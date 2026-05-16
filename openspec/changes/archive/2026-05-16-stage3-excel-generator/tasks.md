@@ -47,9 +47,9 @@
 
 ## 9. main.go 集成
 
-- [ ] 9.1 在 main.go 中添加 `-month` 和 `-json` 参数处理
-- [ ] 9.2 调用 `generator.GenerateWorkbook` 生成 xlsx
-- [ ] 9.3 确保 CSV 输出、balance CSV/XLSX 输出与 generator 输出共存
+- [x] 9.1 在 main.go 中添加 `-month` 和 `-json` 参数处理
+- [x] 9.2 调用 `generator.GenerateWorkbook` 生成 xlsx
+- [x] 9.3 确保 CSV 输出、balance CSV/XLSX 输出与 generator 输出共存
 
 ## 10. 测试
 

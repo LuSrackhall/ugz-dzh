@@ -262,6 +262,52 @@ func containsAnyInSlice(cols []string, subs []string) bool {
 	return false
 }
 
+// ParseDir 解析目录下所有 .md 凭证文件，返回指定月份的分录。
+func ParseDir(voucherDir, month string) ([]Entry, error) {
+	var all []Entry
+	err := filepath.WalkDir(voucherDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Ext(path) != ".md" {
+			return nil
+		}
+		entries, err := ParseFile(path)
+		if err != nil {
+			return fmt.Errorf("解析 %s: %w", path, err)
+		}
+		all = append(all, entries...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if month != "" {
+		prefix := month + "-"
+		var filtered []Entry
+		for _, e := range all {
+			if strings.HasPrefix(e.Date, prefix) {
+				filtered = append(filtered, e)
+			}
+		}
+		all = filtered
+	}
+
+	sortEntries(all)
+	return all, nil
+}
+
+func sortEntries(entries []Entry) {
+	for i := 0; i < len(entries); i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[i].Date > entries[j].Date || (entries[i].Date == entries[j].Date && entries[i].VoucherNum > entries[j].VoucherNum) {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+}
+
 func padLeft(s string, width int, pad rune) string {
 	for len(s) < width {
 		s = string(pad) + s

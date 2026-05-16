@@ -25,4 +25,4 @@ build/
 logs/
 
 test/e2e/test_data/*
-test/e2e/output/*
+test/e2e/output/*ledger

@@ -32,6 +32,10 @@ All 5 must hold before promoting (any missing → keep brainstorming, **never** 
 
 When all 5 hold → proactively suggest "ready to `/opsx:propose`?" — wait for user ack. Never auto-trigger.
 
+### Development discipline
+
+Before implementing any core module (balance, generator, main.go), **Read `openspec/project.md`** to verify the approach matches the master plan. If there's a mismatch, pause and ask — do not silently diverge.
+
 ### Front-door anti-patterns (don't do)
 
 - Letting brainstorming write to `docs/superpowers/specs/`

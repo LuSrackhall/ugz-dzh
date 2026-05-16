@@ -24,4 +24,5 @@ build/
 *.log
 logs/
 
-testdata/*
+test/e2e/test_data/*
+test/e2e/output/*

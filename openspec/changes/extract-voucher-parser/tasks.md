@@ -23,4 +23,4 @@
 
 - [x] 4.1 Run `go test ./voucher/...` and confirm all tests pass
 - [x] 4.2 Run `go vet ./voucher/...` with no issues
-- [ ] 4.3 Commit the voucher package
+- [x] 4.3 Commit the voucher package

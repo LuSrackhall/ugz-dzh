@@ -1,42 +1,42 @@
-## 变更工作流(Claude Code 启动先读)
+## Workflow routing (read on session start)
 
-本 repo 采用 [`superpowers-bridge`](https://github.com/JiangWay/openspec-schemas/tree/main/superpowers-bridge) 衔接 OpenSpec 与 Superpowers。整合规则(语言、artifact 路径、PRECHECK)以该 bridge README 为准;以下是给 Claude 的 routing 指引。
+This repo uses [`superpowers-bridge`](https://github.com/JiangWay/openspec-schemas/tree/main/superpowers-bridge) to bridge OpenSpec and Superpowers. Integration rules (language, artifact paths, PRECHECK) follow that bridge's README; this section is the routing guidance for Claude.
 
-### 入口分流
+### Entry routing
 
-| 你看到的触发 | 应该怎么做 |
+| Trigger you observe | What to do |
 |---|---|
-| 使用者以 narrative 开「设计讨论 / 脑力激荡」 | 先 verbal `superpowers:brainstorming`,**不**写到 `docs/superpowers/specs/`;对话收敛后依下方 5 条判准升级到 `/opsx:propose` |
-| 使用者直接呼叫 `/opsx:new` / `/opsx:ff` / `/opsx:propose` | 走 schema 既定流程;artifact instruction 会在每步注入 |
-| 使用者明确说 bug fix / typo / config 微调 / 文件更新 | 直接 PR,**不**建 change(见下方 skip 规则) |
-| 已经在某个 change 中 | `/opsx:continue` 或 `/opsx:apply` / `/opsx:verify` / `/opsx:archive` 推进 |
+| User starts a narrative "design discussion / let's brainstorm" | Run verbal `superpowers:brainstorming`, but **do NOT** write to `docs/superpowers/specs/`. Once the conversation converges per the 5 criteria below, promote to `/opsx:propose` |
+| User invokes `/opsx:new` / `/opsx:ff` / `/opsx:propose` directly | Follow the schema's flow; artifact instructions inject at each step |
+| User explicitly says bug fix / typo / config tweak / doc update | Direct PR — **do NOT** open a change (see skip rules below) |
+| User is mid-change | Advance with `/opsx:continue`, `/opsx:apply`, `/opsx:verify`, or `/opsx:archive` |
 
-### 何时**不**走 opsx(直接 PR)
+### When NOT to use opsx (direct PR)
 
-| 情境 | 直接 PR? |
+| Scenario | Direct PR? |
 |---|---|
-| 新功能 / 新 capability / 架构变更 / breaking change | ❌ 要走 opsx |
-| Bug fix(不变更合约)/ 测试补写 / linter 规则 / 非破坏性升级 / typo / 文件 / config 值微调 | ✅ 直接 PR |
+| New feature / new capability / architectural change / breaking change | ❌ Use opsx |
+| Bug fix (no contract change) / test backfill / linter tweak / non-breaking upgrade / typo / docs / config value tweak | ✅ Direct PR |
 
-原则:**流程仪式跟风险成正比**。动到对外合约 / schema / 跨系统介接 / 合规边界 → opsx;其他 → 直接 PR。
+Principle: **process ceremony scales with risk**. External contracts / schema / cross-system integration / compliance → opsx. Otherwise → direct PR.
 
-### Verbal brainstorm 升级到 opsx 的 5 条判准
+### Verbal brainstorm → opsx promotion criteria
 
-5 条**全满足**才升级(任一缺则继续 brainstorm,不写到 `docs/superpowers/specs/`):
+All 5 must hold before promoting (any missing → keep brainstorming, **never** write to `docs/superpowers/specs/`):
 
-1. **Scope 锁定** —— 一句话讲清「包含/不包含什么」
-2. **主要设计分歧已收敛** —— 替代方案选过,剩下 TBD 有明确 owner 与影响面
-3. **跨系统依赖盘点过** —— 对方就绪 / 暂 mock / 真未知,三选一讲得清
-4. **验收条件可陈述** —— 具体 pass 条件(例:`./mvnw clean verify` 通过 + N 个成果)
-5. **对话进入收敛** —— 最近几轮在 confirm 不在发散
+1. **Scope locked** — one sentence describes what's in / out
+2. **Major design forks resolved** — alternatives weighed; remaining TBDs have an owner and impact-scope statement
+3. **Cross-system dependencies mapped** — ready / mockable / genuinely unknown — pick one per dep
+4. **Acceptance criteria stateable** — concrete pass conditions (e.g., `go test ./...` passes + N deliverables)
+5. **Conversation converging** — recent turns are confirmations, not new alternatives
 
-全满足 → 主动建议使用者「要不要 `/opsx:propose`?」,使用者 ack 后落地。永远不要自动触发。
+When all 5 hold → proactively suggest "ready to `/opsx:propose`?" — wait for user ack. Never auto-trigger.
 
-### Front-door 反模式(别做)
+### Front-door anti-patterns (don't do)
 
-- 让 brainstorming 写到 `docs/superpowers/specs/`
-- 让 writing-plans 写到 `docs/superpowers/plans/`
-- TBD 没收敛就升级到 opsx
-- 对 bug fix / typo 也建 change
+- Letting brainstorming write to `docs/superpowers/specs/`
+- Letting writing-plans write to `docs/superpowers/plans/`
+- Promoting to opsx with unresolved blocking TBDs
+- Opening a change for bug fix / typo
 
-详细见 [superpowers-bridge README §进入与离开的判断](https://github.com/JiangWay/openspec-schemas/blob/main/superpowers-bridge/README.zh-TW.md#%E9%80%B2%E5%85%A5%E8%88%87%E9%9B%A2%E9%96%8B%E7%9A%84%E5%88%A4%E6%96%B7entry--exit-gates)。
+Full detail: [superpowers-bridge README §Entry & exit gates](https://github.com/JiangWay/openspec-schemas/blob/main/superpowers-bridge/README.md#entry--exit-gates).

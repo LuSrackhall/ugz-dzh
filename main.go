@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"ledger/balance"
+	"ledger/generator"
 	"ledger/voucher"
 
 	"github.com/xuri/excelize/v2"
@@ -19,6 +20,7 @@ func main() {
 	voucherDir := flag.String("voucherDir", "", "凭证 .md 文件所在目录（必填）")
 	output := flag.String("output", ".", "输出目录（默认当前目录）")
 	month := flag.String("month", "", "按月份筛选 (YYYY-MM)，留空则输出全部")
+	configJSON := flag.String("json", "", "科目余额总览.json 路径，指定后生成完整 xlsx 工作薄")
 	flag.Parse()
 
 	if *voucherDir == "" {
@@ -64,6 +66,15 @@ func main() {
 	if err := writeBalanceXLSX(*output, summaries); err != nil {
 		fmt.Fprintf(os.Stderr, "错误: 写入余额 XLSX 失败: %v\n", err)
 		os.Exit(1)
+	}
+
+	// 生成完整累计 xlsx 工作薄
+	if *configJSON != "" && *month != "" {
+		if err := generator.GenerateWorkbook(*configJSON, *voucherDir, *month, *output); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: 生成工作薄失败: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("已生成 %s 工作薄\n", *month)
 	}
 
 	fmt.Printf("已输出 %d 条分录到 %s\n", len(entries), *output)

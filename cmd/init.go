@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -12,19 +13,22 @@ import (
 func init() {
 	rootCmd.AddCommand(initCmd)
 	initCmd.Flags().StringP("start-month", "s", "", "启动月 (YYYY-MM，必填)")
-	initCmd.Flags().StringP("output", "o", ".", "输出目录")
+	initCmd.Flags().StringP("output", "o", ".", "输出根目录")
 	initCmd.MarkFlagRequired("start-month")
 }
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "系统初始化 — 创建 科目余额总览.json",
-	Long:  "创建初始的科目余额总览.json，包含启动月设置和空的科目树。",
+	Short: "系统初始化 — 创建年份 JSON 配置",
+	Long:  "根据启动月推导年份，在输出目录下创建 {year}/{year}.json 配置文件。\n启动月决定手动补科目的期初回溯起点。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		startMonth, _ := cmd.Flags().GetString("start-month")
 		output, _ := cmd.Flags().GetString("output")
 
-		path := filepath.Join(output, "科目余额总览.json")
+		year := strings.Split(startMonth, "-")[0]
+		yearDir := filepath.Join(output, year)
+		path := filepath.Join(yearDir, year+".json")
+
 		if _, err := os.Stat(path); err == nil {
 			return fmt.Errorf("%s 已存在，不会覆盖已有配置", path)
 		}
@@ -44,7 +48,7 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("序列化配置: %w", err)
 		}
-		if err := os.MkdirAll(output, 0o755); err != nil {
+		if err := os.MkdirAll(yearDir, 0o755); err != nil {
 			return fmt.Errorf("创建输出目录: %w", err)
 		}
 		if err := os.WriteFile(path, b, 0o644); err != nil {

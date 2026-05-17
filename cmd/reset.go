@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/xuri/excelize/v2"
@@ -11,19 +12,20 @@ import (
 func init() {
 	rootCmd.AddCommand(resetCmd)
 	resetCmd.Flags().StringP("month", "m", "", "月份 YYYY-MM（必填）")
-	resetCmd.Flags().StringP("output", "o", ".", "xlsx 所在目录")
+	resetCmd.Flags().StringP("output", "o", ".", "输出根目录")
 	resetCmd.MarkFlagRequired("month")
 }
 
 var resetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "重置打印标记",
-	Long:  "清除指定月份 xlsx 中所有账页的\"需打印\"标记。",
+	Long:  "清除指定月份 xlsx 中所有账页的\"需打印\"标记。\nxlsx 路径 = {output}/{year}/{month}.xlsx",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		month, _ := cmd.Flags().GetString("month")
 		output, _ := cmd.Flags().GetString("output")
 
-		path := filepath.Join(output, month+".xlsx")
+		year := strings.Split(month, "-")[0]
+		path := filepath.Join(output, year, month+".xlsx")
 		f, err := excelize.OpenFile(path)
 		if err != nil {
 			return fmt.Errorf("打开 %s: %w", path, err)

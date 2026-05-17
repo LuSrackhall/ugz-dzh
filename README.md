@@ -8,33 +8,34 @@
 # 编译
 go build -o ledger .
 
-# 初始化（创建 科目余额总览.json）
-./ledger init -s 2026-01 -o .
+# 初始化（创建 output/2026/2026.json）
+./ledger init -s 2026-01 -o ./output
 
-# 生成单月 xlsx
-./ledger generate -v ./vouchers -m 2026-01 -j ./科目余额总览.json -o ./output
+# 生成单月 xlsx（年份和月份自动从凭证推导，JSON 路径自动推导为 output/{year}/{year}.json）
+./ledger generate -v ./vouchers/2026_01 -o ./output
 
 # 管理科目名称映射（OCR 纠错）
-./ledger map add -j ./科目余额总览.json -f "管埋费用" -t "管理费用"
-./ledger map list -j ./科目余额总览.json
+./ledger map add -j ./output/2026/2026.json -f "管埋费用" -t "管理费用"
+./ledger map list -j ./output/2026/2026.json
 
 # 手动添加调整科目
-./ledger add-manual -a "银行存款-工商银行" -m 2026-03 -n 100000.00 -t "补记上年余额" -j ./科目余额总览.json
+./ledger add-manual -a "银行存款-工商银行" -m 2026-03 -n 100000.00 -t "补记上年余额" -j ./output/2026/2026.json
 
 # 检测科目树完整性
-./ledger check -j ./科目余额总览.json
+./ledger check -j ./output/2026/2026.json
 
 # 跨年结转
-./ledger year-close -j ./科目余额总览.json -o ./output
+./ledger year-close -j ./output/2026/2026.json -o ./output
 
 # 重置打印标记
 ./ledger reset -m 2026-01 -o ./output
 ```
 
-生成产物：
-- `output/2026-01.xlsx` — 完整累计工作薄（总分类账 + 多科目明细账 + 期初表）
-- `output/ledger.csv` — 凭证分录汇总
-- `output/balance.csv` / `output/balance.xlsx` — 科目余额表
+生成产物（全部在 `output/{年份}/` 下）：
+- `output/2026/2026-01.xlsx` — 完整累计工作薄（总分类账 + 多科目明细账 + 期初表）
+- `output/2026/ledger.csv` — 凭证分录汇总
+- `output/2026/balance.csv` / `output/2026/balance.xlsx` — 科目余额表
+- `output/2026/2026.json` — 年份配置文件
 
 ## 凭证格式
 
@@ -49,8 +50,26 @@ go build -o ledger .
 - 文件中包含日期（`YYYY年MM月DD日` 或 `YYYY-MM-DD`）和凭证号（`记字第XX号`）
 - 借方和贷方金额填在对应列，另一方留空
 - 合计行和表头行会被自动跳过
+- **一次 generate 的凭证目录中所有凭证必须来自同一年同一月**，否则报错
 
-## 科目余额总览.json
+## 输出目录约定
+
+指定 `-o ./output` 后，系统自动按年份创建子目录：
+
+```
+output/
+└── 2026/
+    ├── 2026.json          # 年份配置（科目树、余额历史、映射表）
+    ├── 2026-01.xlsx       # 1 月累计工作薄
+    ├── 2026-02.xlsx       # 2 月累计工作薄
+    ├── ledger.csv         # 当月分录汇总
+    └── balance.csv        # 当月科目余额表
+```
+
+- `init -s 2026-01` → 在 `{output}/2026/` 下创建 `2026.json`
+- `generate -v <dir>` → 年份和月份从凭证自动推导，JSON 路径 = `{output}/{year}/{year}.json`
+
+## 科目余额总览.json（年份配置）
 
 全局配置文件，管理所有科目的期初调整和余额历史。格式：
 
@@ -67,7 +86,7 @@ go build -o ledger .
 }
 ```
 
-系统首次运行前需要手动创建此文件（至少提供 `启动月`）。后续凭证中出现的新科目会自动加入 `自动识别科目`，期初默认 0。
+`启动月` 决定手动补科目的期初回溯起点（从该月起计算余额），默认应为年度 1 月。后续凭证中出现的新科目会自动加入 `自动识别科目`，期初默认 0。
 
 ### 科目名称映射表
 
@@ -84,19 +103,19 @@ OCR 识别凭证时可能产生错字（如"管埋费用"、"银杭存款"），
 }
 ```
 
-保存后，下次运行 `generate -j` 即自动应用。
+保存后，下次运行 `generate` 即自动应用。
 
 **方式二：命令行管理**
 
 ```bash
 # 添加映射
-./ledger map add -j ./科目余额总览.json -f "管埋费用" -t "管理费用"
+./ledger map add -j ./output/2026/2026.json -f "管埋费用" -t "管理费用"
 
 # 查看所有映射
-./ledger map list -j ./科目余额总览.json
+./ledger map list -j ./output/2026/2026.json
 
 # 删除映射
-./ledger map delete -j ./科目余额总览.json -f "管埋费用"
+./ledger map delete -j ./output/2026/2026.json -f "管埋费用"
 ```
 
 映射在生成时自动生效 — 总账科目和明细科目都会匹配替换。使用 `-V` 可查看替换条数。
@@ -120,8 +139,8 @@ OCR 识别凭证时可能产生错字（如"管埋费用"、"银杭存款"），
 
 ```
 子命令：
-  generate     生成月度账本
-  init         系统初始化 — 创建 科目余额总览.json
+  generate     生成月度账本（年份/月份自动推导，凭证需同年同月）
+  init         系统初始化 — 创建 {year}/{year}.json
   map          管理科目名称映射表（add / delete / list）
   check        检测 JSON 科目树与余额完整性
   add-manual   手动添加调整科目
@@ -145,7 +164,7 @@ OCR 识别凭证时可能产生错字（如"管埋费用"、"银杭存款"），
 
 ```
 main.go                 入口（调用 cmd.Execute()）
-cmd/                    CLI 子命令包（generate/init/check/add-manual/reset/year-close）
+cmd/                    CLI 子命令包（generate/init/map/check/add-manual/reset/year-close）
 voucher/                凭证解析器（Markdown HTML 表格 → []Entry）
 balance/                余额管理器（JSON 配置、期初计算、余额回写）
 generator/              Excel 生成器（总分类账、多科目明细账、月结、打印标记）

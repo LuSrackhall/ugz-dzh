@@ -98,7 +98,7 @@ func TestInitSubcommandOverwriteProtection(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("first init failed: %v", err)
 	}
-	configPath := filepath.Join(dir, "科目余额总览.json")
+	configPath := filepath.Join(dir, "2026", "2026.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Fatal("config file was not created")
 	}

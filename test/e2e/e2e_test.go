@@ -17,7 +17,6 @@ func TestCLI(t *testing.T) {
 		t.Fatalf("找不到项目根目录: %v", err)
 	}
 
-	// Build the binary once
 	bin := filepath.Join(t.TempDir(), "ledger")
 	cmd := exec.Command("go", "build", "-o", bin, ".")
 	cmd.Dir = root
@@ -28,8 +27,19 @@ func TestCLI(t *testing.T) {
 	testData := filepath.Join(root, "test", "e2e", "test_data")
 	output := filepath.Join(root, "test", "e2e", "output")
 
-	// Clean and recreate output dir
 	os.RemoveAll(output)
+
+	run := func(args ...string) (string, error) {
+		c := exec.Command(bin, args...)
+		out, err := c.CombinedOutput()
+		return string(out), err
+	}
+
+	// Init first — required for generate to find JSON config
+	out, err := run("init", "-s", "2026-01", "-o", output)
+	if err != nil {
+		t.Fatalf("init 失败: %v\n%s", err, out)
+	}
 
 	tests := []struct {
 		name       string
@@ -39,9 +49,9 @@ func TestCLI(t *testing.T) {
 		checkCSV   func(t *testing.T, records [][]string)
 	}{
 		{
-			name:       "parse all test_data with output flag",
-			args:       []string{"generate", "-v", testData, "-o", output},
-			wantMinLen: 290,
+			name:       "parse 2026-01 test_data with output flag",
+			args:       []string{"generate", "-v", filepath.Join(testData, "2026_01"), "-o", output},
+			wantMinLen: 50,
 			checkCSV: func(t *testing.T, records [][]string) {
 				header := records[0]
 				wantHeader := []string{"日期", "凭证号", "摘要", "总账科目", "明细科目", "借方金额", "贷方金额"}
@@ -51,7 +61,6 @@ func TestCLI(t *testing.T) {
 					}
 				}
 
-				// Verify sorting: dates must be non-decreasing, voucher numbers non-decreasing within same date
 				var prevDate string
 				prevVnum := 0
 				for i, r := range records[1:] {
@@ -66,7 +75,6 @@ func TestCLI(t *testing.T) {
 					prevVnum = vnum
 				}
 
-				// Spot check: voucher 1 in 2026-01 should have 库存现金 and 银行存款 entries
 				foundStock, foundBank := false, false
 				for _, r := range records[1:] {
 					if r[0] == "2026-01-06" && r[1] == "1" {
@@ -82,7 +90,6 @@ func TestCLI(t *testing.T) {
 					t.Errorf("2026-01-06 记字第0001号 缺少预期科目: 库存现金=%v 银行存款=%v", foundStock, foundBank)
 				}
 
-				// Verify amounts parse correctly
 				for _, r := range records[1:] {
 					debit, credit := r[5], r[6]
 					if _, err := strconv.ParseFloat(debit, 64); err != nil {
@@ -93,7 +100,6 @@ func TestCLI(t *testing.T) {
 					}
 				}
 
-				// Debits should equal credits within each voucher
 				type voucherKey struct{ date, vnum string }
 				vmap := make(map[voucherKey]float64)
 				for _, r := range records[1:] {
@@ -115,37 +121,15 @@ func TestCLI(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:       "default output is current directory",
-			args:       []string{"generate", "-v", filepath.Join(testData, "2026_01")},
-			wantMinLen: 50,
-			checkCSV: func(t *testing.T, records [][]string) {
-				// Ensure we at least got the 2026-01 data
-				if len(records) < 2 {
-					t.Error("期望至少有一条数据")
-				}
-			},
+			name:    "reject mixed months in voucher dir",
+			args:    []string{"generate", "-v", testData, "-o", output},
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// For default output test, use a temp working dir
-			workDir := ""
-			if tt.name == "default output is current directory" {
-				workDir = t.TempDir()
-			}
-
-			args := tt.args
-			if workDir != "" {
-				// Override -output with the temp dir
-				args = append([]string{}, args...)
-				args = append(args, "-o", workDir)
-			}
-
-			cmd := exec.Command(bin, args...)
-			if workDir != "" {
-				cmd.Dir = workDir
-			}
+			cmd := exec.Command(bin, tt.args...)
 			out, err := cmd.CombinedOutput()
 
 			if tt.wantErr {
@@ -158,13 +142,12 @@ func TestCLI(t *testing.T) {
 				t.Fatalf("CLI 运行失败: %v\n输出: %s", err, out)
 			}
 
-			csvPath := filepath.Join(output, "ledger.csv")
-			if workDir != "" {
-				csvPath = filepath.Join(workDir, "ledger.csv")
-			}
+			// 新路径: {output}/{year}/ledger.csv
+			yearDir := filepath.Join(output, "2026")
+			csvPath := filepath.Join(yearDir, "ledger.csv")
 			f, err := os.Open(csvPath)
 			if err != nil {
-				t.Fatalf("无法打开输出 CSV: %v", err)
+				t.Fatalf("无法打开输出 CSV %s: %v", csvPath, err)
 			}
 			defer f.Close()
 
@@ -173,7 +156,7 @@ func TestCLI(t *testing.T) {
 				t.Fatalf("无法读取 CSV: %v", err)
 			}
 
-			dataRows := len(records) - 1 // minus header
+			dataRows := len(records) - 1
 			if dataRows < tt.wantMinLen {
 				t.Errorf("数据行数 %d < %d", dataRows, tt.wantMinLen)
 			}
@@ -182,14 +165,11 @@ func TestCLI(t *testing.T) {
 				tt.checkCSV(t, records)
 			}
 
-			// Verify balance CSV exists and is well-formed
-			balPath := filepath.Join(output, "balance.csv")
-			if workDir != "" {
-				balPath = filepath.Join(workDir, "balance.csv")
-			}
+			// 验证余额 CSV
+			balPath := filepath.Join(yearDir, "balance.csv")
 			bf, err := os.Open(balPath)
 			if err != nil {
-				t.Fatalf("无法打开余额 CSV: %v", err)
+				t.Fatalf("无法打开余额 CSV %s: %v", balPath, err)
 			}
 			defer bf.Close()
 			balRecords, err := csv.NewReader(bf).ReadAll()
@@ -313,36 +293,48 @@ func TestCLIOutputPath(t *testing.T) {
 	testData := filepath.Join(root, "test", "e2e", "test_data")
 	target := filepath.Join(root, "test", "e2e", "output")
 
-	t.Run("output goes to specified path", func(t *testing.T) {
+	t.Run("output goes to year subdirectory", func(t *testing.T) {
 		os.RemoveAll(target)
 
-		cmd := exec.Command(bin, "generate", "-v", testData, "-o", target)
-		out, err := cmd.CombinedOutput()
+		run := func(args ...string) (string, error) {
+			c := exec.Command(bin, args...)
+			out, err := c.CombinedOutput()
+			return string(out), err
+		}
+
+		// Init required before generate
+		out, err := run("init", "-s", "2026-01", "-o", target)
+		if err != nil {
+			t.Fatalf("init 失败: %v\n%s", err, out)
+		}
+
+		out, err = run("generate", "-v", filepath.Join(testData, "2026_01"), "-o", target)
 		if err != nil {
 			t.Fatalf("CLI 失败: %v\n%s", err, out)
 		}
 
-		csvPath := filepath.Join(target, "ledger.csv")
+		// 新路径: {target}/{year}/
+		yearDir := filepath.Join(target, "2026")
+		csvPath := filepath.Join(yearDir, "ledger.csv")
 		if _, err := os.Stat(csvPath); err != nil {
 			t.Errorf("输出文件不存在: %s", csvPath)
 		}
 
-		balPath := filepath.Join(target, "balance.csv")
+		balPath := filepath.Join(yearDir, "balance.csv")
 		if _, err := os.Stat(balPath); err != nil {
 			t.Errorf("余额输出文件不存在: %s", balPath)
 		}
 
-		// Verify no stray files in unexpected places
-		stray := filepath.Join(root, "ledger.csv")
-		if _, err := os.Stat(stray); err == nil {
-			t.Errorf("根目录存在不应该出现的 ledger.csv")
+		xlsxPath := filepath.Join(yearDir, "2026-01.xlsx")
+		if _, err := os.Stat(xlsxPath); err != nil {
+			t.Errorf("月度 xlsx 不存在: %s", xlsxPath)
 		}
 
 		t.Logf("输出成功: %s", strings.TrimSpace(string(out)))
 	})
 }
 
-// TestCLIFullWorkflow exercises the complete multi-month pipeline:
+// TestCLIFullWorkflow 完整多月份流程:
 // init → 3x generate → check → add-manual → duplicate rejection → year-close
 func TestCLIFullWorkflow(t *testing.T) {
 	root, err := findProjectRoot()
@@ -367,46 +359,48 @@ func TestCLIFullWorkflow(t *testing.T) {
 		return string(out), err
 	}
 
-	// 1. Init
-	configPath := filepath.Join(workDir, "科目余额总览.json")
-	out, err := run("init", "-s", "2026-01", "-o", workDir)
+	// 1. Init → {outputDir}/2026/2026.json
+	out, err := run("init", "-s", "2026-01", "-o", outputDir)
 	if err != nil {
 		t.Fatalf("init 失败: %v\n%s", err, out)
 	}
+	configPath := filepath.Join(outputDir, "2026", "2026.json")
 	if _, err := os.Stat(configPath); err != nil {
-		t.Fatal("init 后配置文件不存在")
+		t.Fatal("init 后配置文件不存在: " + configPath)
 	}
 
 	// 2. Init overwrite protection
-	_, err = run("init", "-s", "2026-01", "-o", workDir)
+	_, err = run("init", "-s", "2026-01", "-o", outputDir)
 	if err == nil {
 		t.Error("第二次 init 应该失败（覆盖保护）")
 	}
 
+	yearDir := filepath.Join(outputDir, "2026")
+
 	// 3. Generate 2026-01
-	_, err = run("generate", "-v", filepath.Join(testData, "2026_01"), "-m", "2026-01", "-j", configPath, "-o", outputDir)
+	_, err = run("generate", "-v", filepath.Join(testData, "2026_01"), "-o", outputDir)
 	if err != nil {
 		t.Fatalf("generate 2026-01 失败: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(outputDir, "2026-01.xlsx")); err != nil {
+	if _, err := os.Stat(filepath.Join(yearDir, "2026-01.xlsx")); err != nil {
 		t.Error("2026-01.xlsx 未生成")
 	}
 
 	// 4. Generate 2026-02
-	_, err = run("generate", "-v", filepath.Join(testData, "2026_02"), "-m", "2026-02", "-j", configPath, "-o", outputDir)
+	_, err = run("generate", "-v", filepath.Join(testData, "2026_02"), "-o", outputDir)
 	if err != nil {
 		t.Fatalf("generate 2026-02 失败: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(outputDir, "2026-02.xlsx")); err != nil {
+	if _, err := os.Stat(filepath.Join(yearDir, "2026-02.xlsx")); err != nil {
 		t.Error("2026-02.xlsx 未生成")
 	}
 
 	// 5. Generate 2026-03
-	_, err = run("generate", "-v", filepath.Join(testData, "2026_03"), "-m", "2026-03", "-j", configPath, "-o", outputDir)
+	_, err = run("generate", "-v", filepath.Join(testData, "2026_03"), "-o", outputDir)
 	if err != nil {
 		t.Fatalf("generate 2026-03 失败: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(outputDir, "2026-03.xlsx")); err != nil {
+	if _, err := os.Stat(filepath.Join(yearDir, "2026-03.xlsx")); err != nil {
 		t.Error("2026-03.xlsx 未生成")
 	}
 
@@ -428,18 +422,18 @@ func TestCLIFullWorkflow(t *testing.T) {
 		t.Error("重复 add-manual 应该失败")
 	}
 
-	// 9. Year-close
+	// 9. Year-close (uses outputDir as root for year subdirectories)
 	_, err = run("year-close", "-j", configPath, "-o", outputDir)
 	if err != nil {
 		t.Fatalf("year-close 失败: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(outputDir, "2027-01.xlsx")); err != nil {
+	if _, err := os.Stat(filepath.Join(outputDir, "2027", "2027-01.xlsx")); err != nil {
 		t.Error("year-close 未生成 2027-01.xlsx")
 	}
 
-	// 10. All output files present
+	// 10. All output files present (in year dir)
 	for _, f := range []string{"ledger.csv", "balance.csv", "ledger.xlsx", "balance.xlsx"} {
-		if _, err := os.Stat(filepath.Join(outputDir, f)); err != nil {
+		if _, err := os.Stat(filepath.Join(yearDir, f)); err != nil {
 			t.Errorf("输出文件缺失: %s", f)
 		}
 	}

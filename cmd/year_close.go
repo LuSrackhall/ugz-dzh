@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,14 +16,14 @@ import (
 func init() {
 	rootCmd.AddCommand(yearCloseCmd)
 	yearCloseCmd.Flags().StringP("json", "j", "", "科目余额总览.json 路径（必填）")
-	yearCloseCmd.Flags().StringP("output", "o", ".", "输出目录")
+	yearCloseCmd.Flags().StringP("output", "o", ".", "输出根目录")
 	yearCloseCmd.MarkFlagRequired("json")
 }
 
 var yearCloseCmd = &cobra.Command{
 	Use:   "year-close",
 	Short: "跨年结转",
-	Long:  "将各科目年末余额结转为新年度的期初余额，生成新年度首月 xlsx。",
+	Long:  "将各科目年末余额结转为新年度的期初余额，生成新年度首月 xlsx。\nJSON 所在目录即为对应年份的输出目录。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("json")
 		output, _ := cmd.Flags().GetString("output")
@@ -49,8 +50,15 @@ var yearCloseCmd = &cobra.Command{
 		prevDec := fmt.Sprintf("%04d-12", yy)
 		nextYear := fmt.Sprintf("%04d-01", yy+1)
 
-		prevPath := filepath.Join(output, prevDec+".xlsx")
-		newPath := filepath.Join(output, nextYear+".xlsx")
+		prevYearDir := filepath.Join(output, fmt.Sprintf("%04d", yy))
+		nextYearDir := filepath.Join(output, fmt.Sprintf("%04d", yy+1))
+
+		prevPath := filepath.Join(prevYearDir, prevDec+".xlsx")
+		newPath := filepath.Join(nextYearDir, nextYear+".xlsx")
+
+		if err := os.MkdirAll(nextYearDir, 0o755); err != nil {
+			return fmt.Errorf("创建新年度目录: %w", err)
+		}
 
 		var f *excelize.File
 		if src, err := excelize.OpenFile(prevPath); err == nil {

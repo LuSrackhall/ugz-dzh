@@ -132,5 +132,5 @@ JSON 结构：
 - [x] 阶段 1：voucher 解析器封装
 - [x] 阶段 2：balance 管理器（支持叶子级别科目全路径、JSON 配置、期初前推、父级汇总）
 - [x] 阶段 3：generator 生成器（单 xlsx 多 Sheet，总分类账 + 多科目明细账，分页/月结/打印标记）
-- [ ] 阶段 4：main.go CLI 子命令（-month/-json 参数已集成，待重构为 cobra 子命令体系）
+- [x] 阶段 4：main.go CLI 子命令（已重构为 cobra 子命令体系，6 个子命令全部实现）
 - [ ] 阶段 5：集成测试、文档、示例（e2e 测试已有，待补充完整流程测试和 README）

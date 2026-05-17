@@ -40,7 +40,7 @@ func TestCLI(t *testing.T) {
 	}{
 		{
 			name:       "parse all test_data with output flag",
-			args:       []string{"-voucherDir", testData, "-output", output},
+			args:       []string{"generate", "-v", testData, "-o", output},
 			wantMinLen: 290,
 			checkCSV: func(t *testing.T, records [][]string) {
 				header := records[0]
@@ -110,13 +110,13 @@ func TestCLI(t *testing.T) {
 			},
 		},
 		{
-			name:    "missing voucherDir exits with error",
-			args:    []string{"-output", output},
+			name:    "generate missing voucherDir exits with error",
+			args:    []string{"generate", "-o", output},
 			wantErr: true,
 		},
 		{
 			name:       "default output is current directory",
-			args:       []string{"-voucherDir", filepath.Join(testData, "2026_01")},
+			args:       []string{"generate", "-v", filepath.Join(testData, "2026_01")},
 			wantMinLen: 50,
 			checkCSV: func(t *testing.T, records [][]string) {
 				// Ensure we at least got the 2026-01 data
@@ -139,7 +139,7 @@ func TestCLI(t *testing.T) {
 			if workDir != "" {
 				// Override -output with the temp dir
 				args = append([]string{}, args...)
-				args = append(args, "-output", workDir)
+				args = append(args, "-o", workDir)
 			}
 
 			cmd := exec.Command(bin, args...)
@@ -264,9 +264,9 @@ func TestCLIRejectsNoVoucherDir(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"no arguments", []string{}},
-		{"only -output set", []string{"-output", "/tmp"}},
-		{"empty voucherDir", []string{"-voucherDir", "", "-output", "/tmp"}},
+		{"no arguments", []string{"generate"}},
+		{"only -o set", []string{"generate", "-o", "/tmp"}},
+		{"empty voucherDir", []string{"generate", "-v", "", "-o", "/tmp"}},
 	}
 
 	for _, tt := range tests {
@@ -316,7 +316,7 @@ func TestCLIOutputPath(t *testing.T) {
 	t.Run("output goes to specified path", func(t *testing.T) {
 		os.RemoveAll(target)
 
-		cmd := exec.Command(bin, "-voucherDir", testData, "-output", target)
+		cmd := exec.Command(bin, "generate", "-v", testData, "-o", target)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("CLI 失败: %v\n%s", err, out)

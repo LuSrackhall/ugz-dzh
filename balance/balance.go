@@ -23,8 +23,9 @@ type GlobalConfig struct {
 
 // GlobalSettings 全局设置。
 type GlobalSettings struct {
-	StartMonth string   `json:"启动月"`
-	Order      []string `json:"科目顺序"`
+	StartMonth  string            `json:"启动月"`
+	Order       []string          `json:"科目顺序"`
+	AccountMap  map[string]string `json:"科目映射表"`
 }
 
 // AccountNode 科目树中的一个节点（叶子科目）。

@@ -33,6 +33,7 @@ var initCmd = &cobra.Command{
 			"全局设置": map[string]interface{}{
 				"启动月":  startMonth,
 				"科目顺序": []string{},
+				"科目映射表": map[string]string{},
 			},
 			"科目树":     map[string]interface{}{},
 			"自动识别科目": []interface{}{},

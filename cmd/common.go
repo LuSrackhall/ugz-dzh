@@ -57,6 +57,21 @@ func CollectEntries(voucherDir string) ([]voucher.Entry, error) {
 	return all, nil
 }
 
+// ApplyAccountMap applies OCR→standard name mapping to entries' GeneralAccount and DetailAccount.
+func ApplyAccountMap(entries []voucher.Entry, accountMap map[string]string) {
+	if len(accountMap) == 0 {
+		return
+	}
+	for i := range entries {
+		if mapped, ok := accountMap[entries[i].GeneralAccount]; ok {
+			entries[i].GeneralAccount = mapped
+		}
+		if mapped, ok := accountMap[entries[i].DetailAccount]; ok {
+			entries[i].DetailAccount = mapped
+		}
+	}
+}
+
 // FilterByMonth filters entries to those whose date starts with the given month prefix.
 func FilterByMonth(entries []voucher.Entry, month string) []voucher.Entry {
 	prefix := month + "-"

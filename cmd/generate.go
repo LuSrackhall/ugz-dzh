@@ -43,6 +43,19 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("收集凭证: %w", err)
 		}
 
+		if configJSON != "" {
+			cfg, err := balance.LoadConfig(configJSON)
+			if err != nil {
+				return fmt.Errorf("加载配置: %w", err)
+			}
+			if len(cfg.Settings.AccountMap) > 0 {
+				ApplyAccountMap(entries, cfg.Settings.AccountMap)
+				if verbose {
+					fmt.Printf("已应用 %d 条科目名称映射\n", len(cfg.Settings.AccountMap))
+				}
+			}
+		}
+
 		if verbose {
 			fmt.Printf("收集到 %d 条原始分录\n", len(entries))
 		}

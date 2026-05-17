@@ -8,8 +8,23 @@
 # 编译
 go build -o ledger .
 
-# 生成单月 xlsx（需先有 科目余额总览.json）
-./ledger -voucherDir ./vouchers -month 2026-01 -json ./科目余额总览.json -output ./output
+# 初始化（创建 科目余额总览.json）
+./ledger init -s 2026-01 -o .
+
+# 生成单月 xlsx
+./ledger generate -v ./vouchers -m 2026-01 -j ./科目余额总览.json -o ./output
+
+# 手动添加调整科目
+./ledger add-manual -a "银行存款-工商银行" -m 2026-03 -n 100000.00 -t "补记上年余额" -j ./科目余额总览.json
+
+# 检测科目树完整性
+./ledger check -j ./科目余额总览.json
+
+# 跨年结转
+./ledger year-close -j ./科目余额总览.json -o ./output
+
+# 重置打印标记
+./ledger reset -m 2026-01 -o ./output
 ```
 
 生成产物：
@@ -67,11 +82,15 @@ go build -o ledger .
 ## 命令参考
 
 ```
-参数：
-  -voucherDir  凭证 .md 文件所在目录（必填）
-  -month       按月份筛选，格式 YYYY-MM（选填，留空则输出全部）
-  -json        科目余额总览.json 路径，指定后生成完整 xlsx 工作薄
-  -output      输出目录（默认当前目录）
+子命令：
+  generate     生成月度账本
+  init         系统初始化 — 创建 科目余额总览.json
+  check        检测 JSON 科目树与余额完整性
+  add-manual   手动添加调整科目
+  reset        重置打印标记
+  year-close   跨年结转
+
+运行 ledger --help 或 ledger <command> --help 查看各子命令的详细参数。
 ```
 
 ## 打印操作
@@ -87,7 +106,8 @@ go build -o ledger .
 ## 项目结构
 
 ```
-main.go                 入口
+main.go                 入口（调用 cmd.Execute()）
+cmd/                    CLI 子命令包（generate/init/check/add-manual/reset/year-close）
 voucher/                凭证解析器（Markdown HTML 表格 → []Entry）
 balance/                余额管理器（JSON 配置、期初计算、余额回写）
 generator/              Excel 生成器（总分类账、多科目明细账、月结、打印标记）

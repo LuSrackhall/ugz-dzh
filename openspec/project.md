@@ -114,7 +114,7 @@ JSON 结构：
 ### 阶段 4：命令行集成与辅助工具（main.go）
 
 子命令：
-- `ledger generate` — 生成月度账本（-month, -voucherDir, -json, -outputDir, -force, -verbose）
+- `ledger generate` — 生成月度账本（-v voucherDir, -o output, -f force, -V verbose；年月自动推导）
 - `ledger check` — 检测 JSON 科目树与余额
 - `ledger reset` — 重置打印标记
 - `ledger add-manual` — 手动添加调整科目

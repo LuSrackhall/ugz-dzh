@@ -33,8 +33,10 @@ go build -o ledger .
 
 生成产物（全部在 `output/{年份}/` 下）：
 - `output/2026/2026-01.xlsx` — 完整累计工作薄（总分类账 + 多科目明细账 + 期初表）
-- `output/2026/ledger.csv` — 凭证分录汇总
-- `output/2026/balance.csv` / `output/2026/balance.xlsx` — 科目余额表
+- `output/2026/ledger.csv` — 凭证分录汇总（CSV）
+- `output/2026/ledger.xlsx` — 凭证分录汇总（Excel）
+- `output/2026/balance.csv` — 科目余额表（CSV）
+- `output/2026/balance.xlsx` — 科目余额表（Excel）
 - `output/2026/2026.json` — 年份配置文件
 
 ## 凭证格式
@@ -62,14 +64,16 @@ output/
     ├── 2026.json          # 年份配置（科目树、余额历史、映射表）
     ├── 2026-01.xlsx       # 1 月累计工作薄
     ├── 2026-02.xlsx       # 2 月累计工作薄
-    ├── ledger.csv         # 当月分录汇总
-    └── balance.csv        # 当月科目余额表
+    ├── ledger.csv         # 当月分录汇总（CSV）
+    ├── ledger.xlsx        # 当月分录汇总（Excel）
+    ├── balance.csv        # 当月科目余额表（CSV）
+    └── balance.xlsx       # 当月科目余额表（Excel）
 ```
 
 - `init -s 2026-01` → 在 `{output}/2026/` 下创建 `2026.json`
 - `generate -v <dir>` → 年份和月份从凭证自动推导，JSON 路径 = `{output}/{year}/{year}.json`
 
-## 科目余额总览.json（年份配置）
+## 年份配置（{year}.json）
 
 全局配置文件，管理所有科目的期初调整和余额历史。格式：
 

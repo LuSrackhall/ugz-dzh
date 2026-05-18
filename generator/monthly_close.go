@@ -7,10 +7,6 @@ import (
 )
 
 // WriteMonthClosings 对有变化的 Sheet 追加"本月合计"、"本年累计"和"期末余额"行。
-// activity: 各科目全路径 → Activity (当月借/贷合计，分)。
-// ytdDebit/ytdCredit: 各科目全路径 → 截至上月的累计借/贷（分）。
-// initials: 各科目全路径 → 本月期初余额（分）。
-// changedSheets: 当月有数据写入的 Sheet 名称集合。
 func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, ytdCredit map[string]int64, initials map[string]int64, changedSheets map[string]bool) error {
 	for account, act := range activity {
 		sheet := sheetNameGL(account)
@@ -87,11 +83,15 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 }
 
 // nextDataRowAfterBreak 返回 Sheet 中最后一行之后的下一行。
-// 用于在追加完所有数据后再追加月结行。
+// 若最后一行为孤立过次页（无承前页跟随），则返回过次页所在行（关账行直接覆盖过次页）。
 func (wb *Workbook) nextDataRowAfterBreak(sheet string) (int, error) {
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 3, nil
+	}
+	// 孤立过次页：最后一行为过次页 → 覆盖之（过次页不上承前页，关账行替代）
+	if wb.lastRowIsOrphanBreak(sheet) {
+		return len(rows), nil
 	}
 	return len(rows) + 1, nil
 }
@@ -132,7 +132,6 @@ func CollectChangedSheets(entries []voucher.Entry) map[string]bool {
 }
 
 // ExtractYtdTotals 从配置中提取截至上月的各科目本年累计借贷。
-// 返回 ytdDebit, ytdCredit。
 func (wb *Workbook) ExtractYtdTotals(accounts []string) (map[string]int64, map[string]int64) {
 	ytdDebit := make(map[string]int64)
 	ytdCredit := make(map[string]int64)

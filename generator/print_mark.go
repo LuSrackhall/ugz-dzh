@@ -25,8 +25,8 @@ func (wb *Workbook) markExistingPageForPrint(sheet string) {
 	// 标记从 pageStart 到最后一行的所有数据行
 	lastRow := len(rows)
 	for r := pageStart; r <= lastRow; r++ {
-		// 跳过过次页行
-		if r <= len(rows) && len(rows[r-1]) > 0 && rows[r-1][0] == pageBreakLabel {
+		// 跳过过次页行（在摘要列 C）
+		if r <= len(rows) && len(rows[r-1]) > 2 && rows[r-1][2] == pageBreakLabel {
 			continue
 		}
 		wb.markRowForPrint(sheet, r)

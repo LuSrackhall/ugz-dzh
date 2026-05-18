@@ -90,7 +90,6 @@ type mlDetailTotals struct {
 }
 
 // AppendMLEntries 将分录追加到多科目明细账 Sheet。
-// 仅对存在明细科目的总账科目创建多科目明细账。
 func (wb *Workbook) AppendMLEntries(entries []voucher.Entry) error {
 	type mlGroup struct {
 		entries   []voucher.Entry
@@ -114,7 +113,6 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry) error {
 		}
 	}
 
-	// 明细科目按字母排序以保持列稳定
 	for _, g := range groups {
 		sort.Strings(g.details)
 		for i, d := range g.details {
@@ -141,7 +139,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		return err
 	}
 
-	// 计算父级汇总和明细列合计
 	dt := make([]mlDetailTotals, len(details))
 	var grandDebit, grandCredit int64
 	for _, e := range entries {
@@ -155,7 +152,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		grandCredit += e.CreditCents
 	}
 
-	// 写入父级汇总行
 	row, err := wb.nextDataRow(sheet)
 	if err != nil {
 		return err
@@ -165,7 +161,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	wb.markRowForPrint(sheet, row)
 	row++
 
-	// 按日期、凭证号排序
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].Date != entries[j].Date {
 			return entries[i].Date < entries[j].Date
@@ -173,20 +168,35 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		return entries[i].VoucherNum < entries[j].VoucherNum
 	})
 
-	// 获取上页过次页余额
-	balance := wb.lastPageBreakBalance(sheet)
+	balance, pageDebit, pageCredit := wb.lastPageBreakState(sheet)
 	if !wb.pageHasBreakRow(sheet) {
 		wb.markExistingPageForPrint(sheet)
 	}
 
 	numDetails := len(details)
 	for _, e := range entries {
-		if wb.rowIsPageBreak(sheet, row) {
-			wb.writeMLPageBreakRow(sheet, row, balance, numDetails)
+		// 补承前页（上月遗留的孤立过次页）
+		if wb.lastRowIsOrphanBreak(sheet) {
+			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, numDetails)
 			row++
+			pageDebit = 0
+			pageCredit = 0
+		}
+
+		// 页满 → 过次页 + 承前页
+		if wb.rowIsPageBreak(sheet, row) {
+			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, numDetails)
+			row++
+			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, numDetails)
+			row++
+			pageDebit = 0
+			pageCredit = 0
 		}
 
 		balance = balance + e.DebitCents - e.CreditCents
+		pageDebit += e.DebitCents
+		pageCredit += e.CreditCents
+
 		dir, dispBal := directionFor(balance, 0)
 
 		wb.File.SetCellValue(sheet, cellName(1, row), e.Date)
@@ -197,7 +207,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		wb.File.SetCellValue(sheet, cellName(6, row), dir)
 		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
 
-		// 填入对应明细列金额（净额）
 		if e.DetailAccount != "" {
 			if idx, ok := detailIdx[e.DetailAccount]; ok {
 				col := 8 + idx
@@ -207,13 +216,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		}
 
 		wb.markRowForPrint(sheet, row)
-
-		dataRows := row - wb.pageStartRow(sheet) + 1
-		if dataRows >= pageSize {
-			wb.writeMLPageBreakRow(sheet, row+1, balance, numDetails)
-			row++
-		}
-
 		row++
 	}
 
@@ -248,13 +250,32 @@ func (wb *Workbook) writeMLParentSummary(sheet string, row int, general string, 
 	wb.File.SetCellStyle(sheet, cellName(1, row), cellName(endCol, row), parentStyle)
 }
 
-// writeMLPageBreakRow 写入多科目明细账的过次页行（含扩展列）。
-func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, numDetails int) {
+// writeMLPageBreakRow 写多科目明细账的"过次页"行。
+func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, numDetails int) {
 	dir, dispBal := directionFor(balance, 0)
-	wb.File.SetCellValue(sheet, cellName(1, row), pageBreakLabel)
-	for col := 2; col <= 7+numDetails; col++ {
-		wb.File.SetCellValue(sheet, cellName(col, row), "")
-	}
+	wb.File.SetCellValue(sheet, cellName(1, row), "")
+	wb.File.SetCellValue(sheet, cellName(2, row), "")
+	wb.File.SetCellValue(sheet, cellName(3, row), pageBreakLabel)
+	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
 	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+	for col := 8; col <= 7+numDetails; col++ {
+		wb.File.SetCellValue(sheet, cellName(col, row), "")
+	}
+}
+
+// writeMLCarryForwardRow 写多科目明细账的"承前页"行。
+func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, numDetails int) {
+	dir, dispBal := directionFor(balance, 0)
+	wb.File.SetCellValue(sheet, cellName(1, row), "")
+	wb.File.SetCellValue(sheet, cellName(2, row), "")
+	wb.File.SetCellValue(sheet, cellName(3, row), carryForwardLabel)
+	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(6, row), dir)
+	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+	for col := 8; col <= 7+numDetails; col++ {
+		wb.File.SetCellValue(sheet, cellName(col, row), "")
+	}
 }

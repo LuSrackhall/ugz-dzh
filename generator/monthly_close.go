@@ -6,8 +6,8 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// WriteMonthClosings 对有变化的 Sheet 追加"本月合计"、"本年累计"和"期末余额"行。
-func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, ytdCredit map[string]int64, initials map[string]int64, changedSheets map[string]bool) error {
+// WriteMonthClosings 对有变化的 Sheet 追加"本月合计"、"本季合计"（仅季末）、"本年累计"和"期末余额"行。
+func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit map[string]int64, initials map[string]int64, changedSheets map[string]bool) error {
 	for account, act := range activity {
 		sheet := sheetNameGL(account)
 		if !changedSheets[sheet] {
@@ -36,6 +36,26 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		})
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), monthlyStyle)
 		row++
+
+		// "本季合计" 行 — 仅季末月份（3、6、9、12）
+		if isQuarterEnd(wb.Month) {
+			qtDebit := (qtdDebit[account]) + act.Debit
+			qtCredit := (qtdCredit[account]) + act.Credit
+
+			wb.File.SetCellValue(sheet, cellName(1, row), "")
+			wb.File.SetCellValue(sheet, cellName(2, row), "")
+			wb.File.SetCellValue(sheet, cellName(3, row), "本季合计")
+			wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(qtDebit))
+			wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(qtCredit))
+			wb.File.SetCellValue(sheet, cellName(6, row), "")
+			wb.File.SetCellValue(sheet, cellName(7, row), "")
+
+			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Bold: true, Size: 10},
+			})
+			wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), qtStyle)
+			row++
+		}
 
 		// "本年累计" 行
 		cumDebit := (ytdDebit[account]) + act.Debit
@@ -150,4 +170,46 @@ func (wb *Workbook) ExtractYtdTotals(accounts []string) (map[string]int64, map[s
 	}
 
 	return ytdDebit, ytdCredit
+}
+
+// ExtractQuarterlyTotals 从配置中提取本季度截至上月的各科目本季累计借贷。
+func (wb *Workbook) ExtractQuarterlyTotals(accounts []string) (map[string]int64, map[string]int64) {
+	qtdDebit := make(map[string]int64)
+	qtdCredit := make(map[string]int64)
+	qStart := quarterStart(wb.Month)
+
+	for _, account := range accounts {
+		node, ok := wb.Config.Tree[account]
+		if !ok {
+			continue
+		}
+		for monthKey, mb := range node.Balances {
+			if monthKey >= qStart && monthKey < wb.Month {
+				qtdDebit[account] += mb.Debit
+				qtdCredit[account] += mb.Credit
+			}
+		}
+	}
+
+	return qtdDebit, qtdCredit
+}
+
+// isQuarterEnd 判断月份是否为季末（3、6、9、12）。
+func isQuarterEnd(month string) bool {
+	return month[5:] == "03" || month[5:] == "06" || month[5:] == "09" || month[5:] == "12"
+}
+
+// quarterStart 返回当前月份所在季度的起始月份。
+func quarterStart(month string) string {
+	yy := month[:4]
+	switch month[5:] {
+	case "01", "02", "03":
+		return yy + "-01"
+	case "04", "05", "06":
+		return yy + "-04"
+	case "07", "08", "09":
+		return yy + "-07"
+	default:
+		return yy + "-10"
+	}
 }

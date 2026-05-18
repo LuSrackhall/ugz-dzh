@@ -66,8 +66,11 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	// 提取本年累计
 	ytdDebit, ytdCredit := wb.ExtractYtdTotals(allAccounts)
 
+	// 提取本季累计（截至上月）
+	qtdDebit, qtdCredit := wb.ExtractQuarterlyTotals(allAccounts)
+
 	// 9. 月末结账
-	if err := wb.WriteMonthClosings(activity, ytdDebit, ytdCredit, initials, changedSheets); err != nil {
+	if err := wb.WriteMonthClosings(activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit, initials, changedSheets); err != nil {
 		return fmt.Errorf("月结: %w", err)
 	}
 

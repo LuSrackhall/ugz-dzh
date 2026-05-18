@@ -263,6 +263,7 @@ func (wb *Workbook) lastPageBalance(sheet string) int64 {
 }
 
 // currentPageTotals 计算当前页已有数据行的借贷合计（最后一对过次页+承前页之后）。
+// 仅统计真正的业务分录行（列 A 有日期），跳过所有汇总行（本月合计、本季合计、本年累计、期末余额、过次页、承前页、上年结转等）。
 func (wb *Workbook) currentPageTotals(sheet string) (debit, credit int64) {
 	start := wb.pageStartRow(sheet)
 	rows, err := wb.File.GetRows(sheet)
@@ -271,7 +272,8 @@ func (wb *Workbook) currentPageTotals(sheet string) (debit, credit int64) {
 	}
 	for i := start - 1; i < len(rows); i++ {
 		r := rows[i]
-		if len(r) > 2 && (r[2] == pageBreakLabel || r[2] == carryForwardLabel) {
+		// 跳过汇总行：汇总行列 A 为空，业务分录行列 A 为日期
+		if len(r) == 0 || r[0] == "" {
 			continue
 		}
 		if len(r) >= 4 {

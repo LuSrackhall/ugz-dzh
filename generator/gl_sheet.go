@@ -167,7 +167,8 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 	balance := initial
 	var pageDebit, pageCredit int64
 	if !isNew {
-		balance, pageDebit, pageCredit = wb.lastPageBreakState(sheet)
+		balance = wb.lastPageBalance(sheet)
+		pageDebit, pageCredit = wb.currentPageTotals(sheet)
 		if !wb.pageHasBreakRow(sheet) {
 			wb.markExistingPageForPrint(sheet)
 		}
@@ -242,31 +243,49 @@ func (wb *Workbook) lastRowIsOrphanBreak(sheet string) bool {
 	return len(last) > 2 && last[2] == pageBreakLabel
 }
 
-// lastPageBreakState 获取最后一个过次页行的余额和页累计借贷。
-func (wb *Workbook) lastPageBreakState(sheet string) (balance, debit, credit int64) {
+// lastPageBalance 获取最后一个过次页行的余额。
+func (wb *Workbook) lastPageBalance(sheet string) int64 {
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
-		return 0, 0, 0
+		return 0
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
 			if len(rows[i]) >= 7 {
 				if v, err := yuanStrToCents(rows[i][6]); err == nil {
-					balance = v
+					return v
 				}
 			}
-			if len(rows[i]) >= 5 {
-				if v, err := yuanStrToCents(rows[i][3]); err == nil {
-					debit = v
-				}
-				if v, err := yuanStrToCents(rows[i][4]); err == nil {
-					credit = v
-				}
-			}
-			return
+			return 0
 		}
 	}
-	return 0, 0, 0
+	return 0
+}
+
+// currentPageTotals 计算当前页已有数据行的借贷合计（最后一对过次页+承前页之后）。
+func (wb *Workbook) currentPageTotals(sheet string) (debit, credit int64) {
+	start := wb.pageStartRow(sheet)
+	rows, err := wb.File.GetRows(sheet)
+	if err != nil {
+		return 0, 0
+	}
+	for i := start - 1; i < len(rows); i++ {
+		r := rows[i]
+		if len(r) > 2 && (r[2] == pageBreakLabel || r[2] == carryForwardLabel) {
+			continue
+		}
+		if len(r) >= 4 {
+			if v, err := yuanStrToCents(r[3]); err == nil {
+				debit += v
+			}
+		}
+		if len(r) >= 5 {
+			if v, err := yuanStrToCents(r[4]); err == nil {
+				credit += v
+			}
+		}
+	}
+	return
 }
 
 // pageStartRow 返回当前页的起始数据行号（跳过标题/过次页/承前页）。

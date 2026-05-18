@@ -168,7 +168,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		return entries[i].VoucherNum < entries[j].VoucherNum
 	})
 
-	balance, pageDebit, pageCredit := wb.lastPageBreakState(sheet)
+	balance := wb.lastPageBalance(sheet)
+	pageDebit, pageCredit := wb.currentPageTotals(sheet)
 	if !wb.pageHasBreakRow(sheet) {
 		wb.markExistingPageForPrint(sheet)
 	}

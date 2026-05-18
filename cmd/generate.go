@@ -107,7 +107,7 @@ var generateCmd = &cobra.Command{
 				return fmt.Errorf("%s 已存在，使用 -f 覆盖已有 xlsx", xlsxPath)
 			}
 		}
-		if err := generator.GenerateWorkbook(configJSON, voucherDir, month, yearDir); err != nil {
+		if err := generator.GenerateWorkbook(configJSON, month, yearDir, entries); err != nil {
 			return fmt.Errorf("生成工作薄: %w", err)
 		}
 

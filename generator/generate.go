@@ -8,18 +8,14 @@ import (
 )
 
 // GenerateWorkbook 是 xlsx 生成的唯一入口，按序执行完整生成流程。
-func GenerateWorkbook(configPath, voucherDir, month, outputDir string) error {
+// entries 应已经过同年同月校验和科目映射替换。
+func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Entry) error {
 	// 1. 加载配置
 	cfg, err := balance.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("加载配置: %w", err)
 	}
 
-	// 2. 解析当月凭证
-	entries, err := voucher.ParseDir(voucherDir, month)
-	if err != nil {
-		return fmt.Errorf("解析凭证: %w", err)
-	}
 	if len(entries) == 0 {
 		return fmt.Errorf("月份 %s 没有匹配的凭证分录", month)
 	}
@@ -71,8 +67,13 @@ func GenerateWorkbook(configPath, voucherDir, month, outputDir string) error {
 	ytdDebit, ytdCredit := wb.ExtractYtdTotals(allAccounts)
 
 	// 9. 月末结账
-	if err := wb.WriteMonthClosings(activity, ytdDebit, ytdCredit, changedSheets); err != nil {
+	if err := wb.WriteMonthClosings(activity, ytdDebit, ytdCredit, initials, changedSheets); err != nil {
 		return fmt.Errorf("月结: %w", err)
+	}
+
+	// 9.5. 生成独立期末余额汇总 Sheet
+	if err := wb.WriteFinalSheet(initials, activity); err != nil {
+		return fmt.Errorf("生成期末表: %w", err)
 	}
 
 	// 10. 回写余额 — 转换为 balance.Activity

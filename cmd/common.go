@@ -58,11 +58,26 @@ func CollectEntries(voucherDir string) ([]voucher.Entry, error) {
 }
 
 // ApplyAccountMap applies OCR→standard name mapping to entries' GeneralAccount and DetailAccount.
+// Mapping keys are checked against individual field values AND the combined full path.
 func ApplyAccountMap(entries []voucher.Entry, accountMap map[string]string) {
 	if len(accountMap) == 0 {
 		return
 	}
 	for i := range entries {
+		fullPath := entries[i].GeneralAccount
+		if entries[i].DetailAccount != "" {
+			fullPath += "-" + entries[i].DetailAccount
+		}
+		if mapped, ok := accountMap[fullPath]; ok {
+			parts := strings.SplitN(mapped, "-", 2)
+			entries[i].GeneralAccount = parts[0]
+			if len(parts) > 1 {
+				entries[i].DetailAccount = parts[1]
+			} else {
+				entries[i].DetailAccount = ""
+			}
+			continue
+		}
 		if mapped, ok := accountMap[entries[i].GeneralAccount]; ok {
 			entries[i].GeneralAccount = mapped
 		}

@@ -6,11 +6,12 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// WriteMonthClosings 对有变化的 Sheet 追加"本月合计"和"本年累计"行。
+// WriteMonthClosings 对有变化的 Sheet 追加"本月合计"、"本年累计"和"期末余额"行。
 // activity: 各科目全路径 → Activity (当月借/贷合计，分)。
 // ytdDebit/ytdCredit: 各科目全路径 → 截至上月的累计借/贷（分）。
+// initials: 各科目全路径 → 本月期初余额（分）。
 // changedSheets: 当月有数据写入的 Sheet 名称集合。
-func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, ytdCredit map[string]int64, changedSheets map[string]bool) error {
+func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, ytdCredit map[string]int64, initials map[string]int64, changedSheets map[string]bool) error {
 	for account, act := range activity {
 		sheet := sheetNameGL(account)
 		if !changedSheets[sheet] {
@@ -55,10 +56,31 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
-				{Type: "bottom", Color: "#808080", Style: 2},
+				{Type: "bottom", Color: "#808080", Style: 1},
 			},
 		})
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), cumStyle)
+		row++
+
+		// "期末余额" 行 — 期初 + 本月借 - 本月贷
+		endBalance := initials[account] + act.Debit - act.Credit
+		endDir, endDisp := directionFor(endBalance, 0)
+
+		wb.File.SetCellValue(sheet, cellName(1, row), "")
+		wb.File.SetCellValue(sheet, cellName(2, row), "")
+		wb.File.SetCellValue(sheet, cellName(3, row), periodEndLabel)
+		wb.File.SetCellValue(sheet, cellName(4, row), "")
+		wb.File.SetCellValue(sheet, cellName(5, row), "")
+		wb.File.SetCellValue(sheet, cellName(6, row), endDir)
+		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(endDisp))
+
+		endStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Bold: true, Size: 10},
+			Border: []excelize.Border{
+				{Type: "bottom", Color: "#000000", Style: 2},
+			},
+		})
+		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), endStyle)
 	}
 
 	return nil

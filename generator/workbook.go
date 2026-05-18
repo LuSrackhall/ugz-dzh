@@ -45,7 +45,7 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 		wb.File = src
 	} else {
 		wb.File = excelize.NewFile()
-		wb.File.DeleteSheet("Sheet1")
+		// "Sheet1" 作为唯一 sheet 时无法删除，延迟到 Save() 处理
 	}
 
 	return wb, nil
@@ -67,10 +67,14 @@ func (wb *Workbook) currentPath() string {
 
 // Save 保存工作薄到本月文件。
 func (wb *Workbook) Save() error {
+	// 清理默认 "Sheet1" — 此时已有其他 sheet，可以安全删除
+	if len(wb.File.GetSheetList()) > 1 {
+		wb.File.DeleteSheet("Sheet1")
+	}
 	return wb.File.SaveAs(wb.currentPath())
 }
 
-// ExtractLastMonthFinals 从各总分类账 Sheet 的过次页行提取 G 列余额。
+// ExtractLastMonthFinals 从各总分类账 Sheet 的"期末余额"行提取 G 列余额。
 func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 	finals := make(map[string]int64)
 	for _, name := range wb.File.GetSheetList() {
@@ -82,10 +86,10 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 		if err != nil {
 			continue
 		}
-		// 找到最后一个过次页行
+	// 找到最后一个"期末余额"行（月结行）
 		var lastBalance int64
 		for _, row := range rows {
-			if len(row) > 0 && row[0] == pageBreakLabel {
+			if len(row) >= 3 && row[2] == periodEndLabel {
 				if len(row) >= 7 {
 					if v, err := yuanStrToCents(row[6]); err == nil {
 						lastBalance = v
@@ -103,6 +107,7 @@ const (
 	sheetPrefixGL = "总分类账-"
 	sheetPrefixML = "多科目明细账-"
 	pageBreakLabel = "过次页"
+	periodEndLabel = "期末余额"
 )
 
 const pageSize = 20

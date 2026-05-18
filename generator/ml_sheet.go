@@ -169,7 +169,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	})
 
 	balance := wb.lastPageBalance(sheet)
-	pageDebit, pageCredit := wb.currentPageTotals(sheet)
+	var pageDebit, pageCredit int64
 	if !wb.pageHasBreakRow(sheet) {
 		wb.markExistingPageForPrint(sheet)
 	}
@@ -178,7 +178,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	for _, e := range entries {
 		// 补承前页（上月遗留的孤立过次页）
 		if wb.lastRowIsOrphanBreak(sheet) {
-			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, numDetails)
+			pbDebit, pbCredit := wb.lastBreakTotals(sheet)
+			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, numDetails)
 			row++
 			pageDebit = 0
 			pageCredit = 0

@@ -14,9 +14,9 @@ const (
 	mlDetailStartCol = 8  // 明细列起始列 H
 )
 
-// mlPrintMarkCol 返回多科目明细账"是否需打印"标记列号（右页最末列右侧）。
-func mlPrintMarkCol(numDetails int) int {
-	return mlDetailStartCol + numDetails // H + numDetails
+// mlPrintMarkCol 打印标记列号 V（14明细列右侧固定）。
+func mlPrintMarkCol() int {
+	return mlDetailStartCol + mlMaxDetails // V = 8 + 14 = 22
 }
 
 // mlDetailTotals 明细科目合计。
@@ -44,9 +44,9 @@ func (wb *Workbook) ensureMLSheet(general string, details []string) (string, err
 	return name, nil
 }
 
-// writeMLTitle 写入多科目明细账标题行和列标题。
+// writeMLTitle 写入多科目明细账标题行和列标题，固定14列 H-U。
 func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error {
-	lastDetailCol := mlDetailStartCol + len(details) - 1 // 最末明细列号
+	lastDetailCol := mlDetailStartCol + mlMaxDetails - 1 // 最末明细列号 U
 	endCell, _ := excelize.CoordinatesToCellName(lastDetailCol, 1)
 
 	title := "多科目明细账 — " + general
@@ -65,11 +65,15 @@ func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error 
 		cell, _ := excelize.CoordinatesToCellName(i+1, 2)
 		wb.File.SetCellValue(sheet, cell, h)
 	}
-	// 扩展列标题 H-U
-	for i, detail := range details {
+	// 扩展列标题 H-U（固定14列，空明细显示空标题）
+	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailStartCol + i
 		cell, _ := excelize.CoordinatesToCellName(col, 2)
-		wb.File.SetCellValue(sheet, cell, detail)
+		label := ""
+		if i < len(details) {
+			label = details[i]
+		}
+		wb.File.SetCellValue(sheet, cell, label)
 	}
 
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -91,7 +95,8 @@ func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error 
 	wb.File.SetColWidth(sheet, "E", "E", 14)
 	wb.File.SetColWidth(sheet, "F", "F", 6)
 	wb.File.SetColWidth(sheet, "G", "G", 16)
-	for i := range details {
+	// 列宽 — H-U 固定14列
+	for i := 0; i < mlMaxDetails; i++ {
 		colLetter, _ := excelize.ColumnNumberToName(mlDetailStartCol + i)
 		wb.File.SetColWidth(sheet, colLetter, colLetter, 14)
 	}
@@ -152,21 +157,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		return err
 	}
 
-	numDetails := len(details)
-
-	// 计算各明细合计及总合计
-	dt := make([]mlDetailTotals, numDetails)
-	var grandDebit, grandCredit int64
-	for _, e := range entries {
-		if e.DetailAccount != "" {
-			if idx, ok := detailIdx[e.DetailAccount]; ok {
-				dt[idx].debit += e.DebitCents
-				dt[idx].credit += e.CreditCents
-			}
-		}
-		grandDebit += e.DebitCents
-		grandCredit += e.CreditCents
-	}
+	numDetails := mlMaxDetails
 
 	rows, _ := wb.File.GetRows(sheet)
 	isNew := len(rows) <= 2
@@ -179,10 +170,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	if err != nil {
 		return err
 	}
-
-	wb.writeMLParentSummary(sheet, row, general, grandDebit, grandCredit, dt)
-	wb.markMLRowForPrint(sheet, row, numDetails)
-	row++
 
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].Date != entries[j].Date {
@@ -198,7 +185,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	if !isNew {
 		balance = wb.lastPageBalance(sheet)
 		if !wb.pageHasBreakRow(sheet) {
-			wb.markExistingMLPageForPrint(sheet, numDetails)
+			wb.markExistingMLPageForPrint(sheet)
 		}
 	}
 
@@ -206,7 +193,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		// 补承前页（上月遗留的孤立过次页）
 		if wb.lastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.lastBreakTotals(sheet)
-			pbDetails := wb.lastBreakDetailTotals(sheet, numDetails)
+			pbDetails := wb.lastBreakDetailTotals(sheet)
 			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
 			row++
 			pageDebit = 0
@@ -248,39 +235,11 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			}
 		}
 
-		wb.markMLRowForPrint(sheet, row, numDetails)
+		wb.markMLRowForPrint(sheet, row)
 		row++
 	}
 
 	return nil
-}
-
-// writeMLParentSummary 写入多科目明细账的父级汇总行。
-func (wb *Workbook) writeMLParentSummary(sheet string, row int, general string, grandDebit, grandCredit int64, dt []mlDetailTotals) {
-	numDetails := len(dt)
-
-	wb.File.SetCellValue(sheet, cellName(1, row), "")
-	wb.File.SetCellValue(sheet, cellName(2, row), "")
-	wb.File.SetCellValue(sheet, cellName(3, row), general+" 汇总")
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(grandDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(grandCredit))
-	dir, dispBal := directionFor(grandDebit, grandCredit)
-	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
-
-	for i, t := range dt {
-		net := t.debit - t.credit
-		wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
-	}
-
-	parentStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#808080", Style: 1},
-		},
-	})
-	lastDetailCol := mlDetailStartCol + numDetails - 1
-	wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), parentStyle)
 }
 
 // writeMLPageBreakRow 写多科目明细账的"过次页"行，A-G 总计 + H-U 各明细本页净额。
@@ -318,15 +277,15 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 }
 
 // lastBreakDetailTotals 读取最后一个过次页行的各明细列净额。
-func (wb *Workbook) lastBreakDetailTotals(sheet string, numDetails int) []mlDetailTotals {
+func (wb *Workbook) lastBreakDetailTotals(sheet string) []mlDetailTotals {
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
-		return make([]mlDetailTotals, numDetails)
+		return make([]mlDetailTotals, mlMaxDetails)
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
-			result := make([]mlDetailTotals, numDetails)
-			for j := 0; j < numDetails; j++ {
+			result := make([]mlDetailTotals, mlMaxDetails)
+			for j := 0; j < mlMaxDetails; j++ {
 				colIdx := mlDetailStartCol + j - 1 // 0-indexed in rows
 				if colIdx < len(rows[i]) {
 					if v, err := yuanStrToCents(rows[i][colIdx]); err == nil {
@@ -341,5 +300,5 @@ func (wb *Workbook) lastBreakDetailTotals(sheet string, numDetails int) []mlDeta
 			return result
 		}
 	}
-	return make([]mlDetailTotals, numDetails)
+	return make([]mlDetailTotals, mlMaxDetails)
 }

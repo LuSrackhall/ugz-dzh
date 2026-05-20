@@ -45,7 +45,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			continue
 		}
 
-		numDetails := len(g.details)
+		numDetails := mlMaxDetails
 
 		// 计算本月各明细发生额
 		mtdDetails := make([]mlDetailTotals, numDetails)
@@ -110,7 +110,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(qtCredit))
 			wb.File.SetCellValue(sheet, cellName(6, row), "")
 			wb.File.SetCellValue(sheet, cellName(7, row), "")
-			for i := range qtDetails {
+			for i := range g.details {
 				// 明细列本季累计 = 本月 + 此前季度（从配置余额取）
 				detailName := g.details[i]
 				prevQt := wb.getDetailPrevQuarterTotal(general, detailName)
@@ -146,7 +146,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(cumCredit))
 		wb.File.SetCellValue(sheet, cellName(6, row), "")
 		wb.File.SetCellValue(sheet, cellName(7, row), "")
-		for i := range ytdDetails {
+		for i := range g.details {
 			detailName := g.details[i]
 			prevYtd := wb.getDetailPrevYearTotal(general, detailName)
 			net := ytdDetails[i].debit - ytdDetails[i].credit + prevYtd

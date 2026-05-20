@@ -5,9 +5,9 @@ func (wb *Workbook) markRowForPrint(sheet string, row int) {
 	wb.File.SetCellValue(sheet, cellName(8, row), "需打印")
 }
 
-// markMLRowForPrint 在多科目明细账的最末明细列右侧标记打印。
-func (wb *Workbook) markMLRowForPrint(sheet string, row, numDetails int) {
-	wb.File.SetCellValue(sheet, cellName(mlPrintMarkCol(numDetails), row), "需打印")
+// markMLRowForPrint 在多科目明细账的固定 V 列标记打印。
+func (wb *Workbook) markMLRowForPrint(sheet string, row int) {
+	wb.File.SetCellValue(sheet, cellName(mlPrintMarkCol(), row), "需打印")
 }
 
 // markRowsForPrint 标记从 startRow 到 endRow 的行为"需打印"。
@@ -39,7 +39,7 @@ func (wb *Workbook) markExistingPageForPrint(sheet string) {
 }
 
 // markExistingMLPageForPrint 多科目明细账版：标记已有数据行（V 列）。
-func (wb *Workbook) markExistingMLPageForPrint(sheet string, numDetails int) {
+func (wb *Workbook) markExistingMLPageForPrint(sheet string) {
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return
@@ -51,6 +51,6 @@ func (wb *Workbook) markExistingMLPageForPrint(sheet string, numDetails int) {
 		if r <= len(rows) && len(rows[r-1]) > 2 && rows[r-1][2] == pageBreakLabel {
 			continue
 		}
-		wb.markMLRowForPrint(sheet, r, numDetails)
+		wb.markMLRowForPrint(sheet, r)
 	}
 }

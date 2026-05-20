@@ -210,18 +210,9 @@ func TestMLDetailStartCol(t *testing.T) {
 }
 
 func TestMLPrintMarkCol(t *testing.T) {
-	tests := []struct {
-		numDetails int
-		want       int
-	}{
-		{1, 9},
-		{4, 12},
-		{14, 22},
-	}
-	for _, tt := range tests {
-		got := mlPrintMarkCol(tt.numDetails)
-		if got != tt.want {
-			t.Errorf("mlPrintMarkCol(%d) = %d, want %d", tt.numDetails, got, tt.want)
-		}
+	got := mlPrintMarkCol()
+	want := 22 // V = 8 + 14
+	if got != want {
+		t.Errorf("mlPrintMarkCol() = %d, want %d (V column)", got, want)
 	}
 }

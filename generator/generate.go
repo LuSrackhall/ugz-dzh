@@ -50,7 +50,7 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	}
 
 	// 7. 追加分录到多科目明细账 Sheet
-	if err := wb.AppendMLEntries(entries); err != nil {
+	if err := wb.AppendMLEntries(entries, initials); err != nil {
 		return fmt.Errorf("追加多科目明细账: %w", err)
 	}
 
@@ -69,9 +69,14 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	// 提取本季累计（截至上月）
 	qtdDebit, qtdCredit := wb.ExtractQuarterlyTotals(allAccounts)
 
-	// 9. 月末结账
+	// 9. 月末结账（总分类账）
 	if err := wb.WriteMonthClosings(activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit, initials, changedSheets); err != nil {
 		return fmt.Errorf("月结: %w", err)
+	}
+
+	// 9.1 月末结账（多科目明细账）
+	if err := wb.WriteMLMonthClosings(entries, initials, ytdDebit, ytdCredit, qtdDebit, qtdCredit, changedSheets); err != nil {
+		return fmt.Errorf("多科目明细账月结: %w", err)
 	}
 
 	// 9.5. 生成独立期末余额汇总 Sheet

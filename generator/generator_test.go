@@ -202,3 +202,26 @@ func TestCollectChangedSheets(t *testing.T) {
 		t.Error("expected 总分类账-库存现金 to be changed")
 	}
 }
+
+func TestMLDetailStartCol(t *testing.T) {
+	if mlDetailStartCol != 8 {
+		t.Errorf("mlDetailStartCol = %d, want 8 (H column)", mlDetailStartCol)
+	}
+}
+
+func TestMLPrintMarkCol(t *testing.T) {
+	tests := []struct {
+		numDetails int
+		want       int
+	}{
+		{1, 9},
+		{4, 12},
+		{14, 22},
+	}
+	for _, tt := range tests {
+		got := mlPrintMarkCol(tt.numDetails)
+		if got != tt.want {
+			t.Errorf("mlPrintMarkCol(%d) = %d, want %d", tt.numDetails, got, tt.want)
+		}
+	}
+}

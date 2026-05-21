@@ -19,6 +19,7 @@ type GlobalConfig struct {
 	Tree        map[string]AccountNode `json:"科目树"`
 	AutoItems   []AutoItem             `json:"自动识别科目"`
 	ManualItems []ManualItem           `json:"手动调整科目"`
+	DetailOrder map[string][]string    `json:"明细列顺序,omitempty"` // 多科目明细账列序配置
 }
 
 // GlobalSettings 全局设置。

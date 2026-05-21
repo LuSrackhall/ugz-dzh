@@ -3,6 +3,7 @@ package generator
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"ledger/voucher"
 
@@ -26,22 +27,130 @@ type mlDetailTotals struct {
 }
 
 // ensureMLSheet 确保多科目明细账 Sheet 存在并已初始化标题和扩展列。
-func (wb *Workbook) ensureMLSheet(general string, details []string) (string, error) {
+// 已存在的 Sheet 读头保序，新科目追加到右侧空列；全新 Sheet 按 detailOrder 或字母序初始化。
+func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder []string) (string, map[string]int, []string, error) {
 	name := sheetNameML(general)
 	if idx, err := wb.File.GetSheetIndex(name); err == nil && idx >= 0 {
-		return name, nil
+		// Sheet 已存在 — 读头保序
+		existingIdx, existingDetails, err := wb.readMLDetailHeaders(name)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		_ = existingIdx
+
+		// 冲突检测：若配置了 detailOrder，逐列比对
+		if len(detailOrder) > 0 {
+			if err := wb.checkMLDetailOrderConflict(name, existingDetails, detailOrder); err != nil {
+				return "", nil, nil, err
+			}
+		}
+
+		// 合并新科目到空列
+		finalDetails, finalIdx, newAppended, err := resolveMLDetailColumns(existingDetails, details, detailOrder)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		_ = finalDetails
+
+		// 更新标题行（仅更新新增的列）
+		for _, nd := range newAppended {
+			col := mlDetailStartCol + finalIdx[nd]
+			cell, _ := excelize.CoordinatesToCellName(col, 2)
+			wb.File.SetCellValue(name, cell, nd)
+		}
+
+		return name, finalIdx, newAppended, nil
 	}
 
+	// 新 Sheet — 创建
 	idx, err := wb.File.NewSheet(name)
 	if err != nil {
-		return "", fmt.Errorf("创建 Sheet %s: %w", name, err)
+		return "", nil, nil, fmt.Errorf("创建 Sheet %s: %w", name, err)
 	}
 	wb.File.SetActiveSheet(idx)
 
-	if err := wb.writeMLTitle(name, general, details); err != nil {
-		return "", err
+	// 初始化列序：若存在 detailOrder，使用配置；否则按字母序
+	var initDetails []string
+	if len(detailOrder) > 0 {
+		initDetails = make([]string, 0, mlMaxDetails)
+		existingSet := make(map[string]bool)
+		for _, d := range details {
+			existingSet[d] = true
+		}
+		for _, d := range detailOrder {
+			if d == "" || existingSet[d] {
+				initDetails = append(initDetails, d)
+				existingSet[d] = false
+			}
+		}
+		var remaining []string
+		for _, d := range details {
+			if existingSet[d] {
+				remaining = append(remaining, d)
+			}
+		}
+		sort.Strings(remaining)
+		initDetails = append(initDetails, remaining...)
+	} else {
+		initDetails = make([]string, len(details))
+		copy(initDetails, details)
+		sort.Strings(initDetails)
 	}
-	return name, nil
+
+	if len(initDetails) > mlMaxDetails {
+		return "", nil, nil, fmt.Errorf("总账科目 %q 明细科目数 %d 超过上限 %d", general, len(initDetails), mlMaxDetails)
+	}
+
+	if err := wb.writeMLTitle(name, general, initDetails); err != nil {
+		return "", nil, nil, err
+	}
+
+	detailIdx := make(map[string]int)
+	for i, d := range initDetails {
+		if d != "" {
+			detailIdx[d] = i
+		}
+	}
+
+	return name, detailIdx, nil, nil
+}
+
+// checkMLDetailOrderConflict 逐列比对第2行标题与 detailOrder 配置。
+func (wb *Workbook) checkMLDetailOrderConflict(sheet string, existingDetails []string, detailOrder []string) error {
+	configIdx := 0
+	for colIdx := 0; colIdx < mlMaxDetails && configIdx < len(detailOrder); colIdx++ {
+		existing := existingDetails[colIdx]
+		configured := detailOrder[configIdx]
+
+		if configured == "" {
+			if existing != "" {
+				return fmt.Errorf("Sheet %s: detailOrder 与现有列序冲突 — 第 %d 列配置为空但实际为 %q。请使用 -f 从首月重新生成", sheet, colIdx+1, existing)
+			}
+			configIdx++
+			continue
+		}
+
+		if existing == "" {
+			found := false
+			for j := colIdx + 1; j < mlMaxDetails; j++ {
+				if existingDetails[j] == configured {
+					found = true
+					break
+				}
+			}
+			if found {
+				return fmt.Errorf("Sheet %s: detailOrder 与现有列序冲突 — %q 配置在第 %d 列但实际在更右侧。请使用 -f 从首月重新生成", sheet, configured, configIdx+1)
+			}
+			configIdx++
+			continue
+		}
+
+		if existing != configured {
+			return fmt.Errorf("Sheet %s: detailOrder 与现有列序冲突 — 第 %d 列配置为 %q 但实际为 %q。请使用 -f 从首月重新生成", sheet, configIdx+1, configured, existing)
+		}
+		configIdx++
+	}
+	return nil
 }
 
 // writeMLTitle 写入多科目明细账标题行和列标题，固定14列 H-U。
@@ -104,34 +213,155 @@ func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error 
 	return nil
 }
 
+// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（H-U），以匹配当月明细科目集。
+func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
+	for i := 0; i < mlMaxDetails; i++ {
+		col := mlDetailStartCol + i
+		cell, _ := excelize.CoordinatesToCellName(col, 2)
+		label := ""
+		if i < len(details) {
+			label = details[i]
+		}
+		wb.File.SetCellValue(sheet, cell, label)
+	}
+}
+
+// readMLDetailHeaders 从 Sheet 第2行 H-U 读取现有明细列标题，构建 detailName → colIndex 映射。
+// 返回的 details 按列顺序排列（空列对应空字符串）。
+func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int, details []string, err error) {
+	detailIdx = make(map[string]int)
+	details = make([]string, mlMaxDetails)
+
+	rows, err := wb.File.GetRows(sheet)
+	if err != nil {
+		return nil, nil, fmt.Errorf("读取 Sheet %s: %w", sheet, err)
+	}
+	if len(rows) < 2 {
+		return detailIdx, details, nil
+	}
+
+	row2 := rows[1]
+	for i := 0; i < mlMaxDetails; i++ {
+		colIdx := mlDetailStartCol + i - 1 // rows 是 0-indexed
+		label := ""
+		if colIdx < len(row2) {
+			label = strings.TrimSpace(row2[colIdx])
+		}
+		details[i] = label
+		if label != "" {
+			detailIdx[label] = i
+		}
+	}
+	return detailIdx, details, nil
+}
+
+// resolveMLDetailColumns 合并已有列映射与新科目，返回完整列序、映射、新增科目列表。
+// existingDetails: 从 Sheet 第2行读取的现有列序（空字符串表示空列）
+// newDetails: 当月分录中的明细科目集合
+// detailOrder: 用户配置的列序（nil 表示无配置）
+func resolveMLDetailColumns(existingDetails []string, newDetails []string, detailOrder []string) (details []string, detailIdx map[string]int, newAppended []string, err error) {
+	details = make([]string, mlMaxDetails)
+	copy(details, existingDetails)
+
+	detailIdx = make(map[string]int)
+	for i, d := range details {
+		if d != "" {
+			detailIdx[d] = i
+		}
+	}
+
+	// 找出不在现有列中的新科目
+	var toAdd []string
+	for _, nd := range newDetails {
+		if _, ok := detailIdx[nd]; !ok {
+			toAdd = append(toAdd, nd)
+		}
+	}
+	if len(toAdd) == 0 {
+		return details, detailIdx, nil, nil
+	}
+
+	// 如果有 detailOrder，按配置顺序排列；否则按字母序
+	if len(detailOrder) > 0 {
+		orderMap := make(map[string]int)
+		for i, d := range detailOrder {
+			orderMap[d] = i
+		}
+		sort.Slice(toAdd, func(i, j int) bool {
+			oi, iok := orderMap[toAdd[i]]
+			oj, jok := orderMap[toAdd[j]]
+			if iok && jok {
+				return oi < oj
+			}
+			if iok {
+				return true
+			}
+			if jok {
+				return false
+			}
+			return toAdd[i] < toAdd[j]
+		})
+	} else {
+		sort.Strings(toAdd)
+	}
+
+	// 追加到右侧第一个空列
+	for _, nd := range toAdd {
+		placed := false
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] == "" {
+				details[i] = nd
+				detailIdx[nd] = i
+				newAppended = append(newAppended, nd)
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			return nil, nil, nil, fmt.Errorf("多科目明细列已满（14列全部占用），无法追加 %q。已占用: %v", nd, nonEmptyDetails(details))
+		}
+	}
+
+	return details, detailIdx, newAppended, nil
+}
+
+// nonEmptyDetails 返回非空明细科目列表。
+func nonEmptyDetails(details []string) []string {
+	var result []string
+	for _, d := range details {
+		if d != "" {
+			result = append(result, d)
+		}
+	}
+	return result
+}
+
 // AppendMLEntries 将分录追加到多科目明细账 Sheet。
 func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string]int64) error {
 	type mlGroup struct {
-		entries   []voucher.Entry
-		details   []string
-		detailIdx map[string]int
+		entries []voucher.Entry
+		details []string
 	}
 	groups := make(map[string]*mlGroup)
 
 	for _, e := range entries {
 		g, ok := groups[e.GeneralAccount]
 		if !ok {
-			g = &mlGroup{detailIdx: make(map[string]int)}
+			g = &mlGroup{}
 			groups[e.GeneralAccount] = g
 		}
 		g.entries = append(g.entries, e)
 		if e.DetailAccount != "" {
-			if _, exists := g.detailIdx[e.DetailAccount]; !exists {
-				g.detailIdx[e.DetailAccount] = len(g.details)
+			found := false
+			for _, d := range g.details {
+				if d == e.DetailAccount {
+					found = true
+					break
+				}
+			}
+			if !found {
 				g.details = append(g.details, e.DetailAccount)
 			}
-		}
-	}
-
-	for _, g := range groups {
-		sort.Strings(g.details)
-		for i, d := range g.details {
-			g.detailIdx[d] = i
 		}
 	}
 
@@ -139,10 +369,31 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 		if len(g.details) == 0 {
 			continue
 		}
-		if len(g.details) > mlMaxDetails {
-			return fmt.Errorf("总账科目 %q 明细科目数 %d 超过上限 %d，请合并或拆分: %v", general, len(g.details), mlMaxDetails, g.details)
+		detailOrder := wb.Config.DetailOrder[general]
+		_, detailIdx, newAppended, err := wb.ensureMLSheet(general, g.details, detailOrder)
+		if err != nil {
+			return err
 		}
-		if err := wb.appendToMLSheet(general, g.entries, g.details, g.detailIdx, initials[general]); err != nil {
+		if len(newAppended) > 0 {
+			if wb.Config.DetailOrder == nil {
+				wb.Config.DetailOrder = make(map[string][]string)
+			}
+			existing := wb.Config.DetailOrder[general]
+			for _, nd := range newAppended {
+				found := false
+				for _, d := range existing {
+					if d == nd {
+						found = true
+						break
+					}
+				}
+				if !found {
+					existing = append(existing, nd)
+				}
+			}
+			wb.Config.DetailOrder[general] = existing
+		}
+		if err := wb.appendToMLSheet(general, g.entries, detailIdx, initials[general]); err != nil {
 			return fmt.Errorf("多科目明细账 %s: %w", general, err)
 		}
 	}
@@ -151,11 +402,8 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 }
 
 // appendToMLSheet 追加分录到指定总账科目的多科目明细账 Sheet。
-func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, details []string, detailIdx map[string]int, initial int64) error {
-	sheet, err := wb.ensureMLSheet(general, details)
-	if err != nil {
-		return err
-	}
+func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, detailIdx map[string]int, initial int64) error {
+	sheet := sheetNameML(general)
 
 	numDetails := mlMaxDetails
 

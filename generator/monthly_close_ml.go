@@ -7,7 +7,7 @@ import (
 )
 
 // WriteMLMonthClosings 对有变化的多科目明细账 Sheet 追加月结行（本月合计/本季合计/本年累计/期末余额）。
-// details 参数从 entries 中按总账科目提取。
+// 明细列映射统一从 Sheet 第2行标题读取，确保月结列与标题一致。
 func (wb *Workbook) WriteMLMonthClosings(
 	entries []voucher.Entry,
 	initials map[string]int64,
@@ -15,11 +15,8 @@ func (wb *Workbook) WriteMLMonthClosings(
 	qtdDebit, qtdCredit map[string]int64,
 	changedSheets map[string]bool,
 ) error {
-	// 按总账科目收集分录
 	type mlClosing struct {
-		entries     []voucher.Entry
-		details     []string
-		detailIdx   map[string]int
+		entries []voucher.Entry
 	}
 	groups := make(map[string]*mlClosing)
 
@@ -29,20 +26,22 @@ func (wb *Workbook) WriteMLMonthClosings(
 		}
 		g, ok := groups[e.GeneralAccount]
 		if !ok {
-			g = &mlClosing{detailIdx: make(map[string]int)}
+			g = &mlClosing{}
 			groups[e.GeneralAccount] = g
 		}
 		g.entries = append(g.entries, e)
-		if _, exists := g.detailIdx[e.DetailAccount]; !exists {
-			g.detailIdx[e.DetailAccount] = len(g.details)
-			g.details = append(g.details, e.DetailAccount)
-		}
 	}
 
 	for general, g := range groups {
 		sheet := sheetNameML(general)
 		if !changedSheets[sheet] {
 			continue
+		}
+
+		// 从 Sheet 标题读取列映射
+		detailIdx, details, err := wb.readMLDetailHeaders(sheet)
+		if err != nil {
+			return err
 		}
 
 		numDetails := mlMaxDetails
@@ -53,7 +52,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		for _, e := range g.entries {
 			mtdDebit += e.DebitCents
 			mtdCredit += e.CreditCents
-			if idx, ok := g.detailIdx[e.DetailAccount]; ok {
+			if idx, ok := detailIdx[e.DetailAccount]; ok {
 				mtdDetails[idx].debit += e.DebitCents
 				mtdDetails[idx].credit += e.CreditCents
 			}
@@ -72,9 +71,11 @@ func (wb *Workbook) WriteMLMonthClosings(
 		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(mtdCredit))
 		wb.File.SetCellValue(sheet, cellName(6, row), "")
 		wb.File.SetCellValue(sheet, cellName(7, row), "")
-		for i, dt := range mtdDetails {
-			net := dt.debit - dt.credit
-			wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] != "" {
+				net := mtdDetails[i].debit - mtdDetails[i].credit
+				wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+			}
 		}
 
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -94,12 +95,11 @@ func (wb *Workbook) WriteMLMonthClosings(
 			for _, e := range g.entries {
 				qtDebit += e.DebitCents
 				qtCredit += e.CreditCents
-				if idx, ok := g.detailIdx[e.DetailAccount]; ok {
+				if idx, ok := detailIdx[e.DetailAccount]; ok {
 					qtDetails[idx].debit += e.DebitCents
 					qtDetails[idx].credit += e.CreditCents
 				}
 			}
-			// 加上本季此前月份（从 qtd maps 中取父级，明细列从配置余额取）
 			qtDebit += qtdDebit[general]
 			qtCredit += qtdCredit[general]
 
@@ -110,12 +110,12 @@ func (wb *Workbook) WriteMLMonthClosings(
 			wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(qtCredit))
 			wb.File.SetCellValue(sheet, cellName(6, row), "")
 			wb.File.SetCellValue(sheet, cellName(7, row), "")
-			for i := range g.details {
-				// 明细列本季累计 = 本月 + 此前季度（从配置余额取）
-				detailName := g.details[i]
-				prevQt := wb.getDetailPrevQuarterTotal(general, detailName)
-				net := qtDetails[i].debit - qtDetails[i].credit + prevQt
-				wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+			for i := 0; i < mlMaxDetails; i++ {
+				if details[i] != "" {
+					prevQt := wb.getDetailPrevQuarterTotal(general, details[i])
+					net := qtDetails[i].debit - qtDetails[i].credit + prevQt
+					wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+				}
 			}
 
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -131,7 +131,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		for _, e := range g.entries {
 			cumDebit += e.DebitCents
 			cumCredit += e.CreditCents
-			if idx, ok := g.detailIdx[e.DetailAccount]; ok {
+			if idx, ok := detailIdx[e.DetailAccount]; ok {
 				ytdDetails[idx].debit += e.DebitCents
 				ytdDetails[idx].credit += e.CreditCents
 			}
@@ -146,11 +146,12 @@ func (wb *Workbook) WriteMLMonthClosings(
 		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(cumCredit))
 		wb.File.SetCellValue(sheet, cellName(6, row), "")
 		wb.File.SetCellValue(sheet, cellName(7, row), "")
-		for i := range g.details {
-			detailName := g.details[i]
-			prevYtd := wb.getDetailPrevYearTotal(general, detailName)
-			net := ytdDetails[i].debit - ytdDetails[i].credit + prevYtd
-			wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] != "" {
+				prevYtd := wb.getDetailPrevYearTotal(general, details[i])
+				net := ytdDetails[i].debit - ytdDetails[i].credit + prevYtd
+				wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+			}
 		}
 
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -173,7 +174,6 @@ func (wb *Workbook) WriteMLMonthClosings(
 		wb.File.SetCellValue(sheet, cellName(5, row), "")
 		wb.File.SetCellValue(sheet, cellName(6, row), endDir)
 		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(endDisp))
-		// H-U 留空 — 明细列期末余额无会计意义
 
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},

@@ -102,7 +102,27 @@ var generateCmd = &cobra.Command{
 
 		// 生成月度累计工作薄
 		xlsxPath := filepath.Join(yearDir, month+".xlsx")
-		if !force {
+		if force {
+			// 级联删除当月及之后所有月份的 xlsx
+			entries, err := os.ReadDir(yearDir)
+			if err == nil {
+				for _, entry := range entries {
+					if entry.IsDir() {
+						continue
+					}
+					name := entry.Name()
+					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") >= month {
+						path := filepath.Join(yearDir, name)
+						if err := os.Remove(path); err != nil {
+							return fmt.Errorf("删除 %s: %w", path, err)
+						}
+						if verbose {
+							fmt.Printf("已删除: %s\n", path)
+						}
+					}
+				}
+			}
+		} else {
 			if _, err := os.Stat(xlsxPath); err == nil {
 				return fmt.Errorf("%s 已存在，使用 -f 覆盖已有 xlsx", xlsxPath)
 			}

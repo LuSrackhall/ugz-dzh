@@ -97,6 +97,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		initDetails = make([]string, len(details))
 		copy(initDetails, details)
 		sort.Strings(initDetails)
+		newAppended = initDetails
 	}
 
 	if len(initDetails) > mlMaxDetails {
@@ -376,24 +377,44 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 		if err != nil {
 			return err
 		}
+
+		// 回写：新科目追加到 detailOrder，或首次引导从标题初始化
+		needsWriteback := false
 		if len(newAppended) > 0 {
+			needsWriteback = true
+		}
+		if detailOrder == nil {
+			needsWriteback = true
+		}
+		if needsWriteback {
 			if wb.Config.DetailOrder == nil {
 				wb.Config.DetailOrder = make(map[string][]string)
 			}
-			existing := wb.Config.DetailOrder[general]
+			if detailOrder == nil {
+				// 首次引导：从 Sheet 标题读取现有列序作为初始 detailOrder
+				_, existingDetails, err := wb.readMLDetailHeaders(sheetNameML(general))
+				if err == nil {
+					for _, d := range existingDetails {
+						if d != "" {
+							detailOrder = append(detailOrder, d)
+						}
+					}
+				}
+			}
+			merged := detailOrder
 			for _, nd := range newAppended {
 				found := false
-				for _, d := range existing {
+				for _, d := range merged {
 					if d == nd {
 						found = true
 						break
 					}
 				}
 				if !found {
-					existing = append(existing, nd)
+					merged = append(merged, nd)
 				}
 			}
-			wb.Config.DetailOrder[general] = existing
+			wb.Config.DetailOrder[general] = merged
 		}
 		if err := wb.appendToMLSheet(general, g.entries, detailIdx, initials[general]); err != nil {
 			return fmt.Errorf("多科目明细账 %s: %w", general, err)

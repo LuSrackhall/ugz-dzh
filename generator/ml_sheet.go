@@ -71,6 +71,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 
 	// 初始化列序：若存在 detailOrder，使用配置；否则按字母序
 	var initDetails []string
+	var newAppended []string
 	if len(detailOrder) > 0 {
 		initDetails = make([]string, 0, mlMaxDetails)
 		existingSet := make(map[string]bool)
@@ -91,6 +92,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		}
 		sort.Strings(remaining)
 		initDetails = append(initDetails, remaining...)
+		newAppended = remaining
 	} else {
 		initDetails = make([]string, len(details))
 		copy(initDetails, details)
@@ -112,7 +114,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		}
 	}
 
-	return name, detailIdx, nil, nil
+	return name, detailIdx, newAppended, nil
 }
 
 // checkMLDetailOrderConflict 逐列比对第2行标题与 detailOrder 配置。

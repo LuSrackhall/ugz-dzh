@@ -10,21 +10,16 @@ import (
 // GenerateWorkbook 是 xlsx 生成的唯一入口，按序执行完整生成流程。
 // entries 应已经过同年同月校验和科目映射替换。
 func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Entry) error {
-	// 1. 加载配置
-	cfg, err := balance.LoadConfig(configPath)
-	if err != nil {
-		return fmt.Errorf("加载配置: %w", err)
-	}
-
 	if len(entries) == 0 {
 		return fmt.Errorf("月份 %s 没有匹配的凭证分录", month)
 	}
 
-	// 3. 创建或复制上月工作薄
+	// 创建或复制上月工作薄（内部加载配置到 wb.Config）
 	wb, err := NewWorkbook(configPath, month, outputDir)
 	if err != nil {
 		return fmt.Errorf("创建工作薄: %w", err)
 	}
+	cfg := wb.Config
 
 	// 4. 提取上月期末作为本月期初
 	prevFinals, err := wb.ExtractLastMonthFinals()

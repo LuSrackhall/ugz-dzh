@@ -73,20 +73,20 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 	var initDetails []string
 	var newAppended []string
 	if len(detailOrder) > 0 {
-		initDetails = make([]string, 0, mlMaxDetails)
-		existingSet := make(map[string]bool)
-		for _, d := range details {
-			existingSet[d] = true
-		}
+		// 直接复制 detailOrder 完整列表（含 "" 跳列和未发生科目）
+		initDetails = make([]string, len(detailOrder))
+		copy(initDetails, detailOrder)
+
+		// 当月分录中不在 detailOrder 中的科目 → 追加到右侧空列
+		inOrder := make(map[string]bool)
 		for _, d := range detailOrder {
-			if d == "" || existingSet[d] {
-				initDetails = append(initDetails, d)
-				existingSet[d] = false
+			if d != "" {
+				inOrder[d] = true
 			}
 		}
 		var remaining []string
 		for _, d := range details {
-			if existingSet[d] {
+			if !inOrder[d] {
 				remaining = append(remaining, d)
 			}
 		}

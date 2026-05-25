@@ -69,9 +69,12 @@ TBD - created by archiving change stage3-excel-generator. Update Purpose after a
 - **THEN** I 列标题保留"B科"，I 列数据行留空，列位不回收
 
 ### Requirement: 月结处理
-每月生成结束时，系统 SHALL 在每个有变化的 Sheet 末尾添加"本月合计"行和"本年累计"行。
+
+每月生成结束时，系统 SHALL 在每个有变化的 Sheet 末尾添加"本月合计"行和"本年累计"行。季末月份（3、6、9、12）SHALL 额外添加"本季合计"行。
 
 多科目明细账的月结行 SHALL 统一从 Sheet 第2行标题读取明细列映射，确保月结行的明细列数据与标题一致。
+
+多科目明细账"本季合计"和"本年累计"的 A-G 列（总借/贷合计）SHALL 使用全路径（`总账-明细`）从累计 map 聚合所有明细科目的累计值，而非仅使用总账名查找。
 
 #### Scenario: 月末结账
 - **WHEN** 当月所有分录追加完毕
@@ -80,6 +83,14 @@ TBD - created by archiving change stage3-excel-generator. Update Purpose after a
 #### Scenario: 多科目明细账月结列对齐
 - **WHEN** 多科目明细账 Sheet 追加月结行
 - **THEN** 本月合计、本季合计、本年累计行的明细列 SHALL 与第2行标题的科目一致
+
+#### Scenario: 多科目明细账本季合计 A-G 列聚合所有明细
+- **WHEN** 多科目明细账在季末月份生成"本季合计"行，且该总账科目下有多个明细科目（如"银行存款-工行"、"银行存款-建行"）
+- **THEN** A-G 列的总借/贷合计 SHALL 等于当月所有明细的发生额 + 截至上月的本季累计（从累计 map 用全路径 `总账-明细` 聚合），而非仅当月发生额
+
+#### Scenario: 多科目明细账本年累计 A-G 列聚合所有明细
+- **WHEN** 多科目明细账生成"本年累计"行，且该总账科目下有多个明细科目
+- **THEN** A-G 列的总借/贷合计 SHALL 等于当月所有明细的发生额 + 截至上月的本年累计（从累计 map 用全路径 `总账-明细` 聚合），而非仅当月发生额
 
 ### Requirement: 打印标记
 当月有数据变动的行 SHALL 被标记为"需打印"。跨月未满页时，该页原有数据行也 SHALL 标记为"需打印"。

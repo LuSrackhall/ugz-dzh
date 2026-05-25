@@ -58,11 +58,23 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		changedSheets[sheetNameML(general)] = true
 	}
 
-	// 提取本年累计
-	ytdDebit, ytdCredit := wb.ExtractYtdTotals(allAccounts)
+	// 提取本年累计 — 需要所有 Config.Tree 中的科目，而非仅当月有分录的科目，
+	// 否则无当月分录但有历史余额的明细科目的累计值会丢失。
+	allAccountsWithHistory := make([]string, len(allAccounts))
+	copy(allAccountsWithHistory, allAccounts)
+	seen := make(map[string]bool, len(allAccounts))
+	for _, a := range allAccounts {
+		seen[a] = true
+	}
+	for k := range cfg.Tree {
+		if !seen[k] {
+			allAccountsWithHistory = append(allAccountsWithHistory, k)
+		}
+	}
+	ytdDebit, ytdCredit := wb.ExtractYtdTotals(allAccountsWithHistory)
 
 	// 提取本季累计（截至上月）
-	qtdDebit, qtdCredit := wb.ExtractQuarterlyTotals(allAccounts)
+	qtdDebit, qtdCredit := wb.ExtractQuarterlyTotals(allAccountsWithHistory)
 
 	// 9. 月末结账（总分类账）
 	if err := wb.WriteMonthClosings(activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit, initials, changedSheets); err != nil {

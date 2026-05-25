@@ -100,8 +100,13 @@ func (wb *Workbook) WriteMLMonthClosings(
 					qtDetails[idx].credit += e.CreditCents
 				}
 			}
-			qtDebit += qtdDebit[general]
-			qtCredit += qtdCredit[general]
+			for _, d := range details {
+				if d != "" {
+					key := general + "-" + d
+					qtDebit += qtdDebit[key]
+					qtCredit += qtdCredit[key]
+				}
+			}
 
 			wb.File.SetCellValue(sheet, cellName(1, row), "")
 			wb.File.SetCellValue(sheet, cellName(2, row), "")
@@ -136,8 +141,13 @@ func (wb *Workbook) WriteMLMonthClosings(
 				ytdDetails[idx].credit += e.CreditCents
 			}
 		}
-		cumDebit += ytdDebit[general]
-		cumCredit += ytdCredit[general]
+		for _, d := range details {
+			if d != "" {
+				key := general + "-" + d
+				cumDebit += ytdDebit[key]
+				cumCredit += ytdCredit[key]
+			}
+		}
 
 		wb.File.SetCellValue(sheet, cellName(1, row), "")
 		wb.File.SetCellValue(sheet, cellName(2, row), "")

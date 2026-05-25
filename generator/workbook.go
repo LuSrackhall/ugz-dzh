@@ -149,17 +149,9 @@ func prevMonth(m string) string {
 	return fmt.Sprintf("%04d-%02d", yy, mm)
 }
 
-// centsToYuanStr 分转元显示字符串。
-func centsToYuanStr(c int64) string {
-	if c == 0 {
-		return "0.00"
-	}
-	sign := ""
-	if c < 0 {
-		sign = "-"
-		c = -c
-	}
-	return sign + fmt.Sprintf("%d.%02d", c/100, c%100)
+// centsToYuan 分转元数值。
+func centsToYuan(c int64) float64 {
+	return float64(c) / 100
 }
 
 // directionFor 根据借贷差返回方向和显示余额。

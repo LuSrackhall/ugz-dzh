@@ -76,7 +76,7 @@ func (wb *Workbook) WriteFinalSheet(initials map[string]int64, activity map[stri
 
 		wb.File.SetCellValue(name, cellName(1, row), account)
 		wb.File.SetCellValue(name, cellName(2, row), dir)
-		wb.File.SetCellValue(name, cellName(3, row), centsToYuanStr(dispBal))
+		wb.File.SetCellValue(name, cellName(3, row), centsToYuan(dispBal))
 		row++
 	}
 
@@ -84,7 +84,7 @@ func (wb *Workbook) WriteFinalSheet(initials map[string]int64, activity map[stri
 	wb.File.SetCellValue(name, totalCell, "合计")
 	totalDir, totalDispBal := directionFor(totalFinal, 0)
 	wb.File.SetCellValue(name, cellName(2, row), totalDir)
-	wb.File.SetCellValue(name, cellName(3, row), centsToYuanStr(totalDispBal))
+	wb.File.SetCellValue(name, cellName(3, row), centsToYuan(totalDispBal))
 
 	totalStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10},

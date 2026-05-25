@@ -23,8 +23,8 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellValue(sheet, cellName(1, row), "")
 		wb.File.SetCellValue(sheet, cellName(2, row), "")
 		wb.File.SetCellValue(sheet, cellName(3, row), "本月合计")
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(act.Debit))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(act.Credit))
+		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(act.Debit))
+		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(act.Credit))
 		wb.File.SetCellValue(sheet, cellName(6, row), "")
 		wb.File.SetCellValue(sheet, cellName(7, row), "")
 
@@ -45,8 +45,8 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			wb.File.SetCellValue(sheet, cellName(1, row), "")
 			wb.File.SetCellValue(sheet, cellName(2, row), "")
 			wb.File.SetCellValue(sheet, cellName(3, row), "本季合计")
-			wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(qtDebit))
-			wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(qtCredit))
+			wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(qtDebit))
+			wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(qtCredit))
 			wb.File.SetCellValue(sheet, cellName(6, row), "")
 			wb.File.SetCellValue(sheet, cellName(7, row), "")
 
@@ -64,8 +64,8 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellValue(sheet, cellName(1, row), "")
 		wb.File.SetCellValue(sheet, cellName(2, row), "")
 		wb.File.SetCellValue(sheet, cellName(3, row), "本年累计")
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(cumDebit))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(cumCredit))
+		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(cumDebit))
+		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(cumCredit))
 		wb.File.SetCellValue(sheet, cellName(6, row), "")
 		wb.File.SetCellValue(sheet, cellName(7, row), "")
 
@@ -88,7 +88,7 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellValue(sheet, cellName(4, row), "")
 		wb.File.SetCellValue(sheet, cellName(5, row), "")
 		wb.File.SetCellValue(sheet, cellName(6, row), endDir)
-		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(endDisp))
+		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(endDisp))
 
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},

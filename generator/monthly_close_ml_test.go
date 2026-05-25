@@ -127,20 +127,20 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 	// 当月: debit=100000+50000=150000, credit=0+20000=20000
 	// qtd 累计: debit=150000+100000=250000, credit=50000+30000=80000
 	// 预期: debit=400000(4000.00), credit=100000(1000.00)
-	if len(qtRow) > 3 && qtRow[3] != "4000.00" {
-		t.Errorf("本季合计 D(debit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[3], "4000.00")
+	if len(qtRow) > 3 && qtRow[3] != "4000" {
+		t.Errorf("本季合计 D(debit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[3], "4000")
 	}
-	if len(qtRow) > 4 && qtRow[4] != "1000.00" {
-		t.Errorf("本季合计 E(credit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[4], "1000.00")
+	if len(qtRow) > 4 && qtRow[4] != "1000" {
+		t.Errorf("本季合计 E(credit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[4], "1000")
 	}
 
 	// 本年累计 D/E 列 = 当月发生额 + 截至上月的本年累计（全路径聚合所有明细）
 	// ytd 累计: debit=300000+200000=500000, credit=100000+50000=150000
-	// 预期: debit=650000(6500.00), credit=170000(1700.00)
-	if len(ytdRow) > 3 && ytdRow[3] != "6500.00" {
-		t.Errorf("本年累计 D(debit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[3], "6500.00")
+	// 预期: debit=650000(6500), credit=170000(1700)
+	if len(ytdRow) > 3 && ytdRow[3] != "6500" {
+		t.Errorf("本年累计 D(debit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[3], "6500")
 	}
-	if len(ytdRow) > 4 && ytdRow[4] != "1700.00" {
-		t.Errorf("本年累计 E(credit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[4], "1700.00")
+	if len(ytdRow) > 4 && ytdRow[4] != "1700" {
+		t.Errorf("本年累计 E(credit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[4], "1700")
 	}
 }

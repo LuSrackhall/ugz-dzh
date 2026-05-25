@@ -492,15 +492,15 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		wb.File.SetCellValue(sheet, cellName(1, row), e.Date)
 		wb.File.SetCellValue(sheet, cellName(2, row), e.VoucherNum)
 		wb.File.SetCellValue(sheet, cellName(3, row), e.Summary)
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(e.DebitCents))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(e.CreditCents))
+		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(e.DebitCents))
+		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(e.CreditCents))
 		wb.File.SetCellValue(sheet, cellName(6, row), dir)
-		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 
 		if e.DetailAccount != "" {
 			if idx, ok := detailIdx[e.DetailAccount]; ok {
 				net := e.DebitCents - e.CreditCents
-				wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+idx, row), centsToYuanStr(net))
+				wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+idx, row), centsToYuan(net))
 				pageDetails[idx].debit += e.DebitCents
 				pageDetails[idx].credit += e.CreditCents
 			}
@@ -519,14 +519,14 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 	wb.File.SetCellValue(sheet, cellName(1, row), "")
 	wb.File.SetCellValue(sheet, cellName(2, row), "")
 	wb.File.SetCellValue(sheet, cellName(3, row), pageBreakLabel)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 
 	for i, pd := range pageDetails {
 		net := pd.debit - pd.credit
-		wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+		wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuan(net))
 	}
 }
 
@@ -536,14 +536,14 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 	wb.File.SetCellValue(sheet, cellName(1, row), "")
 	wb.File.SetCellValue(sheet, cellName(2, row), "")
 	wb.File.SetCellValue(sheet, cellName(3, row), label)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 
 	for i, pd := range pageDetails {
 		net := pd.debit - pd.credit
-		wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuanStr(net))
+		wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuan(net))
 	}
 }
 

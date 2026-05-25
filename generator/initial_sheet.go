@@ -77,7 +77,7 @@ func (wb *Workbook) WriteInitialSheet(initials map[string]int64) error {
 
 		wb.File.SetCellValue(name, cellName(1, row), account)
 		wb.File.SetCellValue(name, cellName(2, row), dir)
-		wb.File.SetCellValue(name, cellName(3, row), centsToYuanStr(dispBal))
+		wb.File.SetCellValue(name, cellName(3, row), centsToYuan(dispBal))
 		row++
 	}
 
@@ -91,7 +91,7 @@ func (wb *Workbook) WriteInitialSheet(initials map[string]int64) error {
 	}
 	totalDir, totalDispBal := directionFor(totalInit, 0)
 	wb.File.SetCellValue(name, cellName(2, row), totalDir)
-	wb.File.SetCellValue(name, cellName(3, row), centsToYuanStr(totalDispBal))
+	wb.File.SetCellValue(name, cellName(3, row), centsToYuan(totalDispBal))
 
 	totalStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10},

@@ -39,22 +39,22 @@ func TestSheetNameML(t *testing.T) {
 	}
 }
 
-func TestCentsToYuanStr(t *testing.T) {
+func TestCentsToYuan(t *testing.T) {
 	tests := []struct {
 		cents int64
-		want  string
+		want  float64
 	}{
-		{0, "0.00"},
-		{100, "1.00"},
-		{12345, "123.45"},
-		{-500, "-5.00"},
-		{-1, "-0.01"},
-		{99, "0.99"},
+		{0, 0.0},
+		{100, 1.00},
+		{12345, 123.45},
+		{-500, -5.00},
+		{-1, -0.01},
+		{99, 0.99},
 	}
 	for _, tt := range tests {
-		got := centsToYuanStr(tt.cents)
+		got := centsToYuan(tt.cents)
 		if got != tt.want {
-			t.Errorf("centsToYuanStr(%d) = %q, want %q", tt.cents, got, tt.want)
+			t.Errorf("centsToYuan(%d) = %v, want %v", tt.cents, got, tt.want)
 		}
 	}
 }

@@ -205,12 +205,12 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(1, row), e.Date)
 		wb.File.SetCellValue(sheet, cellName(2, row), e.VoucherNum)
 		wb.File.SetCellValue(sheet, cellName(3, row), e.Summary)
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(e.DebitCents))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(e.CreditCents))
+		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(e.DebitCents))
+		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(e.CreditCents))
 
 		dir, dispBal := directionFor(balance, 0)
 		wb.File.SetCellValue(sheet, cellName(6, row), dir)
-		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 
 		wb.markRowForPrint(sheet, row)
 	}
@@ -228,7 +228,7 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64) error {
 	wb.File.SetCellValue(sheet, cellName(4, row), "")
 	wb.File.SetCellValue(sheet, cellName(5, row), "")
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 
 	return nil
 }
@@ -325,10 +325,10 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(1, row), "")
 	wb.File.SetCellValue(sheet, cellName(2, row), "")
 	wb.File.SetCellValue(sheet, cellName(3, row), pageBreakLabel)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 }
 
 // writeCarryForwardRow 写"承前页"行，复制过次页的全部数据。
@@ -337,10 +337,10 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 	wb.File.SetCellValue(sheet, cellName(1, row), "")
 	wb.File.SetCellValue(sheet, cellName(2, row), "")
 	wb.File.SetCellValue(sheet, cellName(3, row), carryForwardLabel)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuanStr(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuanStr(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuanStr(dispBal))
+	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 }
 
 // cellName 返回 Excel 单元格名称。

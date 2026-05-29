@@ -78,6 +78,7 @@ func (wb *Workbook) WriteInitialSheet(initials map[string]int64) error {
 		wb.File.SetCellValue(name, cellName(1, row), account)
 		wb.File.SetCellValue(name, cellName(2, row), dir)
 		wb.File.SetCellValue(name, cellName(3, row), centsToYuan(dispBal))
+		wb.setMoneyStyle(name, row, 3)
 		row++
 	}
 
@@ -100,6 +101,8 @@ func (wb *Workbook) WriteInitialSheet(initials map[string]int64) error {
 		},
 	})
 	wb.File.SetCellStyle(name, totalCell, cellName(3, row), totalStyle)
+
+	wb.setMoneyStyle(name, row, 3)
 
 	return nil
 }

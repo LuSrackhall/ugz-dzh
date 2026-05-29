@@ -15,11 +15,12 @@ import (
 
 // Workbook 持有 excelize.File 和当月生成上下文。
 type Workbook struct {
-	File       *excelize.File
-	Config     *balance.GlobalConfig
-	Month      string // YYYY-MM
-	OutputDir  string
-	ConfigPath string
+	File         *excelize.File
+	Config       *balance.GlobalConfig
+	Month        string // YYYY-MM
+	OutputDir    string
+	ConfigPath   string
+	moneyStyleID int
 }
 
 // NewWorkbook 创建或加载工作薄。若上月 xlsx 存在则复制之，否则新建。
@@ -47,6 +48,14 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 		wb.File = excelize.NewFile()
 		// "Sheet1" 作为唯一 sheet 时无法删除，延迟到 Save() 处理
 	}
+
+	moneyStyle, err := wb.File.NewStyle(&excelize.Style{
+		CustomNumFmt: stringPtr("#,##0.00"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建金额样式: %w", err)
+	}
+	wb.moneyStyleID = moneyStyle
 
 	return wb, nil
 }
@@ -181,4 +190,14 @@ func entryMonth(e voucher.Entry) string {
 		return e.Date[:7]
 	}
 	return ""
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+// setMoneyStyle 对指定单元格应用金额数字格式 #,##0.00。
+func (wb *Workbook) setMoneyStyle(sheet string, row, col int) {
+	cell, _ := excelize.CoordinatesToCellName(col, row)
+	wb.File.SetCellStyle(sheet, cell, cell, wb.moneyStyleID)
 }

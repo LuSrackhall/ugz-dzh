@@ -86,6 +86,16 @@ func (wb *Workbook) WriteMLMonthClosings(
 		})
 		lastDetailCol := mlDetailStartCol + numDetails - 1
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), monthlyStyle)
+
+		wb.setMoneyStyle(sheet, row, 4)
+		wb.setMoneyStyle(sheet, row, 5)
+		wb.setMoneyStyle(sheet, row, 7)
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] != "" {
+				wb.setMoneyStyle(sheet, row, mlDetailStartCol+i)
+			}
+		}
+
 		row++
 
 		// "本季合计" 行 — 仅季末月份（3、6、9、12）
@@ -127,6 +137,16 @@ func (wb *Workbook) WriteMLMonthClosings(
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
 			wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), qtStyle)
+
+			wb.setMoneyStyle(sheet, row, 4)
+			wb.setMoneyStyle(sheet, row, 5)
+			wb.setMoneyStyle(sheet, row, 7)
+			for i := 0; i < mlMaxDetails; i++ {
+				if details[i] != "" {
+					wb.setMoneyStyle(sheet, row, mlDetailStartCol+i)
+				}
+			}
+
 			row++
 		}
 
@@ -171,6 +191,16 @@ func (wb *Workbook) WriteMLMonthClosings(
 			},
 		})
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), cumStyle)
+
+		wb.setMoneyStyle(sheet, row, 4)
+		wb.setMoneyStyle(sheet, row, 5)
+		wb.setMoneyStyle(sheet, row, 7)
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] != "" {
+				wb.setMoneyStyle(sheet, row, mlDetailStartCol+i)
+			}
+		}
+
 		row++
 
 		// "期末余额" 行 — 期初 + 本月借 - 本月贷
@@ -192,6 +222,8 @@ func (wb *Workbook) WriteMLMonthClosings(
 			},
 		})
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), endStyle)
+
+				wb.setMoneyStyle(sheet, row, 7)
 	}
 
 	return nil

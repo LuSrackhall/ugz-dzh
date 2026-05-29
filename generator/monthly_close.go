@@ -35,6 +35,11 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			},
 		})
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), monthlyStyle)
+
+		wb.setMoneyStyle(sheet, row, 4)
+		wb.setMoneyStyle(sheet, row, 5)
+		wb.setMoneyStyle(sheet, row, 7)
+
 		row++
 
 		// "本季合计" 行 — 仅季末月份（3、6、9、12）
@@ -54,6 +59,11 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
 			wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), qtStyle)
+
+			wb.setMoneyStyle(sheet, row, 4)
+			wb.setMoneyStyle(sheet, row, 5)
+			wb.setMoneyStyle(sheet, row, 7)
+
 			row++
 		}
 
@@ -76,6 +86,11 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			},
 		})
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), cumStyle)
+
+		wb.setMoneyStyle(sheet, row, 4)
+		wb.setMoneyStyle(sheet, row, 5)
+		wb.setMoneyStyle(sheet, row, 7)
+
 		row++
 
 		// "期末余额" 行 — 期初 + 本月借 - 本月贷
@@ -97,7 +112,9 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			},
 		})
 		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(7, row), endStyle)
-	}
+
+			wb.setMoneyStyle(sheet, row, 7)
+		}
 
 	return nil
 }

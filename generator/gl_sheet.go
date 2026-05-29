@@ -212,6 +212,10 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(6, row), dir)
 		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 
+		wb.setMoneyStyle(sheet, row, 4)
+		wb.setMoneyStyle(sheet, row, 5)
+		wb.setMoneyStyle(sheet, row, 7)
+
 		wb.markRowForPrint(sheet, row)
 	}
 
@@ -229,6 +233,8 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64) error {
 	wb.File.SetCellValue(sheet, cellName(5, row), "")
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
 	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+
+	wb.setMoneyStyle(sheet, row, 7)
 
 	return nil
 }
@@ -329,6 +335,10 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
 	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+
+	wb.setMoneyStyle(sheet, row, 4)
+	wb.setMoneyStyle(sheet, row, 5)
+	wb.setMoneyStyle(sheet, row, 7)
 }
 
 // writeCarryForwardRow 写"承前页"行，复制过次页的全部数据。
@@ -341,6 +351,10 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
 	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+
+	wb.setMoneyStyle(sheet, row, 4)
+	wb.setMoneyStyle(sheet, row, 5)
+	wb.setMoneyStyle(sheet, row, 7)
 }
 
 // cellName 返回 Excel 单元格名称。

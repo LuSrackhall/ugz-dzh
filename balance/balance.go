@@ -24,9 +24,12 @@ type GlobalConfig struct {
 
 // GlobalSettings 全局设置。
 type GlobalSettings struct {
-	StartMonth  string            `json:"启动月"`
-	Order       []string          `json:"科目顺序"`
-	AccountMap  map[string]string `json:"科目映射表"`
+	StartMonth         string            `json:"启动月"`
+	Order              []string          `json:"科目顺序"`
+	AccountMap         map[string]string `json:"科目映射表"`
+	MergeGLAccounts    []string          `json:"合并总账科目,omitempty"`
+	GLSuppressAccounts []string          `json:"总分类账忽略科目,omitempty"`
+	MLSuppressAccounts []string          `json:"多科目明细账忽略科目,omitempty"`
 }
 
 // AccountNode 科目树中的一个节点（叶子科目）。

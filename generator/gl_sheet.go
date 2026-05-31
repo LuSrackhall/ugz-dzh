@@ -126,7 +126,18 @@ func (wb *Workbook) AppendEntries(entries []voucher.Entry, initials map[string]i
 	}
 	groups := make(map[string]*entryGroup)
 
+	// 构建忽略集合
+	glSuppress := make(map[string]bool)
+	for _, a := range wb.Config.Settings.GLSuppressAccounts {
+		glSuppress[a] = true
+	}
+
 	for _, e := range entries {
+		// 若分录所属父级在总分类账忽略列表中，跳过（不生成叶子 GL）
+		if glSuppress[e.GeneralAccount] {
+			continue
+		}
+
 		path := e.GeneralAccount
 		if e.DetailAccount != "" {
 			path += "-" + e.DetailAccount

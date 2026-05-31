@@ -347,7 +347,18 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 	}
 	groups := make(map[string]*mlGroup)
 
+	// 构建忽略集合
+	mlSuppress := make(map[string]bool)
+	for _, a := range wb.Config.Settings.MLSuppressAccounts {
+		mlSuppress[a] = true
+	}
+
 	for _, e := range entries {
+		// 若分录所属父级在多科目明细账忽略列表中，跳过
+		if mlSuppress[e.GeneralAccount] {
+			continue
+		}
+
 		g, ok := groups[e.GeneralAccount]
 		if !ok {
 			g = &mlGroup{}

@@ -44,6 +44,11 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("追加总分类账: %w", err)
 	}
 
+	// 6.1 追加分录到合并总分类账 Sheet（纯增量，不影响原有 GL）
+	if err := wb.AppendMergeEntries(entries, initials); err != nil {
+		return fmt.Errorf("追加合并总分类账: %w", err)
+	}
+
 	// 7. 追加分录到多科目明细账 Sheet
 	if err := wb.AppendMLEntries(entries, initials); err != nil {
 		return fmt.Errorf("追加多科目明细账: %w", err)
@@ -79,6 +84,11 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	// 9. 月末结账（总分类账）
 	if err := wb.WriteMonthClosings(activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit, initials, changedSheets); err != nil {
 		return fmt.Errorf("月结: %w", err)
+	}
+
+	// 9.05 月末结账（合并总分类账）
+	if err := wb.WriteMergeGLClosings(activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit, initials); err != nil {
+		return fmt.Errorf("合并总分类账月结: %w", err)
 	}
 
 	// 9.1 月末结账（多科目明细账）

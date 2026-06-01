@@ -35,9 +35,12 @@ var initCmd = &cobra.Command{
 
 		config := map[string]interface{}{
 			"全局设置": map[string]interface{}{
-				"启动月":  startMonth,
-				"科目顺序": []string{},
-				"科目映射表": map[string]string{},
+				"启动月":         startMonth,
+				"科目顺序":       []string{},
+				"科目映射表":     map[string]string{},
+				"合并总账科目":   []string{},
+				"总分类账忽略科目": []string{},
+				"多科目明细账忽略科目": []string{},
 			},
 			"科目树":     map[string]interface{}{},
 			"自动识别科目": []interface{}{},

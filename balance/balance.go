@@ -27,9 +27,9 @@ type GlobalSettings struct {
 	StartMonth         string            `json:"启动月"`
 	Order              []string          `json:"科目顺序"`
 	AccountMap         map[string]string `json:"科目映射表"`
-	MergeGLAccounts    []string          `json:"合并总账科目,omitempty"`
-	GLSuppressAccounts []string          `json:"总分类账忽略科目,omitempty"`
-	MLSuppressAccounts []string          `json:"多科目明细账忽略科目,omitempty"`
+	MergeGLAccounts    []string          `json:"合并总账科目"`
+	GLSuppressAccounts []string          `json:"总分类账忽略科目"`
+	MLSuppressAccounts []string          `json:"多科目明细账忽略科目"`
 }
 
 // AccountNode 科目树中的一个节点（叶子科目）。
@@ -217,6 +217,18 @@ func LoadConfig(path string) (*GlobalConfig, error) {
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置 %s: %w", path, err)
 	}
+
+	// normalize: 确保旧配置缺失字段时不为 nil，避免生成时 nil slice 行为不一致
+	if cfg.Settings.MergeGLAccounts == nil {
+		cfg.Settings.MergeGLAccounts = []string{}
+	}
+	if cfg.Settings.GLSuppressAccounts == nil {
+		cfg.Settings.GLSuppressAccounts = []string{}
+	}
+	if cfg.Settings.MLSuppressAccounts == nil {
+		cfg.Settings.MLSuppressAccounts = []string{}
+	}
+
 	return &cfg, nil
 }
 

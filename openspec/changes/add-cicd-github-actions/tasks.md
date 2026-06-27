@@ -33,7 +33,7 @@
 
 ## 5. 更新 .gitignore
 
-- [ ] 5.1 添加 `.worktrees/` 到 .gitignore
+- [x] 5.1 添加 `.worktrees/` 到 .gitignore
 
 ## 6. 测试验证
 

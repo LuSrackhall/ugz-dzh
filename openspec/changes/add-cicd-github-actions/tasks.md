@@ -24,12 +24,12 @@
 
 ## 4. 创建 Release Workflow
 
-- [ ] 4.1 创建 `.github/workflows/release.yml` 文件
-- [ ] 4.2 配置触发条件：Tag 推送，匹配 v* 模式
-- [ ] 4.3 配置权限：permissions: contents: write
-- [ ] 4.4 添加 checkout 步骤：fetch-depth: 0 获取完整历史
-- [ ] 4.5 添加 Go 环境设置步骤
-- [ ] 4.6 添加 GoReleaser release 步骤：使用 GITHUB_TOKEN
+- [x] 4.1 创建 `.github/workflows/release.yml` 文件
+- [x] 4.2 配置触发条件：Tag 推送，匹配 v* 模式
+- [x] 4.3 配置权限：permissions: contents: write
+- [x] 4.4 添加 checkout 步骤：fetch-depth: 0 获取完整历史
+- [x] 4.5 添加 Go 环境设置步骤
+- [x] 4.6 添加 GoReleaser release 步骤：使用 GITHUB_TOKEN
 
 ## 5. 更新 .gitignore
 

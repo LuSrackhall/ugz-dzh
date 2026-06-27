@@ -17,10 +17,10 @@
 
 ## 3. 创建 Build Workflow
 
-- [ ] 3.1 创建 `.github/workflows/build.yml` 文件
-- [ ] 3.2 配置触发条件：Push 到 main
-- [ ] 3.3 添加 Go 环境设置步骤
-- [ ] 3.4 添加 GoReleaser snapshot 构建步骤：使用 goreleaser/goreleaser-action@v6，args: release --snapshot --clean
+- [x] 3.1 创建 `.github/workflows/build.yml` 文件
+- [x] 3.2 配置触发条件：Push 到 main
+- [x] 3.3 添加 Go 环境设置步骤
+- [x] 3.4 添加 GoReleaser snapshot 构建步骤：使用 goreleaser/goreleaser-action@v6，args: release --snapshot --clean
 
 ## 4. 创建 Release Workflow
 

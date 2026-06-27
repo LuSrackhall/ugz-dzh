@@ -1,11 +1,11 @@
 ## 1. 创建 GoReleaser 配置
 
-- [ ] 1.1 创建 `.goreleaser.yml` 文件，配置版本号为 2
-- [ ] 1.2 配置 builds 部分：main 入口、binary 名称、CGO_ENABLED=0
-- [ ] 1.3 配置目标平台：linux/darwin/windows × amd64/arm64
-- [ ] 1.4 配置 archives 部分：tar.gz 格式，Windows 使用 zip
-- [ ] 1.5 配置 checksum 生成：输出 checksums.txt
-- [ ] 1.6 配置 changelog：排除 docs: 和 test: 前缀的提交
+- [x] 1.1 创建 `.goreleaser.yml` 文件，配置版本号为 2
+- [x] 1.2 配置 builds 部分：main 入口、binary 名称、CGO_ENABLED=0
+- [x] 1.3 配置目标平台：linux/darwin/windows × amd64/arm64
+- [x] 1.4 配置 archives 部分：tar.gz 格式，Windows 使用 zip
+- [x] 1.5 配置 checksum 生成：输出 checksums.txt
+- [x] 1.6 配置 changelog：排除 docs: 和 test: 前缀的提交
 
 ## 2. 创建 CI Workflow
 

@@ -9,11 +9,11 @@
 
 ## 2. 创建 CI Workflow
 
-- [ ] 2.1 创建 `.github/workflows/ci.yml` 文件
-- [ ] 2.2 配置触发条件：PR 到 main、Push 到 main
-- [ ] 2.3 添加 Go 环境设置步骤：actions/setup-go@v5，go-version 1.26，启用缓存
-- [ ] 2.4 添加测试数据创建步骤：创建简化 vouchers 和 科目余额总览.json
-- [ ] 2.5 添加测试执行步骤：运行 go test ./...
+- [x] 2.1 创建 `.github/workflows/ci.yml` 文件
+- [x] 2.2 配置触发条件：PR 到 main、Push 到 main
+- [x] 2.3 添加 Go 环境设置步骤：actions/setup-go@v5，go-version 1.26，启用缓存
+- [x] 2.4 添加测试数据创建步骤：创建简化 vouchers 和 科目余额总览.json
+- [x] 2.5 添加测试执行步骤：运行 go test ./...
 
 ## 3. 创建 Build Workflow
 

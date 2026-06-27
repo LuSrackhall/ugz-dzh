@@ -37,7 +37,7 @@
 
 ## 6. 测试验证
 
-- [ ] 6.1 本地运行 GoReleaser snapshot 验证配置正确
+- [x] 6.1 本地运行 GoReleaser snapshot 验证配置正确
 - [ ] 6.2 提交并创建 PR 验证 CI workflow 运行
 - [ ] 6.3 合并到 main 验证 build workflow 运行
 - [ ] 6.4 创建测试 Tag 验证 release workflow 运行

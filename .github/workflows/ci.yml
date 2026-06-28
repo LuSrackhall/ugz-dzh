@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Create test data
+        run: |
+          mkdir -p vouchers/2026_01
+          cat > vouchers/2026_01/01.md << 'EOF'
+          # 2026年1月凭证
+
+          | 日期 | 凭证号 | 摘要 | 科目 | 借方 | 贷方 |
+          |------|--------|------|------|------|------|
+          | 2026-01-01 | 记-001 | 期初余额 | 现金 | 1000.00 | |
+          | 2026-01-01 | 记-001 | 期初余额 | 银行存款 | | 1000.00 |
+          EOF
+          cat > 科目余额总览.json << 'EOF'
+          {
+            "全局设置": {
+              "启动月": "2026-01"
+            },
+            "科目树": {},
+            "自动识别科目": {},
+            "手动调整科目": {}
+          }
+          EOF
+
+      - name: Run tests
+        run: go test ./balance/... ./cmd/... ./generator/... ./voucher/...

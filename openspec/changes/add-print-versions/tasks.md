@@ -1,10 +1,10 @@
 ## 1. 基础建设
 
-- [ ] 1.1 新增 `generator/amount.go`，实现 `centsToDigits` 纯函数
-- [ ] 1.2 新增 `generator/amount_test.go`，编写单元测试（覆盖 0、正数、大额、负数）
-- [ ] 1.3 新增 `generator/styles.go`，实现 `TableStyles` 结构体和共享样式函数
-- [ ] 1.4 实现 `writeAmountCells` 函数，将金额写入 Excel 12 个单元格
-- [ ] 1.5 实现 `formatAmountForDisplay` 函数，用于调试输出
+- [x] 1.1 新增 `generator/amount.go`，实现 `centsToDigits` 纯函数
+- [x] 1.2 新增 `generator/amount_test.go`，编写单元测试（覆盖 0、正数、大额、负数）
+- [x] 1.3 新增 `generator/styles.go`，实现 `TableStyles` 结构体和共享样式函数
+- [x] 1.4 实现 `writeAmountCells` 函数，将金额写入 Excel 12 个单元格
+- [x] 1.5 实现 `formatAmountForDisplay` 函数，用于调试输出
 
 ## 2. 打印版 Excel
 

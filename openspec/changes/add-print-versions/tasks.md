@@ -19,12 +19,12 @@
 
 ## 3. HTML 打印版
 
-- [ ] 3.1 新增 `generator/templates/` 目录，创建 HTML 模板文件
-- [ ] 3.2 设计 HTML 模板结构（左右页布局、表格、金额分栏）
-- [ ] 3.3 编写 CSS 打印样式（@page、@media print、边框、字体）
-- [ ] 3.4 新增 `generator/html_print.go`，实现 HTML 模板渲染函数
-- [ ] 3.5 实现 `embed.FS` 嵌入 HTML 模板
-- [ ] 3.6 实现 HTML 版的月结处理（本月合计、本年累计）
+- [x] 3.1 新增 `generator/templates/` 目录，创建 HTML 模板文件
+- [x] 3.2 设计 HTML 模板结构（左右页布局、表格、金额分栏）
+- [x] 3.3 编写 CSS 打印样式（@page、@media print、边框、字体）
+- [x] 3.4 新增 `generator/html_print.go`，实现 HTML 模板渲染函数
+- [x] 3.5 实现 `embed.FS` 嵌入 HTML 模板
+- [x] 3.6 实现 HTML 版的月结处理（本月合计、本年累计）
 - [ ] 3.7 测试浏览器打印效果（Chrome、Firefox、Edge）
 
 ## 4. CLI 集成

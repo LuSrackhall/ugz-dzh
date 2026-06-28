@@ -19,6 +19,9 @@ func init() {
 	generateCmd.Flags().StringP("output", "o", ".", "输出根目录")
 	generateCmd.Flags().BoolP("force", "f", false, "覆盖已有 xlsx")
 	generateCmd.Flags().BoolP("verbose", "V", false, "输出详细日志")
+	generateCmd.Flags().Bool("view-only", false, "仅生成查看版 Excel")
+	generateCmd.Flags().Bool("print-only", false, "仅生成打印版 Excel")
+	generateCmd.Flags().Bool("html-only", false, "仅生成 HTML 打印版")
 	generateCmd.MarkFlagRequired("voucherDir")
 }
 
@@ -31,6 +34,19 @@ var generateCmd = &cobra.Command{
 		output, _ := cmd.Flags().GetString("output")
 		force, _ := cmd.Flags().GetBool("force")
 		verbose, _ := cmd.Flags().GetBool("verbose")
+		viewOnly, _ := cmd.Flags().GetBool("view-only")
+		printOnly, _ := cmd.Flags().GetBool("print-only")
+		htmlOnly, _ := cmd.Flags().GetBool("html-only")
+
+		// 检查参数冲突
+		if (viewOnly && printOnly) || (viewOnly && htmlOnly) || (printOnly && htmlOnly) {
+			return fmt.Errorf("不能同时指定多个 -only 参数")
+		}
+
+		// 确定生成模式
+		generateView := !printOnly && !htmlOnly  // 默认生成查看版
+		generatePrint := !viewOnly && !htmlOnly   // 默认生成打印版
+		generateHTML := !viewOnly && !printOnly   // 默认生成 HTML 版
 
 		// 收集所有凭证
 		entries, err := CollectEntries(voucherDir)
@@ -127,8 +143,36 @@ var generateCmd = &cobra.Command{
 				return fmt.Errorf("%s 已存在，使用 -f 覆盖已有 xlsx", xlsxPath)
 			}
 		}
-		if err := generator.GenerateWorkbook(configJSON, month, yearDir, entries); err != nil {
-			return fmt.Errorf("生成工作薄: %w", err)
+
+		// 生成查看版 Excel
+		if generateView {
+			if err := generator.GenerateWorkbook(configJSON, month, yearDir, entries); err != nil {
+				return fmt.Errorf("生成查看版工作薄: %w", err)
+			}
+			if verbose {
+				fmt.Printf("已生成查看版: %s\n", xlsxPath)
+			}
+		}
+
+		// 生成打印版 Excel
+		if generatePrint {
+			printXlsxPath := filepath.Join(yearDir, month+"-print.xlsx")
+			if err := generator.GeneratePrintWorkbook(configJSON, month, yearDir, entries); err != nil {
+				return fmt.Errorf("生成打印版工作薄: %w", err)
+			}
+			if verbose {
+				fmt.Printf("已生成打印版: %s\n", printXlsxPath)
+			}
+		}
+
+		// 生成 HTML 打印版
+		if generateHTML {
+			if err := generator.GenerateHTMLPrint(entries, nil, configJSON, month, yearDir); err != nil {
+				return fmt.Errorf("生成 HTML 打印版: %w", err)
+			}
+			if verbose {
+				fmt.Printf("已生成 HTML 打印版\n")
+			}
 		}
 
 		fmt.Printf("已生成 %s/%s 工作薄，共 %d 条分录\n", year, month, len(entries))

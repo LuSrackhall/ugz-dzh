@@ -173,6 +173,37 @@ OCR 识别凭证时可能产生错字（如"管埋费用"、"银杭存款"），
 
 每月 xlsx 仅标记有变化的账页为"需打印"。用户按标记打印后替换活页即可，无需重印整本账簿。
 
+### 打印版本
+
+系统支持三套输出，满足不同场景需求：
+
+1. **查看版 Excel**（默认）：普通数字格式，用于计算验证
+2. **打印版 Excel**：金额分栏展示（十亿千百十万千百十元角分），用于快速预览
+3. **HTML 打印版**：精美样式，支持正反面打印布局
+
+```bash
+# 生成所有版本（默认）
+./ledger generate -v ./vouchers/2026_01 -o ./output
+
+# 仅生成查看版
+./ledger generate -v ./vouchers/2026_01 -o ./output -view-only
+
+# 仅生成打印版 Excel
+./ledger generate -v ./vouchers/2026_01 -o ./output -print-only
+
+# 仅生成 HTML 打印版
+./ledger generate -v ./vouchers/2026_01 -o ./output -html-only
+```
+
+**输出文件**：
+- `output/2026/2026-01.xlsx` — 查看版 Excel
+- `output/2026/2026-01-print.xlsx` — 打印版 Excel
+- `output/2026/2026-01-print.html` — HTML 打印版（用浏览器打开后 Ctrl+P 打印）
+
+**打印建议**：
+- 打印版 Excel：建议使用 A3 纸张横向打印，或缩小字号到 8-9pt
+- HTML 打印版：支持 A4 横向打印，可调整浏览器打印设置优化效果
+
 ## 跨年处理
 
 年末最后一月生成后，新年度首月生成时系统自动：

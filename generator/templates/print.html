@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 10mm;
+        }
+
+        @page :left {
+            margin-right: 5mm;
+        }
+
+        @page :right {
+            margin-left: 5mm;
+        }
+
+        body {
+            font-family: "SimSun", "宋体", serif;
+            font-size: 9pt;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page-container {
+            display: flex;
+            width: 100%;
+        }
+
+        .page-left {
+            width: 45%;
+            padding-right: 2%;
+            border-right: 2px solid #000;
+        }
+
+        .page-right {
+            width: 55%;
+            padding-left: 2%;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 14pt;
+            margin: 10px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        th, td {
+            border: 1px solid #000;
+            padding: 2px 4px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        th {
+            background-color: #D9E1F2;
+            font-weight: bold;
+            font-size: 9pt;
+        }
+
+        td {
+            font-size: 8pt;
+        }
+
+        .amount-header {
+            background-color: #D9E1F2;
+            font-weight: bold;
+        }
+
+        .amount-cell {
+            display: inline-block;
+            width: 1.2em;
+            text-align: center;
+            border-left: 1px solid #000;
+            font-size: 8pt;
+        }
+
+        .amount-cell:first-child {
+            border-left: none;
+        }
+
+        .summary-row {
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+
+        .page-break {
+            page-break-after: always;
+        }
+
+        @media print {
+            .page-container {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>{{.Title}}</h1>
+
+    <div class="page-container">
+        <!-- 左页：基础信息 -->
+        <div class="page-left">
+            <table>
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>凭证号</th>
+                        <th>摘要</th>
+                        <th>借方金额</th>
+                        <th>贷方金额</th>
+                        <th>方向</th>
+                        <th>余额</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Entries}}
+                    <tr>
+                        <td>{{.Date}}</td>
+                        <td>{{.VoucherNum}}</td>
+                        <td>{{.Summary}}</td>
+                        <td>{{.DebitDisplay}}</td>
+                        <td>{{.CreditDisplay}}</td>
+                        <td>{{.Direction}}</td>
+                        <td>{{.BalanceDisplay}}</td>
+                    </tr>
+                    {{end}}
+
+                    {{if .ShowMonthlyTotal}}
+                    <tr class="summary-row">
+                        <td colspan="3">本月合计</td>
+                        <td>{{.MonthlyDebitDisplay}}</td>
+                        <td>{{.MonthlyCreditDisplay}}</td>
+                        <td></td>
+                        <td>{{.MonthlyBalanceDisplay}}</td>
+                    </tr>
+                    {{end}}
+
+                    {{if .ShowYearlyTotal}}
+                    <tr class="summary-row">
+                        <td colspan="3">本年累计</td>
+                        <td>{{.YearlyDebitDisplay}}</td>
+                        <td>{{.YearlyCreditDisplay}}</td>
+                        <td></td>
+                        <td>{{.YearlyBalanceDisplay}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 右页：金额分栏 -->
+        <div class="page-right">
+            <table>
+                <thead>
+                    <tr>
+                        {{range .AmountHeaders}}
+                        <th class="amount-header">{{.}}</th>
+                        {{end}}
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Entries}}
+                    <tr>
+                        {{range .AmountDigits}}
+                        <td><span class="amount-cell">{{.}}</span></td>
+                        {{end}}
+                    </tr>
+                    {{end}}
+
+                    {{if .ShowMonthlyTotal}}
+                    <tr class="summary-row">
+                        {{range .MonthlyAmountDigits}}
+                        <td><span class="amount-cell">{{.}}</span></td>
+                        {{end}}
+                    </tr>
+                    {{end}}
+
+                    {{if .ShowYearlyTotal}}
+                    <tr class="summary-row">
+                        {{range .YearlyAmountDigits}}
+                        <td><span class="amount-cell">{{.}}</span></td>
+                        {{end}}
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

@@ -66,8 +66,10 @@ func (wb *Workbook) prevMonthPath() string {
 	if prev == "" {
 		return ""
 	}
-	// 上月 xlsx 在上月目录中
-	prevDir := filepath.Join(wb.OutputDir, prev)
+	// OutputDir 是月度目录（如 output/2026/2026-04）
+	// 需要推导出年份目录（output/2026），再找上月目录
+	yearDir := filepath.Dir(wb.OutputDir)
+	prevDir := filepath.Join(yearDir, prev)
 	return filepath.Join(prevDir, prev+".xlsx")
 }
 

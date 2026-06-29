@@ -31,7 +31,8 @@ var printGLHeaders = []string{
 
 // sheetNamePrintGL 返回打印版总分类账 Sheet 名称。
 func sheetNamePrintGL(account string) string {
-	return fmt.Sprintf("打印-总分类账-%s", account)
+	// 与查看版保持一致，通过文件名区分
+	return sheetPrefixGL + account
 }
 
 // ensurePrintGLSheet 确保打印版总分类账 Sheet 存在并已初始化。

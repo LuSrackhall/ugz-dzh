@@ -89,8 +89,14 @@ func generateAccountHTML(account string, entries []voucher.Entry, initials map[s
 	// 准备数据
 	data := preparePrintData(account, entries, initials)
 
+	// 创建 html 子目录
+	htmlDir := filepath.Join(outputDir, "html")
+	if err := os.MkdirAll(htmlDir, 0o755); err != nil {
+		return fmt.Errorf("创建 html 目录: %w", err)
+	}
+
 	// 创建输出文件
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("%s-%s-print.html", month, account))
+	outputPath := filepath.Join(htmlDir, fmt.Sprintf("%s-%s-print.html", month, account))
 	file, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("创建文件 %s: %w", outputPath, err)

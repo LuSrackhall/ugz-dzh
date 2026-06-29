@@ -23,7 +23,8 @@ const (
 
 // sheetNamePrintML 返回打印版多科目明细账 Sheet 名称。
 func sheetNamePrintML(general string) string {
-	return fmt.Sprintf("打印-多科目明细账-%s", general)
+	// 与查看版保持一致，通过文件名区分
+	return sheetPrefixML + general
 }
 
 // ensurePrintMLSheet 确保打印版多科目明细账 Sheet 存在并已初始化。

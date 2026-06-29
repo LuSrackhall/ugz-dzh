@@ -1,8 +1,8 @@
 ## 1. 修改 HTML 输出路径
 
-- [ ] 1.1 修改 `generator/html_print.go` 的 `generateAccountHTML` 函数，将输出路径改为 `filepath.Join(outputDir, "html")`
-- [ ] 1.2 在 `generateAccountHTML` 函数中添加 `os.MkdirAll(htmlDir, 0o755)` 自动创建 `html/` 子目录
-- [ ] 1.3 更新 `cmd/generate.go` 中的 verbose 日志，显示新的 HTML 输出路径
+- [x] 1.1 修改 `generator/html_print.go` 的 `generateAccountHTML` 函数，将输出路径改为 `filepath.Join(outputDir, "html")`
+- [x] 1.2 在 `generateAccountHTML` 函数中添加 `os.MkdirAll(htmlDir, 0o755)` 自动创建 `html/` 子目录
+- [x] 1.3 更新 `cmd/generate.go` 中的 verbose 日志，显示新的 HTML 输出路径
 
 ## 2. 验证与测试
 

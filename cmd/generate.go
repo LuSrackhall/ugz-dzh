@@ -171,7 +171,8 @@ var generateCmd = &cobra.Command{
 				return fmt.Errorf("生成 HTML 打印版: %w", err)
 			}
 			if verbose {
-				fmt.Printf("已生成 HTML 打印版\n")
+				htmlDir := filepath.Join(yearDir, "html")
+				fmt.Printf("已生成 HTML 打印版: %s/\n", htmlDir)
 			}
 		}
 

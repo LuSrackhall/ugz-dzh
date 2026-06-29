@@ -144,6 +144,10 @@ var generateCmd = &cobra.Command{
 					}
 				}
 			}
+			// 重新创建月度目录（已被删除）
+			if err := os.MkdirAll(monthDir, 0o755); err != nil {
+				return fmt.Errorf("重建月度目录: %w", err)
+			}
 		} else {
 			if _, err := os.Stat(xlsxPath); err == nil {
 				return fmt.Errorf("%s 已存在，使用 -f 覆盖已有 xlsx", xlsxPath)

@@ -73,9 +73,8 @@ func (wb *Workbook) prevMonthPath() string {
 
 // currentPath 返回本月 xlsx 路径。
 func (wb *Workbook) currentPath() string {
-	// 本月 xlsx 在本月目录中
-	monthDir := filepath.Join(wb.OutputDir, wb.Month)
-	return filepath.Join(monthDir, wb.Month+".xlsx")
+	// outputDir 已经是月度目录，直接使用
+	return filepath.Join(wb.OutputDir, wb.Month+".xlsx")
 }
 
 // Save 保存工作薄到本月文件。

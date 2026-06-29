@@ -31,7 +31,13 @@ var printGLHeaders = []string{
 
 // sheetNamePrintGL 返回打印版总分类账 Sheet 名称。
 func sheetNamePrintGL(account string) string {
-	return fmt.Sprintf("打印-总分类账-%s", account)
+	name := fmt.Sprintf("打印-总分类账-%s", account)
+	// Excel 限制 Sheet 名称最长 31 字符
+	if len([]rune(name)) > 31 {
+		runes := []rune(name)
+		name = string(runes[:31])
+	}
+	return name
 }
 
 // ensurePrintGLSheet 确保打印版总分类账 Sheet 存在并已初始化。

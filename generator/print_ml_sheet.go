@@ -23,7 +23,13 @@ const (
 
 // sheetNamePrintML 返回打印版多科目明细账 Sheet 名称。
 func sheetNamePrintML(general string) string {
-	return fmt.Sprintf("打印-多科目明细账-%s", general)
+	name := fmt.Sprintf("打印-多科目明细账-%s", general)
+	// Excel 限制 Sheet 名称最长 31 字符
+	if len([]rune(name)) > 31 {
+		runes := []rune(name)
+		name = string(runes[:31])
+	}
+	return name
 }
 
 // ensurePrintMLSheet 确保打印版多科目明细账 Sheet 存在并已初始化。

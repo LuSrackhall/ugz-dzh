@@ -6,9 +6,9 @@
 
 ## 2. 验证与测试
 
-- [ ] 2.1 运行 `go build ./...` 确认编译通过
-- [ ] 2.2 运行 `go test ./...` 确认测试通过
-- [ ] 2.3 手动运行 `ledger generate` 验证 HTML 文件输出到 `html/` 子目录
+- [x] 2.1 运行 `go build ./...` 确认编译通过
+- [x] 2.2 运行 `go test ./...` 确认测试通过
+- [x] 2.3 手动运行 `ledger generate` 验证 HTML 文件输出到 `html/` 子目录
 
 ---
 

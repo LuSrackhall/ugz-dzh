@@ -1,10 +1,10 @@
 ## 1. 修改输出路径逻辑
 
-- [ ] 1.1 修改 `cmd/generate.go`，创建月度目录 `monthDir := filepath.Join(yearDir, month)`
-- [ ] 1.2 修改 `cmd/generate.go`，将 xlsx 文件写入月度目录
-- [ ] 1.3 修改 `cmd/generate.go`，将 CSV/XLSX 分录汇总写入月度目录
-- [ ] 1.4 修改 `cmd/generate.go`，将余额表写入月度目录
-- [ ] 1.5 修改 `cmd/generate.go`，将 HTML 打印版输出到月度目录的 html 子目录
+- [x] 1.1 修改 `cmd/generate.go`，创建月度目录 `monthDir := filepath.Join(yearDir, month)`
+- [x] 1.2 修改 `cmd/generate.go`，将 xlsx 文件写入月度目录
+- [x] 1.3 修改 `cmd/generate.go`，将 CSV/XLSX 分录汇总写入月度目录
+- [x] 1.4 修改 `cmd/generate.go`，将余额表写入月度目录
+- [x] 1.5 修改 `cmd/generate.go`，将 HTML 打印版输出到月度目录的 html 子目录
 
 ## 2. 修改上月 xlsx 查找逻辑
 

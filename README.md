@@ -56,18 +56,24 @@ go build -o ledger .
 
 ## 输出目录约定
 
-指定 `-o ./output` 后，系统自动按年份创建子目录：
+指定 `-o ./output` 后，系统自动按年份和月份创建子目录：
 
 ```
 output/
 └── 2026/
     ├── 2026.json          # 年份配置（科目树、余额历史、映射表）
-    ├── 2026-01.xlsx       # 1 月累计工作薄
-    ├── 2026-02.xlsx       # 2 月累计工作薄
-    ├── ledger.csv         # 当月分录汇总（CSV）
-    ├── ledger.xlsx        # 当月分录汇总（Excel）
-    ├── balance.csv        # 当月科目余额表（CSV）
-    └── balance.xlsx       # 当月科目余额表（Excel）
+    ├── 2026-01/           # 1 月目录
+    │   ├── 2026-01.xlsx       # 查看版累计工作薄
+    │   ├── 2026-01-print.xlsx # 打印版累计工作薄
+    │   ├── ledger.csv         # 当月分录汇总（CSV）
+    │   ├── ledger.xlsx        # 当月分录汇总（Excel）
+    │   ├── balance.csv        # 当月科目余额表（CSV）
+    │   ├── balance.xlsx       # 当月科目余额表（Excel）
+    │   └── html/              # HTML 打印版
+    │       └── ...
+    ├── 2026-02/           # 2 月目录
+    │   └── ...
+    └── ...
 ```
 
 - `init -s 2026-01` → 在 `{output}/2026/` 下创建 `2026.json`

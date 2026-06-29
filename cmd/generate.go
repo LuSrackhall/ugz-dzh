@@ -100,36 +100,42 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("创建输出目录: %w", err)
 		}
 
+		// 创建月度目录
+		monthDir := filepath.Join(yearDir, month)
+		if err := os.MkdirAll(monthDir, 0o755); err != nil {
+			return fmt.Errorf("创建月度目录: %w", err)
+		}
+
 		// 写入 CSV/XLSX 分录汇总
-		if err := WriteCSV(yearDir, entries); err != nil {
+		if err := WriteCSV(monthDir, entries); err != nil {
 			return fmt.Errorf("写入 CSV: %w", err)
 		}
-		if err := WriteXLSX(yearDir, entries); err != nil {
+		if err := WriteXLSX(monthDir, entries); err != nil {
 			return fmt.Errorf("写入 XLSX: %w", err)
 		}
 
 		summaries := balance.ComputeSummariesWithParents(entries)
-		if err := WriteBalanceCSV(yearDir, summaries); err != nil {
+		if err := WriteBalanceCSV(monthDir, summaries); err != nil {
 			return fmt.Errorf("写入余额 CSV: %w", err)
 		}
-		if err := WriteBalanceXLSX(yearDir, summaries); err != nil {
+		if err := WriteBalanceXLSX(monthDir, summaries); err != nil {
 			return fmt.Errorf("写入余额 XLSX: %w", err)
 		}
 
 		// 生成月度累计工作薄
-		xlsxPath := filepath.Join(yearDir, month+".xlsx")
+		xlsxPath := filepath.Join(monthDir, month+".xlsx")
 		if force {
-			// 级联删除当月及之后所有月份的 xlsx
+			// 级联删除当月及之后所有月份的目录
 			entries, err := os.ReadDir(yearDir)
 			if err == nil {
 				for _, entry := range entries {
-					if entry.IsDir() {
+					if !entry.IsDir() {
 						continue
 					}
 					name := entry.Name()
-					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") >= month {
+					if name >= month {
 						path := filepath.Join(yearDir, name)
-						if err := os.Remove(path); err != nil {
+						if err := os.RemoveAll(path); err != nil {
 							return fmt.Errorf("删除 %s: %w", path, err)
 						}
 						if verbose {
@@ -146,7 +152,7 @@ var generateCmd = &cobra.Command{
 
 		// 生成查看版 Excel
 		if generateView {
-			if err := generator.GenerateWorkbook(configJSON, month, yearDir, entries); err != nil {
+			if err := generator.GenerateWorkbook(configJSON, month, monthDir, entries); err != nil {
 				return fmt.Errorf("生成查看版工作薄: %w", err)
 			}
 			if verbose {
@@ -156,8 +162,8 @@ var generateCmd = &cobra.Command{
 
 		// 生成打印版 Excel
 		if generatePrint {
-			printXlsxPath := filepath.Join(yearDir, month+"-print.xlsx")
-			if err := generator.GeneratePrintWorkbook(configJSON, month, yearDir, entries); err != nil {
+			printXlsxPath := filepath.Join(monthDir, month+"-print.xlsx")
+			if err := generator.GeneratePrintWorkbook(configJSON, month, monthDir, entries); err != nil {
 				return fmt.Errorf("生成打印版工作薄: %w", err)
 			}
 			if verbose {
@@ -167,11 +173,11 @@ var generateCmd = &cobra.Command{
 
 		// 生成 HTML 打印版
 		if generateHTML {
-			if err := generator.GenerateHTMLPrint(entries, nil, configJSON, month, yearDir); err != nil {
+			if err := generator.GenerateHTMLPrint(entries, nil, configJSON, month, monthDir); err != nil {
 				return fmt.Errorf("生成 HTML 打印版: %w", err)
 			}
 			if verbose {
-				htmlDir := filepath.Join(yearDir, "html")
+				htmlDir := filepath.Join(monthDir, "html")
 				fmt.Printf("已生成 HTML 打印版: %s/\n", htmlDir)
 			}
 		}

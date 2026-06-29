@@ -142,9 +142,10 @@ func TestCLI(t *testing.T) {
 				t.Fatalf("CLI 运行失败: %v\n输出: %s", err, out)
 			}
 
-			// 新路径: {output}/{year}/ledger.csv
+			// 新路径: {output}/{year}/{month}/ledger.csv
 			yearDir := filepath.Join(output, "2026")
-			csvPath := filepath.Join(yearDir, "ledger.csv")
+			monthDir := filepath.Join(yearDir, "2026-01")
+			csvPath := filepath.Join(monthDir, "ledger.csv")
 			f, err := os.Open(csvPath)
 			if err != nil {
 				t.Fatalf("无法打开输出 CSV %s: %v", csvPath, err)
@@ -166,7 +167,7 @@ func TestCLI(t *testing.T) {
 			}
 
 			// 验证余额 CSV
-			balPath := filepath.Join(yearDir, "balance.csv")
+			balPath := filepath.Join(monthDir, "balance.csv")
 			bf, err := os.Open(balPath)
 			if err != nil {
 				t.Fatalf("无法打开余额 CSV %s: %v", balPath, err)
@@ -313,19 +314,20 @@ func TestCLIOutputPath(t *testing.T) {
 			t.Fatalf("CLI 失败: %v\n%s", err, out)
 		}
 
-		// 新路径: {target}/{year}/
+		// 新路径: {target}/{year}/{month}/
 		yearDir := filepath.Join(target, "2026")
-		csvPath := filepath.Join(yearDir, "ledger.csv")
+		monthDir := filepath.Join(yearDir, "2026-01")
+		csvPath := filepath.Join(monthDir, "ledger.csv")
 		if _, err := os.Stat(csvPath); err != nil {
 			t.Errorf("输出文件不存在: %s", csvPath)
 		}
 
-		balPath := filepath.Join(yearDir, "balance.csv")
+		balPath := filepath.Join(monthDir, "balance.csv")
 		if _, err := os.Stat(balPath); err != nil {
 			t.Errorf("余额输出文件不存在: %s", balPath)
 		}
 
-		xlsxPath := filepath.Join(yearDir, "2026-01.xlsx")
+		xlsxPath := filepath.Join(monthDir, "2026-01.xlsx")
 		if _, err := os.Stat(xlsxPath); err != nil {
 			t.Errorf("月度 xlsx 不存在: %s", xlsxPath)
 		}
@@ -382,7 +384,7 @@ func TestCLIFullWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate 2026-01 失败: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(yearDir, "2026-01.xlsx")); err != nil {
+	if _, err := os.Stat(filepath.Join(yearDir, "2026-01", "2026-01.xlsx")); err != nil {
 		t.Error("2026-01.xlsx 未生成")
 	}
 
@@ -391,7 +393,7 @@ func TestCLIFullWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate 2026-02 失败: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(yearDir, "2026-02.xlsx")); err != nil {
+	if _, err := os.Stat(filepath.Join(yearDir, "2026-02", "2026-02.xlsx")); err != nil {
 		t.Error("2026-02.xlsx 未生成")
 	}
 
@@ -400,7 +402,7 @@ func TestCLIFullWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate 2026-03 失败: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(yearDir, "2026-03.xlsx")); err != nil {
+	if _, err := os.Stat(filepath.Join(yearDir, "2026-03", "2026-03.xlsx")); err != nil {
 		t.Error("2026-03.xlsx 未生成")
 	}
 
@@ -431,9 +433,10 @@ func TestCLIFullWorkflow(t *testing.T) {
 		t.Error("year-close 未生成 2027-01.xlsx")
 	}
 
-	// 10. All output files present (in year dir)
+	// 10. All output files present (in month dir)
+	monthDir := filepath.Join(yearDir, "2026-01")
 	for _, f := range []string{"ledger.csv", "balance.csv", "ledger.xlsx", "balance.xlsx"} {
-		if _, err := os.Stat(filepath.Join(yearDir, f)); err != nil {
+		if _, err := os.Stat(filepath.Join(monthDir, f)); err != nil {
 			t.Errorf("输出文件缺失: %s", f)
 		}
 	}

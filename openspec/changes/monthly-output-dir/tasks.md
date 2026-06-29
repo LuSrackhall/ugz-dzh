@@ -8,16 +8,16 @@
 
 ## 2. 修改上月 xlsx 查找逻辑
 
-- [ ] 2.1 修改 `generator/workbook.go` 的 `prevMonthPath` 函数，从上月目录查找
-- [ ] 2.2 修改 `generator/workbook.go` 的 `currentPath` 函数，返回月度目录中的路径
+- [x] 2.1 修改 `generator/workbook.go` 的 `prevMonthPath` 函数，从上月目录查找
+- [x] 2.2 修改 `generator/workbook.go` 的 `currentPath` 函数，返回月度目录中的路径
 
 ## 3. 修改 force 级联删除逻辑
 
-- [ ] 3.1 修改 `cmd/generate.go` 的 force 级联删除逻辑，删除月度目录而非单个文件
+- [x] 3.1 修改 `cmd/generate.go` 的 force 级联删除逻辑，删除月度目录而非单个文件
 
 ## 4. 修改 HTML 输出路径
 
-- [ ] 4.1 修改 `generator/html_print.go` 的 `GenerateHTMLPrint` 函数，输出到月度目录的 html 子目录
+- [x] 4.1 修改 `generator/html_print.go` 的 `GenerateHTMLPrint` 函数，输出到月度目录的 html 子目录
 
 ## 5. 验证与测试
 

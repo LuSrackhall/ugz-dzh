@@ -66,12 +66,16 @@ func (wb *Workbook) prevMonthPath() string {
 	if prev == "" {
 		return ""
 	}
-	return filepath.Join(wb.OutputDir, prev+".xlsx")
+	// 上月 xlsx 在上月目录中
+	prevDir := filepath.Join(wb.OutputDir, prev)
+	return filepath.Join(prevDir, prev+".xlsx")
 }
 
 // currentPath 返回本月 xlsx 路径。
 func (wb *Workbook) currentPath() string {
-	return filepath.Join(wb.OutputDir, wb.Month+".xlsx")
+	// 本月 xlsx 在本月目录中
+	monthDir := filepath.Join(wb.OutputDir, wb.Month)
+	return filepath.Join(monthDir, wb.Month+".xlsx")
 }
 
 // Save 保存工作薄到本月文件。

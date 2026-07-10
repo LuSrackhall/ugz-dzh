@@ -20,8 +20,17 @@ func (wb *Workbook) WriteMLMonthClosings(
 	}
 	groups := make(map[string]*mlClosing)
 
+	// 构建忽略集合
+	mlSuppress := make(map[string]bool)
+	for _, a := range wb.Config.Settings.MLSuppressAccounts {
+		mlSuppress[a] = true
+	}
+
 	for _, e := range entries {
 		if e.DetailAccount == "" {
+			continue
+		}
+		if mlSuppress[e.GeneralAccount] {
 			continue
 		}
 		g, ok := groups[e.GeneralAccount]

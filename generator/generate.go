@@ -58,9 +58,15 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	activity := ComputeActivity(entries)
 	changedSheets := CollectChangedSheets(entries)
 
-	// 同时收集多科目明细账 Sheet
+	// 同时收集多科目明细账 Sheet（排除已忽略科目）
+	mlSuppress := make(map[string]bool)
+	for _, a := range cfg.Settings.MLSuppressAccounts {
+		mlSuppress[a] = true
+	}
 	for general := range getMLGenerals(entries) {
-		changedSheets[sheetNameML(general)] = true
+		if !mlSuppress[general] {
+			changedSheets[sheetNameML(general)] = true
+		}
 	}
 
 	// 提取本年累计 — 需要所有 Config.Tree 中的科目，而非仅当月有分录的科目，

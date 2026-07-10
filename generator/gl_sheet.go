@@ -32,32 +32,28 @@ func (wb *Workbook) ensureGLSheet(account string) (string, error) {
 	return name, nil
 }
 
-// writeGLTitle 写入总分类账标题行和列标题。
+// writeGLTitle 写入总分类账标题行、列标题、页眉页脚及页面布局。
+// 正/反面页通过奇偶页眉区分，满足打印装订需求。
 func (wb *Workbook) writeGLTitle(sheet string) error {
 	account := sheet[len(sheetPrefixGL):]
 
-	// 左侧：固定标题 "总分类账"，双下划线
-	wb.File.SetCellValue(sheet, "A1", "总分类账")
-	wb.File.MergeCell(sheet, "A1", "C1")
+	// ── 第 1 行：标题 "总分类账" ──
+	// 居中、绿色、字间距约 1.5 字，双底框线（代替下划线）延伸至整行宽度
+	wb.File.MergeCell(sheet, "A1", "G1")
+	wb.File.SetCellValue(sheet, "A1", "总    分    类    账")
 
+	darkGreen := "006100"
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 14, Underline: "double"},
+		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "bottom", Color: darkGreen, Style: 7}, // 7 = 双线
+		},
 	})
-	wb.File.SetCellStyle(sheet, "A1", "C1", titleStyle)
+	wb.File.SetCellStyle(sheet, "A1", "G1", titleStyle)
+	wb.File.SetRowHeight(sheet, 1, 28)
 
-	// 右侧：科目名称（红色字体）
-	wb.File.SetCellValue(sheet, "D1", account)
-	wb.File.MergeCell(sheet, "D1", "G1")
-
-	accountStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 14, Color: "CC0000"},
-		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"},
-	})
-	wb.File.SetCellStyle(sheet, "D1", "G1", accountStyle)
-
-	wb.File.SetRowHeight(sheet, 1, 22)
-
+	// ── 第 2 行：列标题 ──
 	for i, h := range glHeaders {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 2)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -75,6 +71,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	endCell, _ := excelize.CoordinatesToCellName(7, 2)
 	wb.File.SetCellStyle(sheet, headerCell, endCell, headerStyle)
 
+	// ── 列宽 ──
 	wb.File.SetColWidth(sheet, "A", "A", 12)
 	wb.File.SetColWidth(sheet, "B", "B", 8)
 	wb.File.SetColWidth(sheet, "C", "C", 35)
@@ -83,21 +80,51 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetColWidth(sheet, "F", "F", 6)
 	wb.File.SetColWidth(sheet, "G", "G", 16)
 
-	// 打印标题：每页顶部重复第 1-2 行（标题 + 列标题）
+	// ── 打印标题：每页顶部重复第 1-2 行 ──
 	wb.File.SetDefinedName(&excelize.DefinedName{
 		Name:     "_xlnm.Print_Titles",
 		RefersTo: fmt.Sprintf("'%s'!$1:$2", sheet),
 		Scope:    sheet,
 	})
 
-	// 打印页面设置：横向、自适应宽度
-	orientation := "landscape"
+	// ── 页面设置：A4 横向 ──
+	a4Size := 9
+	landscape := "landscape"
 	fitToWidth := 1
 	fitToHeight := 0
 	wb.File.SetPageLayout(sheet, &excelize.PageLayoutOptions{
-		Orientation: &orientation,
+		Size:        &a4Size,
+		Orientation: &landscape,
 		FitToWidth:  &fitToWidth,
 		FitToHeight: &fitToHeight,
+	})
+
+	// ── 页边距（英寸）：装订侧稍大 ──
+	binding := 0.75
+	trim := 0.45
+	topMargin := 0.65
+	bottomMargin := 0.55
+	wb.File.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
+		Left:   &binding,
+		Right:  &trim,
+		Top:    &topMargin,
+		Bottom: &bottomMargin,
+	})
+
+	// ── 页眉：奇偶页不同 ──
+	// 正面（奇）左侧 = 商标文字，右侧 = 分第 n 页 + 科目
+	// 反面（偶）左侧 = 分第 n 页 + 科目，右侧 = 商标文字
+	// &K008000 = 绿色，&KCC0000 = 红色（印章红），&P = 页码
+	green := "008000"
+	red := "CC0000"
+	trademark := "红旗路社区纸品"
+	// 右侧页眉：分第 n 页 + 科目名称（分第/页=绿色，n=红色，科目=红色）
+	rightHeader := fmt.Sprintf("&K%s分第 &K%s&P &K%s页&#10;&K%s%s", green, red, green, red, account)
+
+	wb.File.SetHeaderFooter(sheet, &excelize.HeaderFooterOptions{
+		DifferentOddEven: true,
+		OddHeader:        "&L" + trademark + "&R" + rightHeader,
+		EvenHeader:       "&L" + rightHeader + "&R" + trademark,
 	})
 
 	return nil

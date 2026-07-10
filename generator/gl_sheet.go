@@ -35,15 +35,27 @@ func (wb *Workbook) ensureGLSheet(account string) (string, error) {
 // writeGLTitle 写入总分类账标题行和列标题。
 func (wb *Workbook) writeGLTitle(sheet string) error {
 	account := sheet[len(sheetPrefixGL):]
-	title := "总分类账 — " + account
-	wb.File.SetCellValue(sheet, "A1", title)
-	wb.File.MergeCell(sheet, "A1", "G1")
+
+	// 左侧：固定标题 "总分类账"，双下划线
+	wb.File.SetCellValue(sheet, "A1", "总分类账")
+	wb.File.MergeCell(sheet, "A1", "C1")
 
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 14},
+		Font:      &excelize.Font{Bold: true, Size: 14, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, "A1", "G1", titleStyle)
+	wb.File.SetCellStyle(sheet, "A1", "C1", titleStyle)
+
+	// 右侧：科目名称（红色字体）
+	wb.File.SetCellValue(sheet, "D1", account)
+	wb.File.MergeCell(sheet, "D1", "G1")
+
+	accountStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 14, Color: "CC0000"},
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"},
+	})
+	wb.File.SetCellStyle(sheet, "D1", "G1", accountStyle)
+
 	wb.File.SetRowHeight(sheet, 1, 22)
 
 	for i, h := range glHeaders {
@@ -70,6 +82,23 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetColWidth(sheet, "E", "E", 14)
 	wb.File.SetColWidth(sheet, "F", "F", 6)
 	wb.File.SetColWidth(sheet, "G", "G", 16)
+
+	// 打印标题：每页顶部重复第 1-2 行（标题 + 列标题）
+	wb.File.SetDefinedName(&excelize.DefinedName{
+		Name:     "_xlnm.Print_Titles",
+		RefersTo: fmt.Sprintf("'%s'!$1:$2", sheet),
+		Scope:    sheet,
+	})
+
+	// 打印页面设置：横向、自适应宽度
+	orientation := "landscape"
+	fitToWidth := 1
+	fitToHeight := 0
+	wb.File.SetPageLayout(sheet, &excelize.PageLayoutOptions{
+		Orientation: &orientation,
+		FitToWidth:  &fitToWidth,
+		FitToHeight: &fitToHeight,
+	})
 
 	return nil
 }

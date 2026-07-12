@@ -69,8 +69,8 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 	}
 
 	// Row 1: title
-	if len(rows[0]) == 0 || rows[0][0] != "总分类账 — 固定资产" {
-		t.Errorf("row 1 title = %v, want %q", rows[0], "总分类账 — 固定资产")
+	if len(rows[0]) == 0 || rows[0][0] != "总    分    类    账" {
+		t.Errorf("row 1 title = %v, want %q", rows[0], "总    分    类    账")
 	}
 
 	// Row 2: headers

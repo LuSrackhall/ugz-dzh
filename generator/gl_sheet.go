@@ -32,26 +32,43 @@ func (wb *Workbook) ensureGLSheet(account string) (string, error) {
 	return name, nil
 }
 
-// writeGLTitle 写入总分类账标题行、列标题、页眉页脚及页面布局。
-// 正/反面页通过奇偶页眉区分，满足打印装订需求。
+// writeGLTitle 写入总分类账标题行、列标题及页面布局。
+// 标题与科目信息在同一行，利用打印标题行重复到每页。
 func (wb *Workbook) writeGLTitle(sheet string) error {
 	account := sheet[len(sheetPrefixGL):]
 
-	// ── 第 1 行：标题 "总分类账" ──
-	// 居中、绿色、字间距约 1.5 字，双底框线（代替下划线）延伸至整行宽度
-	wb.File.MergeCell(sheet, "A1", "G1")
+	// ── 第 1 行 ──
+	// 左侧：标题 "总    分    类    账"，居中、绿色、双下划线紧贴字体
+	wb.File.MergeCell(sheet, "A1", "C1")
 	wb.File.SetCellValue(sheet, "A1", "总    分    类    账")
 
 	darkGreen := "006100"
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen},
+		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: darkGreen, Style: 7}, // 7 = 双线
+	})
+	wb.File.SetCellStyle(sheet, "A1", "C1", titleStyle)
+
+	// 右侧：分第 1 页（上）+ 科目名称（下），通过 WrapText 分行
+	// 分第/页 = 绿色，n/科目名称 = 印章红
+	sealRed := "CC0000"
+	wb.File.MergeCell(sheet, "D1", "G1")
+	accountRuns := []excelize.RichTextRun{
+		{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+		{Text: "1", Font: &excelize.Font{Color: sealRed, Size: 10}},
+		{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+		{Text: "\n" + account, Font: &excelize.Font{Color: sealRed, Size: 10}},
+	}
+	wb.File.SetCellRichText(sheet, "D1", accountRuns)
+	infoStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+			WrapText:   true,
 		},
 	})
-	wb.File.SetCellStyle(sheet, "A1", "G1", titleStyle)
-	wb.File.SetRowHeight(sheet, 1, 28)
+	wb.File.SetCellStyle(sheet, "D1", "G1", infoStyle)
+	wb.File.SetRowHeight(sheet, 1, 36)
 
 	// ── 第 2 行：列标题 ──
 	for i, h := range glHeaders {
@@ -109,22 +126,6 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		Right:  &trim,
 		Top:    &topMargin,
 		Bottom: &bottomMargin,
-	})
-
-	// ── 页眉：奇偶页不同 ──
-	// 正面（奇）左侧 = 商标文字，右侧 = 分第 n 页 + 科目
-	// 反面（偶）左侧 = 分第 n 页 + 科目，右侧 = 商标文字
-	// &K008000 = 绿色，&KCC0000 = 红色（印章红），&P = 页码
-	green := "008000"
-	red := "CC0000"
-	trademark := "红旗路社区纸品"
-	// 右侧页眉：分第 n 页 + 科目名称（分第/页=绿色，n=红色，科目=红色）
-	rightHeader := fmt.Sprintf("&K%s分第 &K%s&P &K%s页&#10;&K%s%s", green, red, green, red, account)
-
-	wb.File.SetHeaderFooter(sheet, &excelize.HeaderFooterOptions{
-		DifferentOddEven: true,
-		OddHeader:        "&L" + trademark + "&R" + rightHeader,
-		EvenHeader:       "&L" + rightHeader + "&R" + trademark,
 	})
 
 	return nil

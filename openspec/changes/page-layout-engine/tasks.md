@@ -1,9 +1,9 @@
 ## 1. LayoutEngine 包
 
-- [ ] 1.1 创建 `generator/layout/` 包，实现 `LayoutSpec` 结构体（纸张尺寸、装订边、页间隙、每页行数、金额位数、列比例）
-- [ ] 1.2 实现 `ComputeLayout(spec) -> Layout` 纯函数，计算正面/反面区域 mm 坐标、列坐标、行坐标
-- [ ] 1.3 实现 mm → Excel 列宽/行高的映射函数
-- [ ] 1.4 编写 LayoutEngine 单元测试（各种 spec 参数的坐标计算验证）
+- [x] 1.1 创建 `generator/layout/` 包，实现 `LayoutSpec` 结构体（纸张尺寸、装订边、页间隙、每页行数、金额位数、列比例）
+- [x] 1.2 实现 `ComputeLayout(spec) -> Layout` 纯函数，计算正面/反面区域 mm 坐标、列坐标、行坐标
+- [x] 1.3 实现 mm → Excel 列宽/行高的映射函数
+- [x] 1.4 编写 LayoutEngine 单元测试（各种 spec 参数的坐标计算验证）
 
 ## 2. 总分类账标题样式实现
 

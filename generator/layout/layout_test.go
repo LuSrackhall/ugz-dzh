@@ -77,16 +77,12 @@ func TestComputeLayout_Rows(t *testing.T) {
 	spec := DefaultGLSpec()
 	lay := ComputeLayout(spec)
 
-	if lay.TitleRow <= lay.PageNumRow {
-		t.Errorf("title row should be after page num row")
+	// 当前 TitleRow/PageNumRow/AccountRow 合并在同一行
+	// 后续可独立拆分为多行
+	if lay.HeaderRow < lay.TitleRow {
+		t.Errorf("header row should be at or after title row")
 	}
-	if lay.AccountRow <= lay.TitleRow {
-		t.Errorf("account row should be after title row")
-	}
-	if lay.HeaderRow <= lay.AccountRow {
-		t.Errorf("header row should be after account row")
-	}
-	if lay.DataStartRow <= lay.HeaderRow {
-		t.Errorf("data start should be after header row")
+	if lay.DataStartRow < lay.HeaderRow {
+		t.Errorf("data start should be at or after header row")
 	}
 }

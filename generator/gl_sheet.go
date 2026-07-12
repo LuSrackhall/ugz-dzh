@@ -3,6 +3,7 @@ package generator
 import (
 	"fmt"
 
+	"ledger/generator/layout"
 	"ledger/voucher"
 
 	"github.com/xuri/excelize/v2"
@@ -33,33 +34,38 @@ func (wb *Workbook) ensureGLSheet(account string) (string, error) {
 }
 
 // writeGLTitle 写入总分类账标题行、列标题及页面布局。
-// 标题与科目信息在同一行，利用打印标题行重复到每页。
+// 所有行列坐标通过 ComputeLayout 计算，无硬编码。
 func (wb *Workbook) writeGLTitle(sheet string) error {
 	account := sheet[len(sheetPrefixGL):]
-
-	// ── 第 1 行 ──
-	// 左侧：标题 "总    分    类    账"，居中、绿色、双下划线紧贴字体
-	wb.File.MergeCell(sheet, "A1", "C1")
-	wb.File.SetCellValue(sheet, "A1", "总    分    类    账")
+	lay := layout.ComputeLayout(layout.DefaultGLSpec())
 
 	darkGreen := "006100"
+	sealRed := "CC0000"
+
+	// ── 标题行（Row 1: TitleRow+1） ──
+	// 左侧：总    分    类    账（深绿、加粗、双下划线）
+	titleLeft := cellName(lay.TitleColLeft, lay.TitleRow+1)
+	titleRight := cellName(lay.TitleColRight, lay.TitleRow+1)
+	wb.File.MergeCell(sheet, titleLeft, titleRight)
+	wb.File.SetCellValue(sheet, titleLeft, "总    分    类    账")
+
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, "A1", "C1", titleStyle)
+	wb.File.SetCellStyle(sheet, titleLeft, titleRight, titleStyle)
 
-	// 右侧：分第 1 页（上）+ 科目名称（下），通过 WrapText 分行
-	// 分第/页 = 绿色，n/科目名称 = 印章红
-	sealRed := "CC0000"
-	wb.File.MergeCell(sheet, "D1", "G1")
+	// 右侧：分第 1 页（上）+ 科目名称（下），WrapText 分行
+	accLeft := cellName(lay.AccountColLeft, lay.AccountRow+1)
+	accRight := cellName(lay.AccountColRight, lay.AccountRow+1)
+	wb.File.MergeCell(sheet, accLeft, accRight)
 	accountRuns := []excelize.RichTextRun{
 		{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
 		{Text: "1", Font: &excelize.Font{Color: sealRed, Size: 10}},
 		{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
 		{Text: "\n" + account, Font: &excelize.Font{Color: sealRed, Size: 10}},
 	}
-	wb.File.SetCellRichText(sheet, "D1", accountRuns)
+	wb.File.SetCellRichText(sheet, accLeft, accountRuns)
 	infoStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Alignment: &excelize.Alignment{
 			Horizontal: "center",
@@ -67,13 +73,16 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 			WrapText:   true,
 		},
 	})
-	wb.File.SetCellStyle(sheet, "D1", "G1", infoStyle)
-	wb.File.SetRowHeight(sheet, 1, 36)
+	wb.File.SetCellStyle(sheet, accLeft, accRight, infoStyle)
+	wb.File.SetRowHeight(sheet, lay.TitleRow+1, 36)
 
-	// ── 第 2 行：列标题 ──
-	for i, h := range glHeaders {
-		cell, _ := excelize.CoordinatesToCellName(i+1, 2)
-		wb.File.SetCellValue(sheet, cell, h)
+	// ── 列标题行（Row 3: HeaderRow+1） ──
+	colNames := []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "方向", "余额", "金额分栏"}
+	for i, h := range colNames {
+		cell := cellName(lay.FrontStartCol+i, lay.HeaderRow+1)
+		if i < len(colNames) {
+			wb.File.SetCellValue(sheet, cell, h)
+		}
 	}
 
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -84,49 +93,37 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	headerCell, _ := excelize.CoordinatesToCellName(1, 2)
-	endCell, _ := excelize.CoordinatesToCellName(7, 2)
-	wb.File.SetCellStyle(sheet, headerCell, endCell, headerStyle)
+	headerStart := cellName(lay.FrontStartCol, lay.HeaderRow+1)
+	headerEnd := cellName(lay.FrontStartCol+len(colNames)-1, lay.HeaderRow+1)
+	wb.File.SetCellStyle(sheet, headerStart, headerEnd, headerStyle)
 
-	// ── 列宽 ──
-	wb.File.SetColWidth(sheet, "A", "A", 12)
-	wb.File.SetColWidth(sheet, "B", "B", 8)
-	wb.File.SetColWidth(sheet, "C", "C", 35)
-	wb.File.SetColWidth(sheet, "D", "D", 14)
-	wb.File.SetColWidth(sheet, "E", "E", 14)
-	wb.File.SetColWidth(sheet, "F", "F", 6)
-	wb.File.SetColWidth(sheet, "G", "G", 16)
-
-	// ── 打印标题：每页顶部重复第 1-2 行 ──
-	wb.File.SetDefinedName(&excelize.DefinedName{
-		Name:     "_xlnm.Print_Titles",
-		RefersTo: fmt.Sprintf("'%s'!$1:$2", sheet),
-		Scope:    sheet,
-	})
-
-	// ── 页面设置：A4 横向 ──
-	a4Size := 9
-	landscape := "landscape"
-	fitToWidth := 1
-	fitToHeight := 0
-	wb.File.SetPageLayout(sheet, &excelize.PageLayoutOptions{
-		Size:        &a4Size,
-		Orientation: &landscape,
-		FitToWidth:  &fitToWidth,
-		FitToHeight: &fitToHeight,
-	})
-
-	// ── 页边距（英寸）：装订侧稍大 ──
-	binding := 0.75
-	trim := 0.45
-	topMargin := 0.65
-	bottomMargin := 0.55
-	wb.File.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
-		Left:   &binding,
-		Right:  &trim,
-		Top:    &topMargin,
-		Bottom: &bottomMargin,
-	})
+	// ── 列宽（按 Layout 计算） ──
+	avgWidth := layout.MMToExcelColWidth(lay.FrontWidthMM / float64(len(lay.ExcelColumns)))
+	for _, ec := range lay.ExcelColumns {
+		colLetter, _ := excelize.ColumnNumberToName(ec.Col)
+		w := avgWidth
+		if w < 3 {
+			w = 3
+		}
+		wb.File.SetColWidth(sheet, colLetter, colLetter, w)
+	}
+	if lay.BindingLeftCols > 0 {
+		letter, _ := excelize.ColumnNumberToName(1)
+		wb.File.SetColWidth(sheet, letter, letter, 2)
+	}
+	if lay.PageGapStartCol >= 1 && lay.PageGapWidthMM > 0 {
+		letter, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
+		wb.File.SetColWidth(sheet, letter, letter, 2)
+	}
+	if lay.BindingRightCols > 0 && lay.TotalCols >= 1 {
+		letter, _ := excelize.ColumnNumberToName(lay.TotalCols)
+		wb.File.SetColWidth(sheet, letter, letter, 2)
+	}
+	for _, ec := range lay.ExcelColumns {
+		backCol := ec.Col + (lay.BackStartCol - lay.FrontStartCol)
+		letter, _ := excelize.ColumnNumberToName(backCol)
+		wb.File.SetColWidth(sheet, letter, letter, avgWidth)
+	}
 
 	return nil
 }
@@ -190,7 +187,6 @@ func (wb *Workbook) AppendEntries(entries []voucher.Entry, initials map[string]i
 	}
 
 	for _, e := range entries {
-		// 若分录所属父级在总分类账忽略列表中，跳过（不生成叶子 GL）
 		if glSuppress[e.GeneralAccount] {
 			continue
 		}
@@ -247,7 +243,6 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			return err
 		}
 
-		// 如果上一行是孤立过次页（无承前页跟随），先补承前页
 		if wb.lastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.lastBreakTotals(sheet)
 			wb.writeCarryForwardRow(sheet, row, balance, pbDebit, pbCredit)
@@ -256,7 +251,6 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			pageCredit = 0
 		}
 
-		// 如果当前行超出页容量，写过次页 + 承前页
 		if wb.rowIsPageBreak(sheet, row) {
 			wb.writePageBreakRow(sheet, row, balance, pageDebit, pageCredit)
 			row++
@@ -366,7 +360,7 @@ func (wb *Workbook) pageStartRow(sheet string) int {
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
-			return i + 3 // 跳过过次页 + 承前页（i 为 0-index）
+			return i + 3
 		}
 	}
 	return 3

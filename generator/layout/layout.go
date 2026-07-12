@@ -19,8 +19,9 @@ type LayoutSpec struct {
 	PageGapMM     float64 // 正面与反面之间的间隙
 
 	// 内容参数
-	TitleRowCount     int // 标题区行数（含空行）
-	ColHeaderRowCount int // 列标题行数
+	TitleRowCount     int     // 标题区行数（含空行）
+	TitleSplitRatio   float64 // 标题区列分割：占正面区前 TitleSplitRatio（如 0.5），科目信息占剩余部分
+	ColHeaderRowCount int     // 列标题行数
 	DataRowsPerPage   int
 
 	// 列比例（正面/反面内容区内的列宽分配）
@@ -44,7 +45,7 @@ type Layout struct {
 	FrontWidthMM float64
 
 	// 页间隙（正面与反面之间）
-	PageGapLeftMM float64
+	PageGapLeftMM  float64
 	PageGapWidthMM float64
 
 	// 反面内容区
@@ -56,29 +57,37 @@ type Layout struct {
 
 	// ── Excel 映射 ──
 
-	BindingLeftCols   int // 左边距空列数
-	FrontStartCol     int
-	PageGapStartCol   int
-	BackStartCol      int
-	BindingRightCols  int
-	TotalCols         int
+	BindingLeftCols  int // 左边距空列数
+	FrontStartCol    int
+	PageGapStartCol  int
+	BackStartCol     int
+	BindingRightCols int
+	TotalCols        int
 
 	// 列号（Excel）
-	ExcelColumns  []ExcelCol
+	ExcelColumns []ExcelCol
 
 	// 行号（0-indexed）
-	TitleRow        int // 总分类账
-	PageNumRow      int // 分第 n 页
-	AccountRow      int // 科目名称
-	HeaderRow       int // 列标题
-	DataStartRow    int // 数据第 1 行
+	TitleRow     int // 总分类账
+	PageNumRow   int // 分第 n 页
+	AccountRow   int // 科目名称（目前 TitleRow=0, PageNumRow=0, AccountRow=0 合并在同一行）
+	HeaderRow    int // 列标题
+	DataStartRow int // 数据第 1 行
+
+	// 标题区列分割
+	TitleColLeft     int // 标题"总分类账"起始列
+	TitleColRight    int // 标题"总分类账"结束列
+	AccountColLeft   int // 科目信息起始列
+	AccountColRight  int // 科目信息结束列
+	TitleColSpan     int // 标题区总列数
+	AccountColSpan   int // 科目信息区总列数
 }
 
 // ColumnPos 列在一侧内容区中的位置（mm）
 type ColumnPos struct {
-	Name     string
-	StartMM  float64 // 相对内容区起点的偏移
-	WidthMM  float64
+	Name    string
+	StartMM float64 // 相对内容区起点的偏移
+	WidthMM float64
 }
 
 // ExcelCol Excel 列号
@@ -92,10 +101,11 @@ func DefaultGLSpec() LayoutSpec {
 	return LayoutSpec{
 		PaperWidthMM:      297,
 		PaperHeightMM:     210,
-		LeftMarginMM:      20,
-		RightMarginMM:     20,
+		LeftMarginMM:      0,
+		RightMarginMM:     0,
 		PageGapMM:         5,
-		TitleRowCount:     4,  // 分第n页 + 总分类账 + 科目名称 + 空行
+		TitleRowCount:     4,   // 分第n页 + 总分类账 + 科目名称 + 空行
+		TitleSplitRatio:   0.5, // 标题和科目信息各占一半
 		ColHeaderRowCount: 1,
 		DataRowsPerPage:   20,
 		ColProportions: []ColProportion{
@@ -117,8 +127,8 @@ func ComputeLayout(spec LayoutSpec) Layout {
 	frontLeft := spec.LeftMarginMM
 	pageGapLeft := frontLeft + contentWidth
 	backLeft := pageGapLeft + spec.PageGapMM
-	bindingLeftCols := 1
-	bindingRightCols := 1
+	bindingLeftCols := 0
+	bindingRightCols := 0
 
 	// 列坐标（mm）
 	var cols []ColumnPos
@@ -134,7 +144,6 @@ func ComputeLayout(spec LayoutSpec) Layout {
 	}
 
 	// Excel 列号映射
-	// 左侧装订边1列 → 正面 N 列 → 页间隙1列 → 反面 N 列 → 右侧装订边1列
 	nCol := len(spec.ColProportions)
 	frontStart := bindingLeftCols + 1
 	pageGapStart := frontStart + nCol
@@ -145,6 +154,13 @@ func ComputeLayout(spec LayoutSpec) Layout {
 	for i := range cols {
 		exc = append(exc, ExcelCol{Name: cols[i].Name, Col: frontStart + i})
 	}
+
+	// 标题区列分割
+	titleCols := int(float64(nCol) * spec.TitleSplitRatio)
+	if titleCols < 1 {
+		titleCols = 1
+	}
+	accountCols := nCol - titleCols
 
 	return Layout{
 		FrontLeftMM:       frontLeft,
@@ -161,11 +177,17 @@ func ComputeLayout(spec LayoutSpec) Layout {
 		BindingRightCols:  bindingRightCols,
 		TotalCols:         total,
 		ExcelColumns:      exc,
-		TitleRow:          1,
+		TitleRow:          0,
 		PageNumRow:        0,
-		AccountRow:        2,
-		HeaderRow:         4,
-		DataStartRow:      5,
+		AccountRow:        0,
+		HeaderRow:         2,
+		DataStartRow:      3,
+		TitleColLeft:      frontStart,
+		TitleColRight:     frontStart + titleCols - 1,
+		AccountColLeft:    frontStart + titleCols,
+		AccountColRight:   frontStart + nCol - 1,
+		TitleColSpan:      titleCols,
+		AccountColSpan:    accountCols,
 	}
 }
 
@@ -173,7 +195,7 @@ func ComputeLayout(spec LayoutSpec) Layout {
 // Excel 列宽 1 单位 ≈ 7 像素 (96 DPI)，1mm ≈ 3.78 像素。
 // 这是近似值，后续可以根据渲染效果微调。
 func MMToExcelColWidth(mm float64) float64 {
-	const pxPerMM = 96.0 / 25.4 // 96 DPI, 1 inch = 25.4mm
+	const pxPerMM = 96.0 / 25.4
 	const pxPerColUnit = 7.0
 	return mm * pxPerMM / pxPerColUnit
 }

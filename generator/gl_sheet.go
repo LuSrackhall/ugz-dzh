@@ -43,7 +43,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	sealRed := "CC0000"
 
 	// ── 标题行（Row 1: TitleRow+1） ──
-	// 左侧：总    分    类    账（深绿、加粗、双下划线）
+	// 左侧：总    分    类    账（深绿、加粗、双底框线，合并向右多1列使双线溢出 ~1.5字）
 	titleLeft := cellName(lay.TitleColLeft, lay.TitleRow+1)
 	titleRight := cellName(lay.TitleColRight, lay.TitleRow+1)
 	wb.File.MergeCell(sheet, titleLeft, titleRight)
@@ -52,8 +52,14 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "bottom", Color: darkGreen, Style: 6},
+		},
 	})
 	wb.File.SetCellStyle(sheet, titleLeft, titleRight, titleStyle)
+	// 相邻单元格同样设置双底框线，视觉上向右溢出约1列
+	overflowCell := cellName(lay.TitleColRight+1, lay.TitleRow+1)
+	wb.File.SetCellStyle(sheet, overflowCell, overflowCell, titleStyle)
 
 	// 右侧：分第 1 页（上）+ 科目名称（下），WrapText 分行
 	accLeft := cellName(lay.AccountColLeft, lay.AccountRow+1)
@@ -140,7 +146,6 @@ func (wb *Workbook) nextDataRow(sheet string) (int, error) {
 		return 3, nil
 	}
 
-	// 找最近的过次页（在摘要列 C）
 	lastBreak := 0
 	for i := len(rows) - 1; i >= 0; i-- {
 		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
@@ -149,12 +154,10 @@ func (wb *Workbook) nextDataRow(sheet string) (int, error) {
 		}
 	}
 
-	// 过次页为最后一行 → 下一行供承前页
 	if lastBreak > 0 && lastBreak == len(rows) {
 		return lastBreak + 1, nil
 	}
 
-	// 过次页+1 为最后一行（已是承前页） → 返回承前页之后
 	if lastBreak > 0 && lastBreak+1 == len(rows) {
 		return len(rows) + 1, nil
 	}
@@ -180,7 +183,6 @@ func (wb *Workbook) AppendEntries(entries []voucher.Entry, initials map[string]i
 	}
 	groups := make(map[string]*entryGroup)
 
-	// 构建忽略集合
 	glSuppress := make(map[string]bool)
 	for _, a := range wb.Config.Settings.GLSuppressAccounts {
 		glSuppress[a] = true
@@ -190,7 +192,6 @@ func (wb *Workbook) AppendEntries(entries []voucher.Entry, initials map[string]i
 		if glSuppress[e.GeneralAccount] {
 			continue
 		}
-
 		path := e.GeneralAccount
 		if e.DetailAccount != "" {
 			path += "-" + e.DetailAccount
@@ -297,7 +298,6 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64) error {
 	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
 
 	wb.setMoneyStyle(sheet, row, 7)
-
 	return nil
 }
 
@@ -387,7 +387,7 @@ func (wb *Workbook) pageHasBreakRow(sheet string) bool {
 	return false
 }
 
-// writePageBreakRow 写"过次页"行（摘要列 + 本月累计发生额 + 余额）。
+// writePageBreakRow 写"过次页"行。
 func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, pageDebit, pageCredit int64) {
 	dir, dispBal := directionFor(balance, 0)
 	wb.File.SetCellValue(sheet, cellName(1, row), "")
@@ -397,13 +397,12 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
 	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
-
 	wb.setMoneyStyle(sheet, row, 4)
 	wb.setMoneyStyle(sheet, row, 5)
 	wb.setMoneyStyle(sheet, row, 7)
 }
 
-// writeCarryForwardRow 写"承前页"行，复制过次页的全部数据。
+// writeCarryForwardRow 写"承前页"行。
 func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64) {
 	dir, dispBal := directionFor(balance, 0)
 	wb.File.SetCellValue(sheet, cellName(1, row), "")
@@ -413,7 +412,6 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(6, row), dir)
 	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
-
 	wb.setMoneyStyle(sheet, row, 4)
 	wb.setMoneyStyle(sheet, row, 5)
 	wb.setMoneyStyle(sheet, row, 7)

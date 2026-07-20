@@ -47,19 +47,13 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	titleLeft := cellName(lay.TitleColLeft, lay.TitleRow+1)
 	titleRight := cellName(lay.TitleColRight, lay.TitleRow+1)
 	wb.File.MergeCell(sheet, titleLeft, titleRight)
-	wb.File.SetCellValue(sheet, titleLeft, "总    分    类    账")
+	wb.File.SetCellValue(sheet, titleLeft, "   总    分    类    账   ")
 
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: darkGreen, Style: 6},
-		},
 	})
 	wb.File.SetCellStyle(sheet, titleLeft, titleRight, titleStyle)
-	// 相邻单元格同样设置双底框线，视觉上向右溢出约1列
-	overflowCell := cellName(lay.TitleColRight+1, lay.TitleRow+1)
-	wb.File.SetCellStyle(sheet, overflowCell, overflowCell, titleStyle)
 
 	// 右侧：分第 1 页（上）+ 科目名称（下），WrapText 分行
 	accLeft := cellName(lay.AccountColLeft, lay.AccountRow+1)

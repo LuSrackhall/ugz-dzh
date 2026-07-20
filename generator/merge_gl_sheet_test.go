@@ -2,6 +2,7 @@ package generator
 
 import (
 	"testing"
+	"strings"
 
 	"ledger/balance"
 	"ledger/voucher"
@@ -69,7 +70,7 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 	}
 
 	// Row 1 (index 0): title
-	if len(rows[0]) == 0 || rows[0][0] != "总    分    类    账" {
+	if len(rows[0]) == 0 || !strings.Contains(rows[0][0], "总    分    类    账") {
 		t.Errorf("row 1 title = %v, want %q", rows[0], "总    分    类    账")
 	}
 

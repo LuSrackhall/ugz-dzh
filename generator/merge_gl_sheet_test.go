@@ -65,46 +65,46 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 	}
 
 	// Layout: Row 1=title, Row 2=blank, Row 3=headers, Row 4=data start, Row 5=more data
-	if len(rows) < 5 {
-		t.Fatalf("expected at least 5 rows, got %d", len(rows))
+	if len(rows) < 7 {
+		t.Fatalf("expected at least 7 rows, got %d", len(rows))
 	}
 
 	// Row 1 (index 0): title
-	if len(rows[0]) == 0 || !strings.Contains(rows[0][0], "总    分    类    账") {
-		t.Errorf("row 1 title = %v, want %q", rows[0], "总    分    类    账")
+	if len(rows[1]) == 0 || !strings.Contains(rows[1][2], "总    分    类    账") {
+		t.Errorf("row 1 title = %v, want %q", rows[1], "总    分    类    账")
 	}
 
 	// Row 3 (index 2): headers
-	if len(rows[2]) < 7 || rows[2][2] != "摘要" {
-		t.Errorf("row 3 headers: col 3 = %q, want %q", getRowCol(rows, 2, 2), "摘要")
+	if len(rows[4]) < 7 || rows[4][4] != "摘要" {
+		t.Errorf("row 3 headers: col 3 = %q, want %q", getRowCol(rows, 4, 2), "摘要")
 	}
 
-	// Row 4 (index 3): first data row — [电脑] 购电脑
-	if got := getRowCol(rows, 3, 2); got != "[电脑] 购电脑" {
+	// Row 6 (index 5): first data row — [电脑] 购电脑
+	if got := getRowCol(rows, 5, 2); got != "[电脑] 购电脑" {
 		t.Errorf("row 4 summary = %q, want %q", got, "[电脑] 购电脑")
 	}
-	if got := getRowCol(rows, 3, 0); got != "2026-01-05" {
+	if got := getRowCol(rows, 5, 0); got != "2026-01-05" {
 		t.Errorf("row 4 date = %q, want %q", got, "2026-01-05")
 	}
 
-	// Row 5 (index 4): second data row — [打印机] 购打印机
-	if got := getRowCol(rows, 4, 2); got != "[打印机] 购打印机" {
+	// Row 7 (index 6): second data row — [打印机] 购打印机
+	if got := getRowCol(rows, 6, 2); got != "[打印机] 购打印机" {
 		t.Errorf("row 5 summary = %q, want %q", got, "[打印机] 购打印机")
 	}
 
 	// Money columns: debit (col 4, index 3) should have values
-	if got := getRowCol(rows, 3, 3); got == "" || got == "0" {
+	if got := getRowCol(rows, 5, 3); got == "" || got == "0" {
 		t.Errorf("row 4 debit should have value, got %q", got)
 	}
-	if got := getRowCol(rows, 4, 3); got == "" || got == "0" {
+	if got := getRowCol(rows, 6, 3); got == "" || got == "0" {
 		t.Errorf("row 5 debit should have value, got %q", got)
 	}
 
 	// Balance column (col 7, index 6) should have values
-	if got := getRowCol(rows, 3, 6); got == "" || got == "0" {
+	if got := getRowCol(rows, 5, 6); got == "" || got == "0" {
 		t.Errorf("row 4 balance should have value, got %q", got)
 	}
-	if got := getRowCol(rows, 4, 6); got == "" || got == "0" {
+	if got := getRowCol(rows, 6, 6); got == "" || got == "0" {
 		t.Errorf("row 5 balance should have value, got %q", got)
 	}
 }
@@ -130,13 +130,13 @@ func TestAppendMergeEntries_SummaryFormat(t *testing.T) {
 		t.Fatalf("GetRows: %v", err)
 	}
 
-	// Row 4 (index 3): first data row — no detail prefix
-	if got := getRowCol(rows, 3, 2); got != "购买设备" {
+	// Row 6 (index 5): first data row — no detail prefix
+	if got := getRowCol(rows, 5, 2); got != "购买设备" {
 		t.Errorf("row 4 summary = %q, want %q", got, "[办公费] 购买设备")
 	}
 
-	// Row 5 (index 4): second data row — with detail prefix
-	if got := getRowCol(rows, 4, 2); got != "[办公费] 购买设备" {
+	// Row 7 (index 6): second data row — with detail prefix
+	if got := getRowCol(rows, 6, 2); got != "[办公费] 购买设备" {
 		t.Errorf("row 5 summary = %q, want %q", got, "[办公费] 购买设备")
 	}
 }
@@ -163,17 +163,17 @@ func TestAppendMergeEntries_MultipleDetails(t *testing.T) {
 		t.Fatalf("GetRows: %v", err)
 	}
 
-	if len(rows) < 5 {
-		t.Fatalf("expected at least 5 rows, got %d", len(rows))
+	if len(rows) < 7 {
+		t.Fatalf("expected at least 7 rows, got %d", len(rows))
 	}
 
 	// Row 4 (index 3): first data — date column
-	if got := getRowCol(rows, 3, 0); got != "2026-01-05" {
+	if got := getRowCol(rows, 5, 0); got != "2026-01-05" {
 		t.Errorf("row 4 date = %q, want %q", got, "2026-01-05")
 	}
 
 	// Row 5 (index 4): second data
-	if got := getRowCol(rows, 4, 0); got != "2026-01-10" {
+	if got := getRowCol(rows, 6, 0); got != "2026-01-10" {
 		t.Errorf("row 5 date = %q, want %q", got, "2026-01-10")
 	}
 }

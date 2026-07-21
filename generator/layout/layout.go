@@ -96,27 +96,27 @@ type ExcelCol struct {
 	Col  int // 1-indexed
 }
 
-// DefaultGLSpec 返回总分类账的默认布局配置
+// DefaultGLSpec 返回总分类账的默认布局配置（A4 横向）
 func DefaultGLSpec() LayoutSpec {
 	return LayoutSpec{
 		PaperWidthMM:      297,
 		PaperHeightMM:     210,
-		LeftMarginMM:      0,
-		RightMarginMM:     0,
-		PageGapMM:         5,
-		TitleRowCount:     4,   // 分第n页 + 总分类账 + 科目名称 + 空行
+		LeftMarginMM:      15,  // 装订边（空列模拟）
+		RightMarginMM:     15,
+		PageGapMM:         8,   // 正反面间隙
+		TitleRowCount:     3,   // 分第n页、总分类账、科目名称（纵向三行）
 		TitleSplitRatio:   0.5, // 标题和科目信息各占一半
 		ColHeaderRowCount: 1,
 		DataRowsPerPage:   20,
 		ColProportions: []ColProportion{
 			{Name: "日期", Ratio: 10},
-			{Name: "凭证号", Ratio: 8},
+			{Name: "凭证号", Ratio: 9},
 			{Name: "摘要", Ratio: 25},
-			{Name: "借方金额", Ratio: 15},
-			{Name: "贷方金额", Ratio: 15},
+			{Name: "借方金额", Ratio: 16},
+			{Name: "贷方金额", Ratio: 16},
 			{Name: "方向", Ratio: 5},
-			{Name: "余额", Ratio: 12},
-			{Name: "金额分栏", Ratio: 10},
+			{Name: "余额", Ratio: 14},
+			{Name: "金额分栏", Ratio: 5},
 		},
 	}
 }
@@ -127,8 +127,8 @@ func ComputeLayout(spec LayoutSpec) Layout {
 	frontLeft := spec.LeftMarginMM
 	pageGapLeft := frontLeft + contentWidth
 	backLeft := pageGapLeft + spec.PageGapMM
-	bindingLeftCols := 0
-	bindingRightCols := 0
+	bindingLeftCols := 2
+	bindingRightCols := 2
 
 	// 列坐标（mm）
 	var cols []ColumnPos
@@ -177,11 +177,11 @@ func ComputeLayout(spec LayoutSpec) Layout {
 		BindingRightCols:  bindingRightCols,
 		TotalCols:         total,
 		ExcelColumns:      exc,
-		TitleRow:          0,
+		TitleRow:          1,
 		PageNumRow:        0,
-		AccountRow:        0,
-		HeaderRow:         2,
-		DataStartRow:      3,
+		AccountRow:        2,
+		HeaderRow:         4,
+		DataStartRow:      5,
 		TitleColLeft:      frontStart,
 		TitleColRight:     frontStart + titleCols - 1,
 		AccountColLeft:    frontStart + titleCols,

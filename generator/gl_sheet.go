@@ -33,8 +33,14 @@ func (wb *Workbook) ensureGLSheet(account string) (string, error) {
 	return name, nil
 }
 
-// writeGLTitle 写入总分类账标题行、列标题及页面布局。
-// 所有行列坐标通过 ComputeLayout 计算，无硬编码。
+// writeGLTitle 写入总分类账的标题区（3 行）、列标题和列宽。
+//
+// 行结构：
+//   Row 1: 分第 n 页（右侧，绿色+数字红色）
+//   Row 2: 总    分    类    账（居中，绿色+双下划线）| 科目名称（右侧）
+//   Row 3: 科目名称（右侧，印章红）
+//   Row 4: [空行]
+//   Row 5: 日期│凭证号│摘要│借方金额│贷方金额│方向│余额│金额分栏
 func (wb *Workbook) writeGLTitle(sheet string) error {
 	account := sheet[len(sheetPrefixGL):]
 	lay := layout.ComputeLayout(layout.DefaultGLSpec())
@@ -42,41 +48,52 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
-	// ── 标题行（Row 1: TitleRow+1） ──
-	// 左侧：总    分    类    账（深绿、加粗、双底框线，合并向右多1列使双线溢出 ~1.5字）
-	titleLeft := cellName(lay.TitleColLeft, lay.TitleRow+1)
-	titleRight := cellName(lay.TitleColRight, lay.TitleRow+1)
-	wb.File.MergeCell(sheet, titleLeft, titleRight)
-	wb.File.SetCellValue(sheet, titleLeft, "   总    分    类    账   ")
+	// ── Row 1: 分第 1 页（右侧，绿色，数字印章红） ──
+	pnLeft := cellName(lay.AccountColLeft, lay.PageNumRow+1)
+	pnRight := cellName(lay.AccountColRight, lay.PageNumRow+1)
+	wb.File.MergeCell(sheet, pnLeft, pnRight)
+	wb.File.SetCellRichText(sheet, pnLeft, []excelize.RichTextRun{
+		{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+		{Text: "1", Font: &excelize.Font{Color: sealRed, Size: 10}},
+		{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+	})
+	wb.File.SetRowHeight(sheet, lay.PageNumRow+1, 18)
 
+	// ── Row 2: 总    分    类    账（居中）+ 科目名称（右侧） ──
+	tl := cellName(lay.TitleColLeft, lay.TitleRow+1)
+	tr := cellName(lay.TitleColRight, lay.TitleRow+1)
+	wb.File.MergeCell(sheet, tl, tr)
+	wb.File.SetCellValue(sheet, tl, "   总    分    类    账   ")
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, titleLeft, titleRight, titleStyle)
+	wb.File.SetCellStyle(sheet, tl, tr, titleStyle)
 
-	// 右侧：分第 1 页（上）+ 科目名称（下），WrapText 分行
-	accLeft := cellName(lay.AccountColLeft, lay.AccountRow+1)
-	accRight := cellName(lay.AccountColRight, lay.AccountRow+1)
-	wb.File.MergeCell(sheet, accLeft, accRight)
-	accountRuns := []excelize.RichTextRun{
-		{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-		{Text: "1", Font: &excelize.Font{Color: sealRed, Size: 10}},
-		{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-		{Text: "\n" + account, Font: &excelize.Font{Color: sealRed, Size: 10}},
-	}
-	wb.File.SetCellRichText(sheet, accLeft, accountRuns)
-	infoStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Alignment: &excelize.Alignment{
-			Horizontal: "center",
-			Vertical:   "center",
-			WrapText:   true,
-		},
+	al := cellName(lay.AccountColLeft, lay.TitleRow+1)
+	ar := cellName(lay.AccountColRight, lay.TitleRow+1)
+	wb.File.MergeCell(sheet, al, ar)
+	wb.File.SetCellValue(sheet, al, account)
+	accStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Color: sealRed, Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, accLeft, accRight, infoStyle)
-	wb.File.SetRowHeight(sheet, lay.TitleRow+1, 36)
+	wb.File.SetCellStyle(sheet, al, ar, accStyle)
+	wb.File.SetRowHeight(sheet, lay.TitleRow+1, 28)
 
-	// ── 列标题行（Row 3: HeaderRow+1） ──
+	// ── Row 3: 科目名称（右侧，印章红） — 独立行 ──
+	acLeft := cellName(lay.AccountColLeft, lay.AccountRow+1)
+	acRight := cellName(lay.AccountColRight, lay.AccountRow+1)
+	wb.File.MergeCell(sheet, acLeft, acRight)
+	wb.File.SetCellValue(sheet, acLeft, account)
+	acRowStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Color: sealRed, Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	wb.File.SetCellStyle(sheet, acLeft, acRight, acRowStyle)
+	wb.File.SetRowHeight(sheet, lay.AccountRow+1, 18)
+
+	// ── Row 5: 列标题 ──
 	colNames := []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "方向", "余额", "金额分栏"}
 	for i, h := range colNames {
 		cell := cellName(lay.FrontStartCol+i, lay.HeaderRow+1)
@@ -84,7 +101,6 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 			wb.File.SetCellValue(sheet, cell, h)
 		}
 	}
-
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10},
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
@@ -93,36 +109,44 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	headerStart := cellName(lay.FrontStartCol, lay.HeaderRow+1)
-	headerEnd := cellName(lay.FrontStartCol+len(colNames)-1, lay.HeaderRow+1)
-	wb.File.SetCellStyle(sheet, headerStart, headerEnd, headerStyle)
+	hs := cellName(lay.FrontStartCol, lay.HeaderRow+1)
+	he := cellName(lay.FrontStartCol+len(colNames)-1, lay.HeaderRow+1)
+	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// ── 列宽（按 Layout 计算） ──
+	// ── 列宽 ──
 	avgWidth := layout.MMToExcelColWidth(lay.FrontWidthMM / float64(len(lay.ExcelColumns)))
 	for _, ec := range lay.ExcelColumns {
-		colLetter, _ := excelize.ColumnNumberToName(ec.Col)
+		cl, _ := excelize.ColumnNumberToName(ec.Col)
 		w := avgWidth
 		if w < 3 {
 			w = 3
 		}
-		wb.File.SetColWidth(sheet, colLetter, colLetter, w)
+		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
-	if lay.BindingLeftCols > 0 {
-		letter, _ := excelize.ColumnNumberToName(1)
-		wb.File.SetColWidth(sheet, letter, letter, 2)
+	// 装订列
+	for _, offset := range []int{1, 2} {
+		if offset <= lay.TotalCols {
+			cl, _ := excelize.ColumnNumberToName(offset)
+			wb.File.SetColWidth(sheet, cl, cl, 2)
+		}
 	}
-	if lay.PageGapStartCol >= 1 && lay.PageGapWidthMM > 0 {
-		letter, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
-		wb.File.SetColWidth(sheet, letter, letter, 2)
+	// 页间隙列
+	if lay.PageGapStartCol <= lay.TotalCols {
+		cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
+		wb.File.SetColWidth(sheet, cl, cl, 2)
 	}
-	if lay.BindingRightCols > 0 && lay.TotalCols >= 1 {
-		letter, _ := excelize.ColumnNumberToName(lay.TotalCols)
-		wb.File.SetColWidth(sheet, letter, letter, 2)
-	}
+	// 反面区列宽（与正面一致）
 	for _, ec := range lay.ExcelColumns {
 		backCol := ec.Col + (lay.BackStartCol - lay.FrontStartCol)
-		letter, _ := excelize.ColumnNumberToName(backCol)
-		wb.File.SetColWidth(sheet, letter, letter, avgWidth)
+		cl, _ := excelize.ColumnNumberToName(backCol)
+		wb.File.SetColWidth(sheet, cl, cl, avgWidth)
+	}
+	// 右侧装订列
+	for _, offset := range []int{lay.TotalCols, lay.TotalCols - 1} {
+		if offset > 0 && offset > lay.BackStartCol && offset <= lay.TotalCols {
+			cl, _ := excelize.ColumnNumberToName(offset)
+			wb.File.SetColWidth(sheet, cl, cl, 2)
+		}
 	}
 
 	return nil

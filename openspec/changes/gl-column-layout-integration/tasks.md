@@ -26,7 +26,7 @@
 
 ## Phase 5: 集成验证
 
-- [ ] 5.1 编译：`go build -o ledger .`
-- [ ] 5.2 e2e 测试：`go test ./test/e2e/... -count=1 -timeout 180s`
-- [ ] 5.3 跨年生成：`bash scripts/test-e2e.sh --skip-test`
-- [ ] 5.4 确认 TDD 测试用例通过（Phase 1.1 的断言成立）
+- [x] 5.1 编译：`go build -o ledger .`
+- [x] 5.2 e2e 测试：`go test ./test/e2e/... -count=1 -timeout 180s`
+- [x] 5.3 跨年生成：`bash scripts/test-e2e.sh --skip-test`
+- [x] 5.4 确认 TDD 测试用例通过（Phase 1.1 的断言成立）

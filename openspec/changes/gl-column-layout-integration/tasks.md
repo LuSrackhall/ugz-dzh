@@ -12,17 +12,17 @@
 
 ## Phase 3: 月结 + 合并 GL + ML 列映射替换
 
-- [ ] 3.1 `workbook.go` — `ExtractLastMonthFinals` 读取索引偏移；编译通过
-- [ ] 3.2 `monthly_close.go` — `WriteMonthClosings` + `nextDataRowAfterBreak` 替换；编译通过
-- [ ] 3.3 `merge_gl_sheet.go` — `appendToMergeGLSheet` + `WriteMergeGLClosings` + `writeMergeGLClosingRows` 替换；编译通过
-- [ ] 3.4 `ml_sheet.go` — `appendToMLSheet` + `writeMLPageBreakRow` + `writeMLCarryForwardRow` + `lastBreakDetailTotals` 替换（注意：ML 扩展列 H-U 不动）；编译通过
-- [ ] 3.5 `print_mark.go` — `markRowForPrint` 列号由 8 → `lay.FrontStartCol + len(lay.ExcelColumns)`；编译通过
-- [ ] 3.6 运行 `go test ./... -count=1` 全绿
+- [x] 3.1 `workbook.go` — `ExtractLastMonthFinals` 读取索引偏移；编译通过
+- [x] 3.2 `monthly_close.go` — `WriteMonthClosings` + `nextDataRowAfterBreak` 替换；编译通过
+- [x] 3.3 `merge_gl_sheet.go` — `appendToMergeGLSheet` + `WriteMergeGLClosings` + `writeMergeGLClosingRows` 替换；编译通过
+- [x] 3.4 `ml_sheet.go` — `appendToMLSheet` + `writeMLPageBreakRow` + `writeMLCarryForwardRow` + `lastBreakDetailTotals` 替换（注意：ML 扩展列 H-U 不动）；编译通过
+- [x] 3.5 `print_mark.go` — `markRowForPrint` 列号由 8 → `lay.FrontStartCol + len(lay.ExcelColumns)`；编译通过
+- [x] 3.6 运行 `go test ./... -count=1` 全绿
 
 ## Phase 4: 测试断言更新
 
-- [ ] 4.1 `merge_gl_sheet_test.go` — 更新硬编码行号断言（Row 4→5 偏移）
-- [ ] 4.2 运行 `go test ./... -count=1` 全绿
+- [x] 4.1 `merge_gl_sheet_test.go` — 更新硬编码行号断言（Row 4→5 偏移，列索引+BindingLeftCols）
+- [x] 4.2 运行 `go test ./... -count=1` 全绿
 
 ## Phase 5: 集成验证
 

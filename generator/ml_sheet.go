@@ -438,6 +438,7 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 // appendToMLSheet 追加分录到指定总账科目的多科目明细账 Sheet。
 func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, detailIdx map[string]int, initial int64) error {
 	sheet := sheetNameML(general)
+	lay := glLayout()
 
 	numDetails := mlMaxDetails
 
@@ -500,17 +501,17 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 		dir, dispBal := directionFor(balance, 0)
 
-		wb.File.SetCellValue(sheet, cellName(1, row), e.Date)
-		wb.File.SetCellValue(sheet, cellName(2, row), e.VoucherNum)
-		wb.File.SetCellValue(sheet, cellName(3, row), e.Summary)
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(e.DebitCents))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(e.CreditCents))
-		wb.File.SetCellValue(sheet, cellName(6, row), dir)
-		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), e.Date)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), e.VoucherNum)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), e.Summary)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(e.DebitCents))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(e.CreditCents))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), dir)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
 
-		wb.setMoneyStyle(sheet, row, 4)
-		wb.setMoneyStyle(sheet, row, 5)
-		wb.setMoneyStyle(sheet, row, 7)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 
 		if e.DetailAccount != "" {
 			if idx, ok := detailIdx[e.DetailAccount]; ok {
@@ -532,18 +533,19 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 // writeMLPageBreakRow 写多科目明细账的"过次页"行，A-G 总计 + H-U 各明细本页净额。
 func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals) {
+	lay := glLayout()
 	dir, dispBal := directionFor(balance, 0)
-	wb.File.SetCellValue(sheet, cellName(1, row), "")
-	wb.File.SetCellValue(sheet, cellName(2, row), "")
-	wb.File.SetCellValue(sheet, cellName(3, row), pageBreakLabel)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
-	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), pageBreakLabel)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), dir)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
 
-	wb.setMoneyStyle(sheet, row, 4)
-	wb.setMoneyStyle(sheet, row, 5)
-	wb.setMoneyStyle(sheet, row, 7)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 
 	for i, pd := range pageDetails {
 		net := pd.debit - pd.credit
@@ -555,18 +557,19 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 
 // writeMLCarryForwardRow 写多科目明细账的"承前页"行，与过次页数据相同。
 func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals, label string) {
+	lay := glLayout()
 	dir, dispBal := directionFor(balance, 0)
-	wb.File.SetCellValue(sheet, cellName(1, row), "")
-	wb.File.SetCellValue(sheet, cellName(2, row), "")
-	wb.File.SetCellValue(sheet, cellName(3, row), label)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
-	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), label)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), dir)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
 
-	wb.setMoneyStyle(sheet, row, 4)
-	wb.setMoneyStyle(sheet, row, 5)
-	wb.setMoneyStyle(sheet, row, 7)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 
 	for i, pd := range pageDetails {
 		net := pd.debit - pd.credit
@@ -578,12 +581,13 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 
 // lastBreakDetailTotals 读取最后一个过次页行的各明细列净额。
 func (wb *Workbook) lastBreakDetailTotals(sheet string) []mlDetailTotals {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return make([]mlDetailTotals, mlMaxDetails)
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
+		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
 			result := make([]mlDetailTotals, mlMaxDetails)
 			for j := 0; j < mlMaxDetails; j++ {
 				colIdx := mlDetailStartCol + j - 1 // 0-indexed in rows

@@ -3,7 +3,10 @@ package generator
 import (
 	"testing"
 
+	"ledger/generator/layout"
 	"ledger/voucher"
+
+	"github.com/xuri/excelize/v2"
 )
 
 func TestSheetNameGL(t *testing.T) {
@@ -211,8 +214,51 @@ func TestMLDetailStartCol(t *testing.T) {
 
 func TestMLPrintMarkCol(t *testing.T) {
 	got := mlPrintMarkCol()
-	want := 22 // V = 8 + 14
+	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	want := lay.FrontStartCol + 7 + 14 // 24
 	if got != want {
-		t.Errorf("mlPrintMarkCol() = %d, want %d (V column)", got, want)
+		t.Errorf("mlPrintMarkCol() = %d, want %d", got, want)
+	}
+}
+
+// TestGLColumnLayoutConsistency 验证写入使用 Layout 坐标后，GetRows 能从正确索引位置读回数据。
+// 这是保护列映射正确性的核心 TDD 测试，拦截任何因索引偏移导致的数据错乱。
+func TestGLColumnLayoutConsistency(t *testing.T) {
+	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	f := excelize.NewFile()
+	sheet := "Sheet1"
+
+	// 用 Layout 坐标写入一行完整数据
+	row := 1
+	f.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "2026-01-05")
+	f.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "1")
+	f.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), "测试摘要")
+	f.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), 100.00)
+	f.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), 50.00)
+	f.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), "借")
+	f.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), 50.00)
+
+	rows, err := f.GetRows(sheet)
+	if err != nil {
+		t.Fatalf("GetRows: %v", err)
+	}
+	if len(rows) < 1 {
+		t.Fatal("no rows returned")
+	}
+	r := rows[0]
+
+	// 验证各列在正确的 index 位置
+	bIdx := lay.BindingLeftCols
+	if len(r) <= bIdx+6 {
+		t.Fatalf("row too short (len=%d, need at least %d)", len(r), bIdx+7)
+	}
+	if r[bIdx+0] != "2026-01-05" {
+		t.Errorf("date at index %d: got %q, want %q", bIdx+0, r[bIdx+0], "2026-01-05")
+	}
+	if r[bIdx+2] != "测试摘要" {
+		t.Errorf("summary at index %d: got %q, want %q", bIdx+2, r[bIdx+2], "测试摘要")
+	}
+	if r[bIdx+5] != "借" {
+		t.Errorf("direction at index %d: got %q, want %q", bIdx+5, r[bIdx+5], "借")
 	}
 }

@@ -20,7 +20,6 @@ func (wb *Workbook) WriteMLMonthClosings(
 	}
 	groups := make(map[string]*mlClosing)
 
-	// 构建忽略集合
 	mlSuppress := make(map[string]bool)
 	for _, a := range wb.Config.Settings.MLSuppressAccounts {
 		mlSuppress[a] = true
@@ -47,7 +46,6 @@ func (wb *Workbook) WriteMLMonthClosings(
 			continue
 		}
 
-		// 从 Sheet 标题读取列映射
 		detailIdx, details, err := wb.readMLDetailHeaders(sheet)
 		if err != nil {
 			return err
@@ -55,7 +53,6 @@ func (wb *Workbook) WriteMLMonthClosings(
 
 		numDetails := mlMaxDetails
 
-		// 计算本月各明细发生额
 		mtdDetails := make([]mlDetailTotals, numDetails)
 		var mtdDebit, mtdCredit int64
 		for _, e := range g.entries {
@@ -72,18 +69,21 @@ func (wb *Workbook) WriteMLMonthClosings(
 			return err
 		}
 
-		// "本月合计" 行
-		wb.File.SetCellValue(sheet, cellName(1, row), "")
-		wb.File.SetCellValue(sheet, cellName(2, row), "")
-		wb.File.SetCellValue(sheet, cellName(3, row), "本月合计")
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(mtdDebit))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(mtdCredit))
-		wb.File.SetCellValue(sheet, cellName(6, row), "")
-		wb.File.SetCellValue(sheet, cellName(7, row), "")
+		lay := glLayout()
+		lastDetailCol := mlDetailExcelCol(lay, numDetails-1)
+
+		// 本月合计
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), "本月合计")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(mtdDebit))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(mtdCredit))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), "")
 		for i := 0; i < mlMaxDetails; i++ {
 			if details[i] != "" {
 				net := mtdDetails[i].debit - mtdDetails[i].credit
-				wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuan(net))
+				wb.File.SetCellValue(sheet, cellName(mlDetailExcelCol(lay, i), row), centsToYuan(net))
 			}
 		}
 
@@ -93,21 +93,19 @@ func (wb *Workbook) WriteMLMonthClosings(
 				{Type: "top", Color: "#808080", Style: 1},
 			},
 		})
-		lastDetailCol := mlDetailStartCol + numDetails - 1
-		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), monthlyStyle)
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(lastDetailCol, row), monthlyStyle)
 
-		wb.setMoneyStyle(sheet, row, 4)
-		wb.setMoneyStyle(sheet, row, 5)
-		wb.setMoneyStyle(sheet, row, 7)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 		for i := 0; i < mlMaxDetails; i++ {
 			if details[i] != "" {
-				wb.setMoneyStyle(sheet, row, mlDetailStartCol+i)
+				wb.setMoneyStyle(sheet, row, mlDetailExcelCol(lay, i))
 			}
 		}
 
 		row++
 
-		// "本季合计" 行 — 仅季末月份（3、6、9、12）
 		if isQuarterEnd(wb.Month) {
 			qtDetails := make([]mlDetailTotals, numDetails)
 			var qtDebit, qtCredit int64
@@ -127,39 +125,38 @@ func (wb *Workbook) WriteMLMonthClosings(
 				}
 			}
 
-			wb.File.SetCellValue(sheet, cellName(1, row), "")
-			wb.File.SetCellValue(sheet, cellName(2, row), "")
-			wb.File.SetCellValue(sheet, cellName(3, row), "本季合计")
-			wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(qtDebit))
-			wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(qtCredit))
-			wb.File.SetCellValue(sheet, cellName(6, row), "")
-			wb.File.SetCellValue(sheet, cellName(7, row), "")
+			wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+			wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+			wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), "本季合计")
+			wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(qtDebit))
+			wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(qtCredit))
+			wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), "")
+			wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), "")
 			for i := 0; i < mlMaxDetails; i++ {
 				if details[i] != "" {
 					prevQt := wb.getDetailPrevQuarterTotal(general, details[i])
 					net := qtDetails[i].debit - qtDetails[i].credit + prevQt
-					wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuan(net))
+					wb.File.SetCellValue(sheet, cellName(mlDetailExcelCol(lay, i), row), centsToYuan(net))
 				}
 			}
 
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
-			wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), qtStyle)
+			wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(lastDetailCol, row), qtStyle)
 
-			wb.setMoneyStyle(sheet, row, 4)
-			wb.setMoneyStyle(sheet, row, 5)
-			wb.setMoneyStyle(sheet, row, 7)
+			wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+			wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+			wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 			for i := 0; i < mlMaxDetails; i++ {
 				if details[i] != "" {
-					wb.setMoneyStyle(sheet, row, mlDetailStartCol+i)
+					wb.setMoneyStyle(sheet, row, mlDetailExcelCol(lay, i))
 				}
 			}
 
 			row++
 		}
 
-		// "本年累计" 行
 		ytdDetails := make([]mlDetailTotals, numDetails)
 		var cumDebit, cumCredit int64
 		for _, e := range g.entries {
@@ -178,18 +175,18 @@ func (wb *Workbook) WriteMLMonthClosings(
 			}
 		}
 
-		wb.File.SetCellValue(sheet, cellName(1, row), "")
-		wb.File.SetCellValue(sheet, cellName(2, row), "")
-		wb.File.SetCellValue(sheet, cellName(3, row), "本年累计")
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(cumDebit))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(cumCredit))
-		wb.File.SetCellValue(sheet, cellName(6, row), "")
-		wb.File.SetCellValue(sheet, cellName(7, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), "本年累计")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(cumDebit))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(cumCredit))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), "")
 		for i := 0; i < mlMaxDetails; i++ {
 			if details[i] != "" {
 				prevYtd := wb.getDetailPrevYearTotal(general, details[i])
 				net := ytdDetails[i].debit - ytdDetails[i].credit + prevYtd
-				wb.File.SetCellValue(sheet, cellName(mlDetailStartCol+i, row), centsToYuan(net))
+				wb.File.SetCellValue(sheet, cellName(mlDetailExcelCol(lay, i), row), centsToYuan(net))
 			}
 		}
 
@@ -199,30 +196,29 @@ func (wb *Workbook) WriteMLMonthClosings(
 				{Type: "bottom", Color: "#808080", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), cumStyle)
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(lastDetailCol, row), cumStyle)
 
-		wb.setMoneyStyle(sheet, row, 4)
-		wb.setMoneyStyle(sheet, row, 5)
-		wb.setMoneyStyle(sheet, row, 7)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 		for i := 0; i < mlMaxDetails; i++ {
 			if details[i] != "" {
-				wb.setMoneyStyle(sheet, row, mlDetailStartCol+i)
+				wb.setMoneyStyle(sheet, row, mlDetailExcelCol(lay, i))
 			}
 		}
 
 		row++
 
-		// "期末余额" 行 — 期初 + 本月借 - 本月贷
 		endBalance := initials[general] + mtdDebit - mtdCredit
 		endDir, endDisp := directionFor(endBalance, 0)
 
-		wb.File.SetCellValue(sheet, cellName(1, row), "")
-		wb.File.SetCellValue(sheet, cellName(2, row), "")
-		wb.File.SetCellValue(sheet, cellName(3, row), periodEndLabel)
-		wb.File.SetCellValue(sheet, cellName(4, row), "")
-		wb.File.SetCellValue(sheet, cellName(5, row), "")
-		wb.File.SetCellValue(sheet, cellName(6, row), endDir)
-		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(endDisp))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), periodEndLabel)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), "")
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), endDir)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(endDisp))
 
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
@@ -230,9 +226,8 @@ func (wb *Workbook) WriteMLMonthClosings(
 				{Type: "bottom", Color: "#000000", Style: 2},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(1, row), cellName(lastDetailCol, row), endStyle)
-
-				wb.setMoneyStyle(sheet, row, 7)
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(lastDetailCol, row), endStyle)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 	}
 
 	return nil

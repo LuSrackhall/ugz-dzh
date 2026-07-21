@@ -83,8 +83,9 @@ func (wb *Workbook) Save() error {
 	return wb.File.SaveAs(wb.currentPath())
 }
 
-// ExtractLastMonthFinals 从各总分类账 Sheet 的"期末余额"行提取 G 列余额。
+// ExtractLastMonthFinals 从各总分类账 Sheet 的"期末余额"行提取余额。
 func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
+	lay := glLayout()
 	finals := make(map[string]int64)
 	for _, name := range wb.File.GetSheetList() {
 		if !strings.HasPrefix(name, sheetPrefixGL) {
@@ -98,9 +99,9 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 	// 找到最后一个"期末余额"行（月结行）
 		var lastBalance int64
 		for _, row := range rows {
-			if len(row) >= 3 && row[2] == periodEndLabel {
-				if len(row) >= 7 {
-					if v, err := yuanStrToCents(row[6]); err == nil {
+			if len(row) >= lay.BindingLeftCols+3 && row[lay.BindingLeftCols+2] == periodEndLabel {
+				if len(row) >= lay.BindingLeftCols+7 {
+					if v, err := yuanStrToCents(row[lay.BindingLeftCols+6]); err == nil {
 						lastBalance = v
 					}
 				}

@@ -31,3 +31,17 @@
 - **GIVEN** `lay.ExcelColumns` 有 8 列且 `lay.FrontStartCol=3`
 - **WHEN** 标记数据行为"需打印"
 - **THEN** 标记写入列号为 `3+8=11`（col K）
+
+### Requirement: ML 明细列使用 Layout 坐标
+
+系统 SHALL 确保多科目明细账的标题和数据列使用 `lay.FrontStartCol + offset`，明细列使用 `lay.FrontStartCol + 7 + i`。
+
+#### Scenario: ML 明细列写入正确
+- **GIVEN** `lay = ComputeLayout(DefaultGLSpec())`
+- **WHEN** 向 ML Sheet 写入明细列第 i 列
+- **THEN** 写入列号为 `mlDetailExcelCol(lay, i)` = `lay.FrontStartCol + 7 + i`
+
+#### Scenario: ML 明细列读取正确
+- **GIVEN** ML 过次页行写入明细列第 i 列
+- **WHEN** 调用 GetRows 后按索引读取
+- **THEN** `row[mlDetailRowIdx(lay, i)]` = `row[lay.BindingLeftCols + 7 + i]` 等于预期值

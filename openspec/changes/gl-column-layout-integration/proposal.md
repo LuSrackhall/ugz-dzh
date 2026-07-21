@@ -7,7 +7,8 @@
 - 写入端：`cellName(N, row)` → `cellName(lay.FrontStartCol + N-1, row)`
 - 读取端：`rows[i][index]` → `rows[i][lay.BindingLeftCols + index]`
 - 打印标记列：`cellName(8, row)` → `cellName(lay.FrontStartCol + len(lay.ExcelColumns), row)`
-- 受影响：gl_sheet.go, workbook.go, monthly_close.go, merge_gl_sheet.go, ml_sheet.go, print_mark.go
+- ML 标题和明细列同步迁移：基础列 FrontStartCol+0~6，明细列 FrontStartCol+7~20
+- 受影响：gl_sheet.go, workbook.go, monthly_close.go, merge_gl_sheet.go, ml_sheet.go, print_mark.go, monthly_close_ml.go
 - 新增"写入→读回"测试用例保护列映射正确性
 
 ## Capabilities

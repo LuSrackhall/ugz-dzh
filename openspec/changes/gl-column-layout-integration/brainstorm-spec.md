@@ -44,12 +44,16 @@
 | 读余额 | `row[6]` | `row[lay.BindingLeftCols+6]` |
 | 读借方金额 | `row[3]` | `row[lay.BindingLeftCols+3]` |
 | 读贷方金额 | `row[4]` | `row[lay.BindingLeftCols+4]` |
-| 读明细列 H-U | `row[mlDetailStartCol-1 + i]` | 不变（ML 不涉及装订列偏移） |
+| 读明细列 H-U | `row[7+i]` | `row[lay.BindingLeftCols+7+i]` |
 
-### 决策 3：不改 ML 的列号
+### 决策 3：ML 同步迁移
 
-ML 使用独立列号系统（A-G 基础列 + H-U 扩展列），其 `mlDetailStartCol=8` 和 `mlPrintMarkCol()` 都是固定值，不与 Layout 共用。
-ML 内 A-G 列的写入使用 `lay.FrontStartCol` 偏移，但扩展列 H-U 保持原位。
+ML（多科目明细账）与 GL 存在相同的标题/数据列不对齐问题。变更实施中同步修复：
+
+- 基础列（日期~余额）：`FrontStartCol+0~6`，与 GL 一致
+- 明细列（H~U）：`FrontStartCol+7~20`，通过 `mlDetailExcelCol(lay, i)` 计算
+- 打印标记列：`FrontStartCol+7+mlMaxDetails`，通过 `mlPrintMarkCol()` 计算
+- 读取端：明细列 GetRows 索引通过 `mlDetailRowIdx(lay, i)` = `lay.BindingLeftCols + 7 + i` 计算
 
 ### 决策 4：year_close.go 的遗留处理
 

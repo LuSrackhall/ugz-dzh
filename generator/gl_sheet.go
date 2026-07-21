@@ -152,9 +152,15 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	return nil
 }
 
+// glLayout 返回当前 GL 布局，供写入和读取端统一使用。
+func glLayout() layout.Layout {
+	return layout.ComputeLayout(layout.DefaultGLSpec())
+}
+
 // nextDataRow 返回 Sheet 中下一个可用数据行号。
 // 若最后一行为孤立过次页（无承前页跟随），返回过次页+1 供承前页写入。
 func (wb *Workbook) nextDataRow(sheet string) (int, error) {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 3, nil
@@ -166,7 +172,7 @@ func (wb *Workbook) nextDataRow(sheet string) (int, error) {
 
 	lastBreak := 0
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
+		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
 			lastBreak = i + 1
 			break
 		}
@@ -238,6 +244,7 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		return err
 	}
 
+	lay := glLayout()
 	rows, _ := wb.File.GetRows(sheet)
 	isNew := len(rows) <= 2
 
@@ -283,19 +290,19 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		pageDebit += e.DebitCents
 		pageCredit += e.CreditCents
 
-		wb.File.SetCellValue(sheet, cellName(1, row), e.Date)
-		wb.File.SetCellValue(sheet, cellName(2, row), e.VoucherNum)
-		wb.File.SetCellValue(sheet, cellName(3, row), e.Summary)
-		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(e.DebitCents))
-		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(e.CreditCents))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), e.Date)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), e.VoucherNum)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), e.Summary)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(e.DebitCents))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(e.CreditCents))
 
 		dir, dispBal := directionFor(balance, 0)
-		wb.File.SetCellValue(sheet, cellName(6, row), dir)
-		wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), dir)
+		wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
 
-		wb.setMoneyStyle(sheet, row, 4)
-		wb.setMoneyStyle(sheet, row, 5)
-		wb.setMoneyStyle(sheet, row, 7)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 
 		wb.markRowForPrint(sheet, row)
 	}
@@ -305,40 +312,43 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 
 // insertCarryForward 在新科目首行插入"上年结转"。
 func (wb *Workbook) insertCarryForward(sheet string, amount int64) error {
+	lay := glLayout()
 	row := 3
 	dir, dispBal := directionFor(amount, 0)
-	wb.File.SetCellValue(sheet, cellName(1, row), "")
-	wb.File.SetCellValue(sheet, cellName(2, row), "")
-	wb.File.SetCellValue(sheet, cellName(3, row), "上年结转")
-	wb.File.SetCellValue(sheet, cellName(4, row), "")
-	wb.File.SetCellValue(sheet, cellName(5, row), "")
-	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), "上年结转")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), dir)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
 
-	wb.setMoneyStyle(sheet, row, 7)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 	return nil
 }
 
 // lastRowIsOrphanBreak 检查最后一行是否为没有承前页跟随的孤立过次页。
 func (wb *Workbook) lastRowIsOrphanBreak(sheet string) bool {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) == 0 {
 		return false
 	}
 	last := rows[len(rows)-1]
-	return len(last) > 2 && last[2] == pageBreakLabel
+	return len(last) > lay.BindingLeftCols+2 && last[lay.BindingLeftCols+2] == pageBreakLabel
 }
 
 // lastPageBalance 获取最后一个过次页行的余额。
 func (wb *Workbook) lastPageBalance(sheet string) int64 {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 0
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
-			if len(rows[i]) >= 7 {
-				if v, err := yuanStrToCents(rows[i][6]); err == nil {
+		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
+			if len(rows[i]) >= lay.BindingLeftCols+7 {
+				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+6]); err == nil {
 					return v
 				}
 			}
@@ -350,17 +360,18 @@ func (wb *Workbook) lastPageBalance(sheet string) int64 {
 
 // lastBreakTotals 获取最后一个过次页行的页借贷合计。
 func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 0, 0
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
-			if len(rows[i]) >= 5 {
-				if v, err := yuanStrToCents(rows[i][3]); err == nil {
+		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
+			if len(rows[i]) >= lay.BindingLeftCols+5 {
+				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+3]); err == nil {
 					debit = v
 				}
-				if v, err := yuanStrToCents(rows[i][4]); err == nil {
+				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+4]); err == nil {
 					credit = v
 				}
 			}
@@ -372,12 +383,13 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 
 // pageStartRow 返回当前页的起始数据行号（跳过标题/过次页/承前页）。
 func (wb *Workbook) pageStartRow(sheet string) int {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < 3 {
 		return 3
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
+		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
 			return i + 3
 		}
 	}
@@ -393,12 +405,13 @@ func (wb *Workbook) rowIsPageBreak(sheet string, row int) bool {
 
 // pageHasBreakRow 检查当前页是否已有过次页行。
 func (wb *Workbook) pageHasBreakRow(sheet string) bool {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return false
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > 2 && rows[i][2] == pageBreakLabel {
+		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
 			return true
 		}
 	}
@@ -407,32 +420,34 @@ func (wb *Workbook) pageHasBreakRow(sheet string) bool {
 
 // writePageBreakRow 写"过次页"行。
 func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, pageDebit, pageCredit int64) {
+	lay := glLayout()
 	dir, dispBal := directionFor(balance, 0)
-	wb.File.SetCellValue(sheet, cellName(1, row), "")
-	wb.File.SetCellValue(sheet, cellName(2, row), "")
-	wb.File.SetCellValue(sheet, cellName(3, row), pageBreakLabel)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
-	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
-	wb.setMoneyStyle(sheet, row, 4)
-	wb.setMoneyStyle(sheet, row, 5)
-	wb.setMoneyStyle(sheet, row, 7)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), pageBreakLabel)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), dir)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 }
 
 // writeCarryForwardRow 写"承前页"行。
 func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64) {
+	lay := glLayout()
 	dir, dispBal := directionFor(balance, 0)
-	wb.File.SetCellValue(sheet, cellName(1, row), "")
-	wb.File.SetCellValue(sheet, cellName(2, row), "")
-	wb.File.SetCellValue(sheet, cellName(3, row), carryForwardLabel)
-	wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(pageCredit))
-	wb.File.SetCellValue(sheet, cellName(6, row), dir)
-	wb.File.SetCellValue(sheet, cellName(7, row), centsToYuan(dispBal))
-	wb.setMoneyStyle(sheet, row, 4)
-	wb.setMoneyStyle(sheet, row, 5)
-	wb.setMoneyStyle(sheet, row, 7)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, row), "")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, row), carryForwardLabel)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, row), centsToYuan(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+5, row), dir)
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 }
 
 // cellName 返回 Excel 单元格名称。

@@ -5,10 +5,10 @@
 
 ## Phase 2: GL Sheet 列映射替换
 
-- [ ] 2.1 `gl_sheet.go` — `appendToGLSheet` 内所有 `cellName(1-8, row)` 替换为 `cellName(lay.FrontStartCol+0~7, row)`；编译通过
-- [ ] 2.2 `gl_sheet.go` — `insertCarryForward`、`writePageBreakRow`、`writeCarryForwardRow` 写入列替换；编译通过
-- [ ] 2.3 `gl_sheet.go` — 读取端辅助函数索引偏移（`lastPageBalance`、`lastRowIsOrphanBreak`、`lastBreakTotals`、`pageStartRow`、`rowIsPageBreak`、`pageHasBreakRow`）；编译通过
-- [ ] 2.4 运行 `go test ./generator/... -count=1` 全绿
+- [x] 2.1 `gl_sheet.go` — `appendToGLSheet` 内所有 `cellName(1-8, row)` 替换为 `cellName(lay.FrontStartCol+0~7, row)`；编译通过
+- [x] 2.2 `gl_sheet.go` — `insertCarryForward`、`writePageBreakRow`、`writeCarryForwardRow` 写入列替换；编译通过
+- [x] 2.3 `gl_sheet.go` — 读取端辅助函数索引偏移（`lastPageBalance`、`lastRowIsOrphanBreak`、`lastBreakTotals`、`pageStartRow`、`rowIsPageBreak`、`pageHasBreakRow`）；编译通过
+- [x] 2.4 运行 `go test ./generator/... -count=1` 全绿
 
 ## Phase 3: 月结 + 合并 GL + ML 列映射替换
 

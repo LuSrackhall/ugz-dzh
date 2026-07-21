@@ -214,9 +214,10 @@ func TestMLDetailStartCol(t *testing.T) {
 
 func TestMLPrintMarkCol(t *testing.T) {
 	got := mlPrintMarkCol()
-	want := 22 // V = 8 + 14
+	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	want := lay.FrontStartCol + 7 + 14 // 24
 	if got != want {
-		t.Errorf("mlPrintMarkCol() = %d, want %d (V column)", got, want)
+		t.Errorf("mlPrintMarkCol() = %d, want %d", got, want)
 	}
 }
 

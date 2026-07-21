@@ -5,19 +5,31 @@ import (
 	"sort"
 	"strings"
 
+	"ledger/generator/layout"
 	"ledger/voucher"
 
 	"github.com/xuri/excelize/v2"
 )
 
 const (
-	mlMaxDetails     = 14 // 明细科目上限
-	mlDetailStartCol = 8  // 明细列起始列 H
+	mlMaxDetails    = 14 // 明细科目上限
+	mlDetailStartCol = 8  // 明细列起始列 H（保留常量用于非 Layout 上下文）
 )
 
-// mlPrintMarkCol 打印标记列号 V（14明细列右侧固定）。
+// mlPrintMarkCol 返回多科目明细账打印标记列号（Layout 内容区末列）。
 func mlPrintMarkCol() int {
-	return mlDetailStartCol + mlMaxDetails // V = 8 + 14 = 22
+	lay := glLayout()
+	return lay.FrontStartCol + 7 + mlMaxDetails
+}
+
+// mlDetailExcelCol 返回多科目明细账第 i 个明细列的 Excel 列号（Layout 坐标）。
+func mlDetailExcelCol(lay layout.Layout, i int) int {
+	return lay.FrontStartCol + 7 + i
+}
+
+// mlDetailRowIdx 返回多科目明细账第 i 个明细列在 GetRows 中的索引（Layout 坐标）。
+func mlDetailRowIdx(lay layout.Layout, i int) int {
+	return lay.BindingLeftCols + 7 + i
 }
 
 // mlDetailTotals 明细科目合计。
@@ -53,10 +65,11 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		_ = finalDetails
 
 		// 更新标题行（仅更新新增的列）
-		for _, nd := range newAppended {
-			col := mlDetailStartCol + finalIdx[nd]
-			cell, _ := excelize.CoordinatesToCellName(col, 2)
-			wb.File.SetCellValue(name, cell, nd)
+			lay := glLayout()
+			for _, nd := range newAppended {
+				col := mlDetailExcelCol(lay, finalIdx[nd])
+				cell := cellName(col, 2)
+				wb.File.SetCellValue(name, cell, nd)
 		}
 
 		return name, finalIdx, newAppended, nil
@@ -156,31 +169,35 @@ func (wb *Workbook) checkMLDetailOrderConflict(sheet string, existingDetails []s
 	return nil
 }
 
-// writeMLTitle 写入多科目明细账标题行和列标题，固定14列 H-U。
+// writeMLTitle 写入多科目明细账标题行和列标题，固定 7 基础列 + 14 明细列。
+// 标题和列标题使用 Layout 坐标（基础列在 FrontStartCol+0~6，明细列在 FrontStartCol+7~20）。
 func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error {
-	lastDetailCol := mlDetailStartCol + mlMaxDetails - 1 // 最末明细列号 U
-	endCell, _ := excelize.CoordinatesToCellName(lastDetailCol, 1)
+	lay := glLayout()
+	nCols := 7 + mlMaxDetails                      // 总列数 = 基础列 + 明细列
+	lastCol := lay.FrontStartCol + nCols                     // 最后数据列（不含打印标记）
+	titleStart := cellName(lay.FrontStartCol, 1)
+	titleEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 1)
 
 	title := "多科目明细账 — " + general
-	wb.File.SetCellValue(sheet, "A1", title)
-	wb.File.MergeCell(sheet, "A1", endCell)
+	wb.File.SetCellValue(sheet, titleStart, title)
+	wb.File.MergeCell(sheet, titleStart, titleEndCell)
 
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, "A1", endCell, titleStyle)
+	wb.File.SetCellStyle(sheet, titleStart, titleEndCell, titleStyle)
 	wb.File.SetRowHeight(sheet, 1, 22)
 
-	// 标准列标题 A-G
+	// 基础列标题 FrontStartCol+0~6（日期/凭证号/摘要/借方/贷方/方向/余额）
 	for i, h := range glHeaders {
-		cell, _ := excelize.CoordinatesToCellName(i+1, 2)
+		cell := cellName(lay.FrontStartCol+i, 2)
 		wb.File.SetCellValue(sheet, cell, h)
 	}
-	// 扩展列标题 H-U（固定14列，空明细显示空标题）
+	// 明细列标题 FrontStartCol+7~20（H-U 对应）
 	for i := 0; i < mlMaxDetails; i++ {
-		col := mlDetailStartCol + i
-		cell, _ := excelize.CoordinatesToCellName(col, 2)
+		col := mlDetailExcelCol(lay, i)
+		cell := cellName(col, 2)
 		label := ""
 		if i < len(details) {
 			label = details[i]
@@ -196,31 +213,38 @@ func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error 
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	headerEnd, _ := excelize.CoordinatesToCellName(lastDetailCol, 2)
-	wb.File.SetCellStyle(sheet, "A2", headerEnd, headerStyle)
+	headerEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 2)
+	wb.File.SetCellStyle(sheet, titleStart, headerEndCell, headerStyle)
 
-	// 列宽
-	wb.File.SetColWidth(sheet, "A", "A", 12)
-	wb.File.SetColWidth(sheet, "B", "B", 8)
-	wb.File.SetColWidth(sheet, "C", "C", 35)
-	wb.File.SetColWidth(sheet, "D", "D", 14)
-	wb.File.SetColWidth(sheet, "E", "E", 14)
-	wb.File.SetColWidth(sheet, "F", "F", 6)
-	wb.File.SetColWidth(sheet, "G", "G", 16)
-	// 列宽 — H-U 固定14列
+	// 基础列宽
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+0), cellColLetter(lay.FrontStartCol+0), 12)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+1), cellColLetter(lay.FrontStartCol+1), 8)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+2), cellColLetter(lay.FrontStartCol+2), 35)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+3), cellColLetter(lay.FrontStartCol+3), 14)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+4), cellColLetter(lay.FrontStartCol+4), 14)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+5), cellColLetter(lay.FrontStartCol+5), 6)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+6), cellColLetter(lay.FrontStartCol+6), 16)
+	// 明细列宽
 	for i := 0; i < mlMaxDetails; i++ {
-		colLetter, _ := excelize.ColumnNumberToName(mlDetailStartCol + i)
+		colLetter := cellColLetter(mlDetailExcelCol(lay, i))
 		wb.File.SetColWidth(sheet, colLetter, colLetter, 14)
 	}
 
 	return nil
 }
 
-// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（H-U），以匹配当月明细科目集。
+// cellColLetter 返回列号的字母表示。
+func cellColLetter(col int) string {
+	l, _ := excelize.ColumnNumberToName(col)
+	return l
+}
+
+// updateMLDetailHeaders 更新已有 Sheet 的明细列标题，以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
+	lay := glLayout()
 	for i := 0; i < mlMaxDetails; i++ {
-		col := mlDetailStartCol + i
-		cell, _ := excelize.CoordinatesToCellName(col, 2)
+		col := mlDetailExcelCol(lay, i)
+		cell := cellName(col, 2)
 		label := ""
 		if i < len(details) {
 			label = details[i]
@@ -229,9 +253,10 @@ func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	}
 }
 
-// readMLDetailHeaders 从 Sheet 第2行 H-U 读取现有明细列标题，构建 detailName → colIndex 映射。
+// readMLDetailHeaders 从 Sheet 第2行读取现有明细列标题，构建 detailName → colIndex 映射。
 // 返回的 details 按列顺序排列（空列对应空字符串）。
 func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int, details []string, err error) {
+	lay := glLayout()
 	detailIdx = make(map[string]int)
 	details = make([]string, mlMaxDetails)
 
@@ -245,7 +270,7 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 
 	row2 := rows[1]
 	for i := 0; i < mlMaxDetails; i++ {
-		colIdx := mlDetailStartCol + i - 1 // rows 是 0-indexed
+		colIdx := mlDetailRowIdx(lay, i) // GetRows 索引 = BindingLeftCols + 7 + i
 		label := ""
 		if colIdx < len(row2) {
 			label = strings.TrimSpace(row2[colIdx])
@@ -549,7 +574,7 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 
 	for i, pd := range pageDetails {
 		net := pd.debit - pd.credit
-		col := mlDetailStartCol + i
+		col := mlDetailExcelCol(lay, i)
 		wb.File.SetCellValue(sheet, cellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
 	}
@@ -573,7 +598,7 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 
 	for i, pd := range pageDetails {
 		net := pd.debit - pd.credit
-		col := mlDetailStartCol + i
+		col := mlDetailExcelCol(lay, i)
 		wb.File.SetCellValue(sheet, cellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
 	}
@@ -590,7 +615,7 @@ func (wb *Workbook) lastBreakDetailTotals(sheet string) []mlDetailTotals {
 		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
 			result := make([]mlDetailTotals, mlMaxDetails)
 			for j := 0; j < mlMaxDetails; j++ {
-				colIdx := mlDetailStartCol + j - 1 // 0-indexed in rows
+				colIdx := mlDetailRowIdx(lay, j) // GetRows 索引 = BindingLeftCols + 7 + j
 				if colIdx < len(rows[i]) {
 					if v, err := yuanStrToCents(rows[i][colIdx]); err == nil {
 						if v >= 0 {

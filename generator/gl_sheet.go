@@ -279,25 +279,21 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 
 		if wb.lastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.lastBreakTotals(sheet)
-			wb.writeCarryForwardRow(sheet, row, balance, pbDebit, pbCredit)
-			row++
-			// 孤立过次页后也需写入标题行（跨月未满页场景）
 			pageNum++
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
-			pageDebit = 0
-			pageCredit = 0
+			wb.writeCarryForwardRow(sheet, row, balance, pbDebit, pbCredit)
+			row++
 		}
 
 		if wb.rowIsPageBreak(sheet, row) {
 			wb.writePageBreakRow(sheet, row, balance, pageDebit, pageCredit)
 			row++
-			wb.writeCarryForwardRow(sheet, row, balance, pageDebit, pageCredit)
-			row++
-			// 写入新页标题
 			pageNum++
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
+			wb.writeCarryForwardRow(sheet, row, balance, pageDebit, pageCredit)
+			row++
 			pageDebit = 0
 			pageCredit = 0
 		}
@@ -467,7 +463,7 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
 }
 
-// writePageHeader 写入后续页标题行（过次页/承前页之后调用），包含页码、总分类账、科目名称、列标题。
+// writePageHeader 写入后续页标题行（过次页之后、承前页之前调用），包含页码、总分类账、科目名称、列标题。
 // 行结构（5 行，与 writeGLTitle 相同）：
 //   Row N+0: 分第 n 页（右侧，绿色+数字红色）
 //   Row N+1: 总    分    类    账（居中，绿色+双下划线）| 科目名称（右侧）

@@ -713,7 +713,7 @@ func (wb *Workbook) lastBreakDetailTotals(sheet string) []mlDetailTotals {
 		return make([]mlDetailTotals, mlMaxDetails)
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
+		if hasPageBreakAt(rows[i], lay) {
 			result := make([]mlDetailTotals, mlMaxDetails)
 			for j := 0; j < mlMaxDetails; j++ {
 				colIdx := mlDetailRowIdx(lay, j) // GetRows 索引 = BindingLeftCols + 7 + j

@@ -34,7 +34,7 @@ func (wb *Workbook) markExistingPageForPrint(sheet string) {
 	lastRow := len(rows)
 	for r := pageStart; r <= lastRow; r++ {
 		// 跳过过次页行（在摘要列 C）
-		if r <= len(rows) && len(rows[r-1]) > lay.BindingLeftCols+2 && rows[r-1][lay.BindingLeftCols+2] == pageBreakLabel {
+		if r <= len(rows) && hasPageBreakAt(rows[r-1], lay) {
 			continue
 		}
 		wb.markRowForPrint(sheet, r)
@@ -52,7 +52,7 @@ func (wb *Workbook) markExistingMLPageForPrint(sheet string) {
 	pageStart := wb.pageStartRow(sheet)
 	lastRow := len(rows)
 	for r := pageStart; r <= lastRow; r++ {
-		if r <= len(rows) && len(rows[r-1]) > lay.BindingLeftCols+2 && rows[r-1][lay.BindingLeftCols+2] == pageBreakLabel {
+		if r <= len(rows) && hasPageBreakAt(rows[r-1], lay) {
 			continue
 		}
 		wb.markMLRowForPrint(sheet, r)

@@ -37,6 +37,16 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 		ConfigPath: configPath,
 	}
 
+	// 若当月文件已存在（如 year-close 预生成），优先加载
+	currentPath := wb.currentPath()
+	if _, err := os.Stat(currentPath); err == nil {
+		src, err := excelize.OpenFile(currentPath)
+		if err == nil {
+			wb.File = src
+			return wb, nil
+		}
+	}
+
 	prevPath := wb.prevMonthPath()
 	if _, err := os.Stat(prevPath); err == nil {
 		src, err := excelize.OpenFile(prevPath)
@@ -99,9 +109,19 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 	// 找到最后一个"期末余额"行（月结行）
 		var lastBalance int64
 		for _, row := range rows {
+			// 期末余额在 Front 区
 			if len(row) >= lay.BindingLeftCols+3 && row[lay.BindingLeftCols+2] == periodEndLabel {
 				if len(row) >= lay.BindingLeftCols+7 {
 					if v, err := yuanStrToCents(row[lay.BindingLeftCols+6]); err == nil {
+						lastBalance = v
+					}
+				}
+			}
+			// 期末余额在 Back 区
+			if len(row) > lay.BackStartCol+1 && row[lay.BackStartCol+1] == periodEndLabel {
+				balIdx := lay.BackStartCol + 5
+				if len(row) > balIdx {
+					if v, err := yuanStrToCents(row[balIdx]); err == nil {
 						lastBalance = v
 					}
 				}

@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"ledger/balance"
 
@@ -47,42 +46,19 @@ var yearCloseCmd = &cobra.Command{
 		}
 
 		yy, _ := strconv.Atoi(lastMonth[:4])
-		prevDec := fmt.Sprintf("%04d-12", yy)
 		nextYear := fmt.Sprintf("%04d-01", yy+1)
 
-		prevYearDir := filepath.Join(output, fmt.Sprintf("%04d", yy))
 		nextYearDir := filepath.Join(output, fmt.Sprintf("%04d", yy+1))
-
-		prevPath := filepath.Join(prevYearDir, prevDec+".xlsx")
 		newPath := filepath.Join(nextYearDir, nextYear+".xlsx")
 
 		if err := os.MkdirAll(nextYearDir, 0o755); err != nil {
 			return fmt.Errorf("创建新年度目录: %w", err)
 		}
 
-		var f *excelize.File
-		if src, err := excelize.OpenFile(prevPath); err == nil {
-			f = src
-		} else {
-			f = excelize.NewFile()
-			f.DeleteSheet("Sheet1")
-		}
+		// 创建干净的空工作薄（不带旧年度的明细数据）
+		f := excelize.NewFile()
+		f.DeleteSheet("Sheet1")
 		defer f.Close()
-
-		for _, name := range f.GetSheetList() {
-			if !strings.HasPrefix(name, "总分类账-") {
-				continue
-			}
-			account := strings.TrimPrefix(name, "总分类账-")
-			node, ok := cfg.Tree[account]
-			if !ok {
-				continue
-			}
-			if bal, ok := node.Balances[prevDec]; ok && bal.Final != 0 {
-				f.SetCellValue(name, "A1", "上年结转")
-				f.SetCellValue(name, "G1", CentsToYuan(bal.Final))
-			}
-		}
 
 		if err := f.SaveAs(newPath); err != nil {
 			return fmt.Errorf("保存 %s: %w", newPath, err)

@@ -339,10 +339,23 @@ func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMon
 		return end
 	}
 
+	// 从 JSON 科目树中取最近月份的期末余额作为期初
 	node, ok := cfg.Tree[account]
-	if !ok {
-		return 0
+	if ok {
+		// 找最新的有余额的月份
+		var latestMonth string
+		var latestBal int64
+		for m, mb := range node.Balances {
+			if m < month && mb.Final != 0 && (latestMonth == "" || m > latestMonth) {
+				latestMonth = m
+				latestBal = mb.Final
+			}
+		}
+		if latestMonth != "" {
+			return latestBal
+		}
 	}
+
 	if node.FirstRecord.Month == month {
 		return node.FirstRecord.Amount
 	}
@@ -470,6 +483,20 @@ func ensureBackfillForAll(cfg *GlobalConfig, currentMonth string) {
 }
 
 // --- 月份辅助 ---
+
+func prevMonth(m string) string {
+	yy := int(m[0]-'0')*1000 + int(m[1]-'0')*100 + int(m[2]-'0')*10 + int(m[3]-'0')
+	mm := int(m[5]-'0')*10 + int(m[6]-'0')
+	mm--
+	if mm < 1 {
+		mm = 12
+		yy--
+		if yy < 0 {
+			return ""
+		}
+	}
+	return fmt.Sprintf("%04d-%02d", yy, mm)
+}
 
 func cmpMonth(a, b string) int {
 	if a < b {

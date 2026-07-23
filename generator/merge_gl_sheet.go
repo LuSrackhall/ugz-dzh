@@ -87,7 +87,7 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 	// 计算页码：已有过次页数 + 1
 	pageNum := 1
 	for _, r := range rows {
-		if len(r) > lay.BindingLeftCols+2 && r[lay.BindingLeftCols+2] == pageBreakLabel {
+		if hasPageBreakAt(r, lay) {
 			pageNum++
 		}
 	}

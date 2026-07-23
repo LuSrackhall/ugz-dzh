@@ -165,6 +165,13 @@ func dataCol(lay layout.Layout, pageNum, offset int) int {
 	return lay.BackStartCol + offset
 }
 
+
+// hasPageBreakAt 检查 row 中是否有"过次页"标记（在 Front 或 Back 区域）。
+func hasPageBreakAt(row []string, lay layout.Layout) bool {
+	return (len(row) > lay.BindingLeftCols+2 && row[lay.BindingLeftCols+2] == pageBreakLabel) ||
+		(len(row) > lay.BackStartCol+1 && row[lay.BackStartCol+1] == pageBreakLabel)
+}
+
 // nextDataRow 返回 Sheet 中下一个可用数据行号。
 // 若最后一行为孤立过次页（无承前页跟随），返回过次页+1 供承前页写入。
 func (wb *Workbook) nextDataRow(sheet string) (int, error) {
@@ -180,7 +187,7 @@ func (wb *Workbook) nextDataRow(sheet string) (int, error) {
 
 	lastBreak := 0
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
+		if hasPageBreakAt(rows[i], lay) {
 			lastBreak = i + 1
 			break
 		}
@@ -259,7 +266,7 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 	// 计算页码：已有过次页数 + 1
 	pageNum := 1
 	for _, r := range rows {
-		if len(r) > lay.BindingLeftCols+2 && r[lay.BindingLeftCols+2] == pageBreakLabel {
+		if hasPageBreakAt(r, lay) {
 			pageNum++
 		}
 	}
@@ -355,7 +362,7 @@ func (wb *Workbook) lastRowIsOrphanBreak(sheet string) bool {
 		return false
 	}
 	last := rows[len(rows)-1]
-	return len(last) > lay.BindingLeftCols+2 && last[lay.BindingLeftCols+2] == pageBreakLabel
+	return hasPageBreakAt(last, lay)
 }
 
 // lastPageBalance 获取最后一个过次页行的余额。
@@ -366,14 +373,27 @@ func (wb *Workbook) lastPageBalance(sheet string) int64 {
 		return 0
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
+		if !hasPageBreakAt(rows[i], lay) {
+			continue
+		}
+		// 过次页在 Front 区
 		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
 			if len(rows[i]) >= lay.BindingLeftCols+7 {
 				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+6]); err == nil {
 					return v
 				}
 			}
-			return 0
 		}
+		// 过次页在 Back 区
+		if len(rows[i]) > lay.BackStartCol+1 && rows[i][lay.BackStartCol+1] == pageBreakLabel {
+			balIdx := lay.BackStartCol + 5 // GetRows index = col - 1
+			if len(rows[i]) > balIdx {
+				if v, err := yuanStrToCents(rows[i][balIdx]); err == nil {
+					return v
+				}
+			}
+		}
+		return 0
 	}
 	return 0
 }
@@ -386,6 +406,10 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 		return 0, 0
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
+		if !hasPageBreakAt(rows[i], lay) {
+			continue
+		}
+		// 过次页在 Front 区
 		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
 			if len(rows[i]) >= lay.BindingLeftCols+5 {
 				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+3]); err == nil {
@@ -395,8 +419,21 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 					credit = v
 				}
 			}
-			return
 		}
+		// 过次页在 Back 区
+		if len(rows[i]) > lay.BackStartCol+1 && rows[i][lay.BackStartCol+1] == pageBreakLabel {
+			debIdx := lay.BackStartCol + 2 // GetRows index for debit
+			crdIdx := lay.BackStartCol + 3 // GetRows index for credit
+			if len(rows[i]) > crdIdx {
+				if v, err := yuanStrToCents(rows[i][debIdx]); err == nil {
+					debit = v
+				}
+				if v, err := yuanStrToCents(rows[i][crdIdx]); err == nil {
+					credit = v
+				}
+			}
+		}
+		return
 	}
 	return 0, 0
 }
@@ -432,7 +469,7 @@ func (wb *Workbook) pageHasBreakRow(sheet string) bool {
 		return false
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
+		if hasPageBreakAt(rows[i], lay) {
 			return true
 		}
 	}

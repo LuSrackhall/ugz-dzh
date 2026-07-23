@@ -15,6 +15,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			continue
 		}
 
+		// 计算当前 Sheet 的最后一页页码
+		rows, _ := wb.File.GetRows(sheet)
+		pageNum := 1
+		for _, r := range rows {
+			if hasPageBreakAt(r, lay) {
+				pageNum++
+			}
+		}
 		row, err := wb.nextDataRowAfterBreak(sheet)
 		if err != nil {
 			return err

@@ -275,11 +275,16 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		if err := wb.insertCarryForward(sheet, initial, pageNum); err != nil {
 			return err
 		}
+	} else if !isNew && initial != 0 {
+		// 已有数据的 Sheet 有跨年期初余额时，在数据区首行插入上年结转
+		if err := wb.insertCarryForwardAtRow(sheet, initial, pageNum); err != nil {
+			return err
+		}
 	}
 
 	balance := initial
 	var pageDebit, pageCredit int64
-	if !isNew {
+	if !isNew && initial == 0 {
 		balance = wb.lastPageBalance(sheet)
 		if !wb.pageHasBreakRow(sheet) {
 			wb.markExistingPageForPrint(sheet)
@@ -350,6 +355,25 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int) 
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), dir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), centsToYuan(dispBal))
 
+	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
+	return nil
+}
+
+// insertCarryForwardAtRow 在已有数据的 Sheet 中，于数据区首行追加"上年结转"行。
+func (wb *Workbook) insertCarryForwardAtRow(sheet string, amount int64, pageNum int) error {
+	lay := glLayout()
+	row, err := wb.nextDataRow(sheet)
+	if err != nil {
+		return err
+	}
+	dir, dispBal := directionFor(amount, 0)
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "上年结转")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), "")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), dir)
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), centsToYuan(dispBal))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
 	return nil
 }

@@ -33,6 +33,12 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	for _, account := range allAccounts {
 		initials[account] = balance.GetInitBalanceForGenerate(cfg, account, month, prevFinals)
 	}
+	// 补充：科目树中有非零余额但当月无分录的科目，也加入期初映射
+	for k := range cfg.Tree {
+		if _, exists := initials[k]; !exists {
+			initials[k] = balance.GetInitBalanceForGenerate(cfg, k, month, prevFinals)
+		}
+	}
 
 	// 5. 生成本月期初表
 	if err := wb.WriteInitialSheet(initials); err != nil {
@@ -40,8 +46,13 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	}
 
 	// 6. 追加分录到总分类账 Sheet
+	// 对仅有期初余额但无当月分录的科目，追加 上年结转
 	if err := wb.AppendEntries(entries, initials); err != nil {
 		return fmt.Errorf("追加总分类账: %w", err)
+	}
+	// 对仅有期初余额但无当月分录的科目，写入 上年结转
+	if err := wb.appendCarryForwardOnly(entries, initials); err != nil {
+		return fmt.Errorf("追加上年结转: %w", err)
 	}
 
 	// 6.1 追加分录到合并总分类账 Sheet（纯增量，不影响原有 GL）
@@ -124,6 +135,28 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("保存 xlsx: %w", err)
 	}
 
+	return nil
+}
+
+// appendCarryForwardOnly 对仅有期初余额但无当月分录的科目写入上年结转行。
+func (wb *Workbook) appendCarryForwardOnly(entries []voucher.Entry, initials map[string]int64) error {
+	// 收集当月有分录的科目
+	hasEntries := make(map[string]bool)
+	for _, e := range entries {
+		path := e.GeneralAccount
+		if e.DetailAccount != "" {
+			path += "-" + e.DetailAccount
+		}
+		hasEntries[path] = true
+	}
+	// 对仅期初非零但无分录的科目，写入上年结转
+	for account, initial := range initials {
+		if initial != 0 && !hasEntries[account] {
+			if err := wb.appendToGLSheet(account, nil, initial); err != nil {
+				return fmt.Errorf("追加上年结转 %s: %w", account, err)
+			}
+		}
+	}
 	return nil
 }
 

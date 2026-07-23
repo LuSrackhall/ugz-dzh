@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"ledger/balance"
+	"ledger/generator/layout"
 
 	"github.com/spf13/cobra"
 	"github.com/xuri/excelize/v2"
@@ -79,8 +80,21 @@ var yearCloseCmd = &cobra.Command{
 				continue
 			}
 			if bal, ok := node.Balances[prevDec]; ok && bal.Final != 0 {
-				f.SetCellValue(name, "A1", "上年结转")
-				f.SetCellValue(name, "G1", CentsToYuan(bal.Final))
+				lay := layout.ComputeLayout(layout.DefaultGLSpec())
+				row := 3
+				dir := "借"
+				dispBal := bal.Final
+				if bal.Final < 0 {
+					dir = "贷"
+					dispBal = -bal.Final
+				}
+				f.SetCellValue(name, CellName(lay.FrontStartCol+0, row), "")
+				f.SetCellValue(name, CellName(lay.FrontStartCol+1, row), "")
+				f.SetCellValue(name, CellName(lay.FrontStartCol+2, row), "上年结转")
+				f.SetCellValue(name, CellName(lay.FrontStartCol+3, row), "")
+				f.SetCellValue(name, CellName(lay.FrontStartCol+4, row), "")
+				f.SetCellValue(name, CellName(lay.FrontStartCol+5, row), dir)
+				f.SetCellValue(name, CellName(lay.FrontStartCol+6, row), CentsToYuan(dispBal))
 			}
 		}
 

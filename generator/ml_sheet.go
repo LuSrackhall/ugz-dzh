@@ -80,10 +80,16 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		_ = finalDetails
 
 		// 更新标题行（仅更新新增的列）
-			lay := glLayout()
+			lay := mlLayout()
 			for _, nd := range newAppended {
-				col := mlDetailExcelCol(lay, finalIdx[nd])
-				cell := cellName(col, 2)
+				idx := finalIdx[nd]
+				var col int
+				if idx < 4 {
+					col = mlBackBaseCol(lay, 7+idx)
+				} else {
+					col = mlFrontDetailCol(lay, idx-4)
+				}
+				cell := cellName(col, 4)
 				wb.File.SetCellValue(name, cell, nd)
 		}
 
@@ -340,10 +346,15 @@ func cellColLetter(col int) string {
 
 // updateMLDetailHeaders 更新已有 Sheet 的明细列标题，以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
-	lay := glLayout()
+	lay := mlLayout()
 	for i := 0; i < mlMaxDetails; i++ {
-		col := mlDetailExcelCol(lay, i)
-		cell := cellName(col, 2)
+		var col int
+		if i < 4 {
+			col = mlBackBaseCol(lay, 7+i)
+		} else {
+			col = mlFrontDetailCol(lay, i-4)
+		}
+		cell := cellName(col, 4)
 		label := ""
 		if i < len(details) {
 			label = details[i]

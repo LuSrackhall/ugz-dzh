@@ -270,7 +270,16 @@ func (wb *Workbook) WriteMergeGLClosings(activity map[string]Activity, ytdDebit,
 // writeMergeGLClosingRows 写入合并 GL 的四行月结：本月合计、本季合计（仅季末）、本年累计、期末余额。
 func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, qtDebit, qtCredit, cumDebit, cumCredit int64, parentInitial int64) error {
 	lay := glLayout()
+
+	// 计算末页页码
+	rows, _ := wb.File.GetRows(sheet)
 	pageNum := 1
+	for _, r := range rows {
+		if hasPageBreakAt(r, lay) {
+			pageNum++
+		}
+	}
+
 	row, err := wb.nextDataRowAfterBreak(sheet)
 	if err != nil {
 		return err

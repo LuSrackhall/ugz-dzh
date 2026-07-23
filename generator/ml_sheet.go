@@ -16,6 +16,21 @@ const (
 	mlDetailStartCol = 8  // 明细列起始列 H（保留常量用于非 Layout 上下文）
 )
 
+// mlLayout 返回 ML 专用的 Layout（12 列/区，用于跨页布局）。
+func mlLayout() layout.Layout {
+	return layout.ComputeLayout(layout.DefaultMLSpec())
+}
+
+// mlBackBaseCol 返回 ML Back 区（反面）第 offset 个基础列的 Excel 列号。
+func mlBackBaseCol(lay layout.Layout, offset int) int {
+	return lay.BackStartCol + offset
+}
+
+// mlFrontDetailCol 返回 ML Front 区（正面）第 i 个明细列的 Excel 列号。
+func mlFrontDetailCol(lay layout.Layout, i int) int {
+	return lay.FrontStartCol + i
+}
+
 // mlPrintMarkCol 返回多科目明细账打印标记列号（Layout 内容区末列）。
 func mlPrintMarkCol() int {
 	lay := glLayout()

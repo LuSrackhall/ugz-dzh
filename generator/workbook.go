@@ -37,6 +37,16 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 		ConfigPath: configPath,
 	}
 
+	// 若当月文件已存在（如 year-close 预生成），优先加载
+	currentPath := wb.currentPath()
+	if _, err := os.Stat(currentPath); err == nil {
+		src, err := excelize.OpenFile(currentPath)
+		if err == nil {
+			wb.File = src
+			return wb, nil
+		}
+	}
+
 	prevPath := wb.prevMonthPath()
 	if _, err := os.Stat(prevPath); err == nil {
 		src, err := excelize.OpenFile(prevPath)

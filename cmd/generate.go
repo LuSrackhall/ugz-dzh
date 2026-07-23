@@ -111,7 +111,7 @@ var generateCmd = &cobra.Command{
 						continue
 					}
 					name := entry.Name()
-					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") >= month {
+					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") > month {
 						path := filepath.Join(yearDir, name)
 						if err := os.Remove(path); err != nil {
 							return fmt.Errorf("删除 %s: %w", path, err)

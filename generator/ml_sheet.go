@@ -352,10 +352,10 @@ func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	}
 }
 
-// readMLDetailHeaders 从 Sheet 第2行读取现有明细列标题，构建 detailName → colIndex 映射。
-// 返回的 details 按列顺序排列（空列对应空字符串）。
+// readMLDetailHeaders 从 Sheet 标题行读取现有明细列标题，构建 detailName → colIndex 映射。
+// 在 ML 跨页布局下，列头在 Row 4（0-indexed row 3），明细 1~4 在 Back 区，5~14 在 Front 区。
 func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int, details []string, err error) {
-	lay := glLayout()
+	lay := mlLayout()
 	detailIdx = make(map[string]int)
 	details = make([]string, mlMaxDetails)
 
@@ -363,16 +363,23 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取 Sheet %s: %w", sheet, err)
 	}
-	if len(rows) < 2 {
+	if len(rows) < 4 {
 		return detailIdx, details, nil
 	}
 
-	row2 := rows[1]
+	headerRow := rows[3] // 0-indexed row 3 = Excel Row 4
 	for i := 0; i < mlMaxDetails; i++ {
-		colIdx := mlDetailRowIdx(lay, i) // GetRows 索引 = BindingLeftCols + 7 + i
+		var colIdx int
+		if i < 4 {
+			// 明细 1~4: Back 区 BackStartCol+7+i
+			colIdx = lay.BackStartCol + 6 + i
+		} else {
+			// 明细 5~14: Front 区 FrontStartCol+(i-4)
+			colIdx = lay.FrontStartCol - 1 + (i - 4)
+		}
 		label := ""
-		if colIdx < len(row2) {
-			label = strings.TrimSpace(row2[colIdx])
+		if colIdx >= 0 && colIdx < len(headerRow) {
+			label = strings.TrimSpace(headerRow[colIdx])
 		}
 		details[i] = label
 		if label != "" {

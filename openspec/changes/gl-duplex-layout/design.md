@@ -1,43 +1,21 @@
 ## Context
 
-brainstorm-spec.md 覆盖了高层设计。本文补充实现细节。
+brainstorm-spec.md 覆盖了高层设计。本文补充实施中遇到的关联问题修复。
 
 ## Decisions
 
-### 决策 1：dataCol 辅助函数
+### 决策 1：dataCol 与 colOffset
 
-新增全局辅助函数，在所有需要根据奇偶页选择写入列的 Renderer 函数中使用：
+`dataCol(lay, pageNum, offset)` 处理奇偶页列偏移。`writePageHeader` 用 `colOffset = BackStartCol - FrontStartCol` 偏移偶数页标题。
 
-```go
-func dataCol(lay layout.Layout, pageNum, offset int) int {
-    if pageNum%2 == 1 {
-        return lay.FrontStartCol + offset
-    }
-    return lay.BackStartCol + offset
-}
-```
+### 决策 2：hasPageBreakAt 双区扫描
 
-### 决策 2：偶数页标题写入
+读取端不能假设过次页在 Front 区。`hasPageBreakAt` 同时检查 `BindingLeftCols+2`（Front）和 `BackStartCol+1`（Back）。
 
-`writePageHeader` 接收 pageNum 参数判断奇偶。奇偶页的标题文字一致，仅写入列范围不同：
+### 决策 3：year_close 简化
 
-- 奇数页：标题占用 `FrontStartCol ~ FrontStartCol + nCol - 1`
-- 偶数页：标题占用 `BackStartCol ~ BackStartCol + nCol - 1`
+不再复制 12 月 xlsx 数据到新年度。只创建空白文件 + JSON 配置。上年结转由 generate 自动处理（`insertCarryForwardAtRow`），仅在 1 月触发。
 
-### 决策 3：月结和合并 GL 同步
+### 决策 4：-f 级联保护
 
-`WriteMonthClosings` 和 `WriteMergeGLClosings` 写入关账行时，行位置已经在 Sheet 末尾，应根据 Sheet 实际状态判断（通过 `nextDataRowAfterBreak` 定位），无需关心奇偶页——它们总是在数据末尾追加。
-
-月结行写入的列号需要通过 `dataCol` 计算。
-
-### 决策 4：打印标记列
-
-偶数页的打印标记列位置 = `BackStartCol + len(lay.ExcelColumns)`。
-
-### 决策 5：pageNum 传递
-
-`appendToGLSheet` 已有 pageNum 变量。需要将 pageNum 传递给所有需要奇偶感知的函数：
-- `writePageHeader` — 已有
-- `writePageBreakRow` / `writeCarryForwardRow` — 新增 pageNum 参数
-- `insertCarryForward` — 新增 pageNum 参数
-- `markRowForPrint` — 新增 pageNum 参数
+`>= month` 改为 `> month`，保留 year-close 输出。重新生成时需要先 `rm` 目标月文件或重新 year-close。

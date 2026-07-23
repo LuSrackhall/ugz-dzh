@@ -2,6 +2,7 @@ package generator
 
 import (
 	"fmt"
+	"strings"
 
 	"ledger/balance"
 	"ledger/voucher"
@@ -151,7 +152,7 @@ func (wb *Workbook) appendCarryForwardOnly(entries []voucher.Entry, initials map
 	}
 	// 对仅期初非零但无分录的科目，写入上年结转
 	for account, initial := range initials {
-		if initial != 0 && !hasEntries[account] {
+		if initial != 0 && !hasEntries[account] && strings.HasSuffix(wb.Month, "-01") {
 			if err := wb.appendToGLSheet(account, nil, initial); err != nil {
 				return fmt.Errorf("追加上年结转 %s: %w", account, err)
 			}

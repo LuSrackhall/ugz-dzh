@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"ledger/generator/layout"
+	"strings"
 	"ledger/voucher"
 
 	"github.com/xuri/excelize/v2"
@@ -275,8 +276,8 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		if err := wb.insertCarryForward(sheet, initial, pageNum); err != nil {
 			return err
 		}
-	} else if !isNew && initial != 0 {
-		// 已有数据的 Sheet 有跨年期初余额时，在数据区首行插入上年结转
+	} else if !isNew && initial != 0 && strings.HasSuffix(wb.Month, "-01") {
+		// 仅 1 月的 Sheet 有跨年期初余额时，在数据区首行插入上年结转
 		if err := wb.insertCarryForwardAtRow(sheet, initial, pageNum); err != nil {
 			return err
 		}
@@ -462,8 +463,8 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 	return 0, 0
 }
 
-// pageStartRow 返回当前页第一个数据行的行号（含承前页/上年结转）。
-// 过次页后新页：承前页为第一行。首页：上年结转或 DataStartRow 为第一行。
+// pageStartRow 返回当前页第一个有效数据行的行号。
+// 过次页后新页：承前页为第一行。首页：DataStartRow+1（列标题之后的首行）。
 func (wb *Workbook) pageStartRow(sheet string) int {
 	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -472,12 +473,8 @@ func (wb *Workbook) pageStartRow(sheet string) int {
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if hasPageBreakAt(rows[i], lay) {
+			// 过次页在 i→承前页在 i+1+DataStartRow
 			return i + 2 + lay.DataStartRow
-		}
-	}
-	for _, r := range rows {
-		if len(r) > lay.BindingLeftCols+2 && r[lay.BindingLeftCols+2] == "上年结转" {
-			return 3
 		}
 	}
 	return lay.DataStartRow + 1

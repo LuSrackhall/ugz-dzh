@@ -121,6 +121,35 @@ func DefaultGLSpec() LayoutSpec {
 	}
 }
 
+// DefaultMLSpec 返回多科目明细账的默认布局配置（A4 横向，12 列/区）。
+func DefaultMLSpec() LayoutSpec {
+	return LayoutSpec{
+		PaperWidthMM:      297,
+		PaperHeightMM:     210,
+		LeftMarginMM:      15,
+		RightMarginMM:     15,
+		PageGapMM:         8,
+		TitleRowCount:     3,
+		TitleSplitRatio:   0.5,
+		ColHeaderRowCount: 1,
+		DataRowsPerPage:   20,
+		ColProportions: []ColProportion{
+			{Name: "日期", Ratio: 8},
+			{Name: "凭证号", Ratio: 7},
+			{Name: "摘要", Ratio: 15},
+			{Name: "借方金额", Ratio: 10},
+			{Name: "贷方金额", Ratio: 10},
+			{Name: "方向", Ratio: 4},
+			{Name: "余额", Ratio: 8},
+			{Name: "明细1~4", Ratio: 8},
+			{Name: "明细5~6", Ratio: 8},
+			{Name: "明细7~8", Ratio: 8},
+			{Name: "明细9~10", Ratio: 8},
+			{Name: "金额分栏", Ratio: 6},
+		},
+	}
+}
+
 // ComputeLayout 从 Spec 计算所有坐标。纯函数。
 func ComputeLayout(spec LayoutSpec) Layout {
 	contentWidth := (spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM - spec.PageGapMM) / 2

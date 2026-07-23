@@ -438,7 +438,8 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 	return 0, 0
 }
 
-// pageStartRow 返回当前页的起始数据行号（跳过过次页/承前页/标题行）。
+// pageStartRow 返回当前页第一个数据行的行号（含承前页/上年结转）。
+// 过次页后新页：承前页为第一行。首页：上年结转或 DataStartRow 为第一行。
 func (wb *Workbook) pageStartRow(sheet string) int {
 	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -446,12 +447,16 @@ func (wb *Workbook) pageStartRow(sheet string) int {
 		return 3
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
-			// i = 过次页 0-indexed → 1-indexed；+1 承前页；+DataStartRow 标题行+列标题
-			return i + 3 + lay.DataStartRow
+		if hasPageBreakAt(rows[i], lay) {
+			return i + 2 + lay.DataStartRow
 		}
 	}
-	return 3
+	for _, r := range rows {
+		if len(r) > lay.BindingLeftCols+2 && r[lay.BindingLeftCols+2] == "上年结转" {
+			return 3
+		}
+	}
+	return lay.DataStartRow + 1
 }
 
 // rowIsPageBreak 检查指定行是否已超出当页容量（pageSize 行数据后需过次页）。

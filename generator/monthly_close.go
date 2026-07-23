@@ -29,13 +29,13 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		}
 
 		// "本月合计" 行
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 0), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 1), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 2), row), "本月合计")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 3), row), centsToYuan(act.Debit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 4), row), centsToYuan(act.Credit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 5), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 6), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "本月合计")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), centsToYuan(act.Debit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(act.Credit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), "")
 
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
@@ -43,11 +43,11 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				{Type: "top", Color: "#808080", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, 1, 6), row), monthlyStyle)
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), monthlyStyle)
 
-		wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 3))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 4))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 6))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
 
 		row++
 
@@ -56,22 +56,22 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			qtDebit := (qtdDebit[account]) + act.Debit
 			qtCredit := (qtdCredit[account]) + act.Credit
 
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 0), row), "")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 1), row), "")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 2), row), "本季合计")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 3), row), centsToYuan(qtDebit))
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 4), row), centsToYuan(qtCredit))
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 5), row), "")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 6), row), "")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "本季合计")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), centsToYuan(qtDebit))
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(qtCredit))
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), "")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), "")
 
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
-			wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, 1, 6), row), qtStyle)
+			wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), qtStyle)
 
-			wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 3))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 4))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 6))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
 
 			row++
 		}
@@ -80,13 +80,13 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		cumDebit := (ytdDebit[account]) + act.Debit
 		cumCredit := (ytdCredit[account]) + act.Credit
 
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 0), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 1), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 2), row), "本年累计")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 3), row), centsToYuan(cumDebit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 4), row), centsToYuan(cumCredit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 5), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 6), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "本年累计")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), centsToYuan(cumDebit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(cumCredit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), "")
 
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
@@ -94,11 +94,11 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				{Type: "bottom", Color: "#808080", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, 1, 6), row), cumStyle)
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), cumStyle)
 
-		wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 3))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 4))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 6))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
 
 		row++
 
@@ -106,13 +106,13 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		endBalance := initials[account] + act.Debit - act.Credit
 		endDir, endDisp := directionFor(endBalance, 0)
 
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 0), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 1), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 2), row), periodEndLabel)
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 3), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 4), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 5), row), endDir)
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, 1, 6), row), centsToYuan(endDisp))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), periodEndLabel)
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), endDir)
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), centsToYuan(endDisp))
 
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
@@ -120,9 +120,9 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				{Type: "bottom", Color: "#000000", Style: 2},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, 1, 6), row), endStyle)
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), endStyle)
 
-			wb.setMoneyStyle(sheet, row, dataCol(lay, 1, 6))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
 		}
 
 	return nil

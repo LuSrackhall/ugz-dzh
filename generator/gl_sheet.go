@@ -458,7 +458,7 @@ func (wb *Workbook) pageStartRow(sheet string) int {
 func (wb *Workbook) rowIsPageBreak(sheet string, row int) bool {
 	start := wb.pageStartRow(sheet)
 	dataRows := row - start
-	return dataRows > pageSize
+	return dataRows >= pageSize
 }
 
 // pageHasBreakRow 检查当前页是否已有过次页行。

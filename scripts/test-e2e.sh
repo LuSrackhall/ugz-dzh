@@ -101,11 +101,29 @@ if [ "$SKIP_TEST" = false ]; then
 fi
 
 echo ""
+# 复制并重命名关键月份，避免 WPS 同名冲突
+WT_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's/[^a-zA-Z0-9_-]/-/g')
+if [ -n "$WT_NAME" ] && [ "$WT_NAME" != "main" ]; then
+  for f in "$OUT/2025/2025-12.xlsx" "$OUT/2026/2026-06.xlsx"; do
+    if [ -f "$f" ]; then
+      base=$(basename "$f")
+      cp "$f" "$OUT/$WT_NAME-$base"
+      echo "  已复制: $OUT/$WT_NAME-$base"
+    fi
+  done
+fi
+
 find "$OUT" -name "*.xlsx" | sort
 
 if [ "$OPEN" = true ]; then
-  LAST=$(find "$OUT" -name "*.xlsx" ! -name "ledger.xlsx" ! -name "balance.xlsx" | sort | tail -1)
-  [ -n "$LAST" ] && open "$LAST"
+  if [ -n "$WT_NAME" ] && [ "$WT_NAME" != "main" ]; then
+    for f in "$OUT/$WT_NAME-2025-12.xlsx" "$OUT/$WT_NAME-2026-06.xlsx"; do
+      [ -f "$f" ] && open "$f"
+    done
+  else
+    LAST=$(find "$OUT" -name "*.xlsx" ! -name "ledger.xlsx" ! -name "balance.xlsx" | sort | tail -1)
+    [ -n "$LAST" ] && open "$LAST"
+  fi
 fi
 
 echo "=== 完成 ==="

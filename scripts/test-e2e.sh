@@ -8,14 +8,13 @@
 #   4. year-close 跨年结转（生成 2026-01 含上年结转行）
 #   5. 生成 2026-01 ~ 2026-06
 #   6. 运行全部测试
-#   7. 可选打开 xlsx
+#   7. 自动打开 2025-12 和 2026-06 账本 xlsx
 #
 # 数据目录：test/e2e/test_data/2025_09/ ~ 2026_06/
 # 输出目录：test/e2e/out/（gitignored）
 #
 # 用法：
-#   bash scripts/test-e2e.sh              # 生成 + 测试
-#   bash scripts/test-e2e.sh --open       # 生成后打开 xlsx
+#   bash scripts/test-e2e.sh              # 生成 + 测试 + 打开
 #   bash scripts/test-e2e.sh --skip-test  # 只生成不测试
 
 set -euo pipefail
@@ -54,9 +53,8 @@ ML_SUPPRESS='[
   "其他流动负债", "其他非流动资产", "其他非流动负债"
 ]'
 
-OPEN=false
 SKIP_TEST=false
-for arg in "$@"; do case "$arg" in --open) OPEN=true ;; --skip-test) SKIP_TEST=true ;; esac; done
+for arg in "$@"; do case "$arg" in --skip-test) SKIP_TEST=true ;; esac; done
 
 echo "=== 1. 编译 ==="
 go build -o "$LEDGER" .
@@ -115,15 +113,15 @@ fi
 
 find "$OUT" -name "*.xlsx" | sort
 
-if [ "$OPEN" = true ]; then
-  if [ -n "$WT_NAME" ] && [ "$WT_NAME" != "main" ]; then
-    for f in "$OUT/$WT_NAME-2025-12.xlsx" "$OUT/$WT_NAME-2026-06.xlsx"; do
-      [ -f "$f" ] && open "$f"
-    done
-  else
-    LAST=$(find "$OUT" -name "*.xlsx" ! -name "ledger.xlsx" ! -name "balance.xlsx" | sort | tail -1)
-    [ -n "$LAST" ] && open "$LAST"
-  fi
+# 自动打开 2025-12 和 2026-06 账本，方便快速手动测试
+if [ -n "$WT_NAME" ] && [ "$WT_NAME" != "main" ]; then
+  for f in "$OUT/$WT_NAME-2025-12.xlsx" "$OUT/$WT_NAME-2026-06.xlsx"; do
+    [ -f "$f" ] && open "$f"
+  done
+else
+  for f in "$OUT/2025/2025-12.xlsx" "$OUT/2026/2026-06.xlsx"; do
+    [ -f "$f" ] && open "$f"
+  done
 fi
 
 echo "=== 完成 ==="

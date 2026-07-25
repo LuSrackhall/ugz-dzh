@@ -24,6 +24,30 @@ cd "$(dirname "$0")/.."
 LEDGER="./ledger"
 OUT="test/e2e/out"
 
+# 工作树兼容：若 test_data 不存在，从主工作树创建 symlink
+TEST_DATA="test/e2e/test_data"
+if [ ! -d "$TEST_DATA/2025_09" ]; then
+  MAIN_DIR=$(git worktree list | grep "\[main\]" | awk '{print $1}')
+  if [ -z "$MAIN_DIR" ] || [ ! -d "$MAIN_DIR/$TEST_DATA/2025_09" ]; then
+    # 回退：找第一个有 test_data 的工作树
+    while IFS= read -r line; do
+      dir=$(echo "$line" | awk '{print $1}')
+      if [ -d "$dir/$TEST_DATA/2025_09" ]; then
+        MAIN_DIR="$dir"
+        break
+      fi
+    done < <(git worktree list)
+  fi
+  if [ -n "$MAIN_DIR" ] && [ -d "$MAIN_DIR/$TEST_DATA/2025_09" ]; then
+    rm -f "$TEST_DATA"
+    ln -sf "$MAIN_DIR/$TEST_DATA" "$TEST_DATA"
+    echo "  test_data 已从 $MAIN_DIR 链接到工作树"
+  else
+    echo "错误：找不到 test_data。请先将测试数据放入主工作树的 $TEST_DATA/ 目录" >&2
+    exit 1
+  fi
+fi
+
 ML_SUPPRESS='[
   "应收款", "应付款", "库存现金", "银行存款",
   "其他应收款", "其他应付款", "其他流动资产",

@@ -43,16 +43,16 @@ func (wb *Workbook) markExistingPageForPrint(sheet string) {
 
 // markExistingMLPageForPrint 多科目明细账版：标记已有数据行（V 列）。
 func (wb *Workbook) markExistingMLPageForPrint(sheet string) {
-	lay := glLayout()
+	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return
 	}
 
-	pageStart := wb.pageStartRow(sheet)
+	pageStart := wb.mlPageStartRow(sheet)
 	lastRow := len(rows)
 	for r := pageStart; r <= lastRow; r++ {
-		if r <= len(rows) && hasPageBreakAt(rows[r-1], lay) {
+		if r <= len(rows) && mlHasPageBreakAt(rows[r-1], lay) {
 			continue
 		}
 		wb.markMLRowForPrint(sheet, r)

@@ -44,7 +44,7 @@ func (wb *Workbook) ensureGLSheet(account string) (string, error) {
 //   Row 5: 日期│凭证号│摘要│借方金额│贷方金额│方向│余额│金额分栏
 func (wb *Workbook) writeGLTitle(sheet string) error {
 	account := sheet[len(sheetPrefixGL):]
-	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 
 	darkGreen := "006100"
 	sealRed := "CC0000"
@@ -115,7 +115,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
 	// ── 列宽 ──
-	avgWidth := layout.MMToExcelColWidth(lay.FrontWidthMM / float64(len(lay.ExcelColumns)))
+	avgWidth := layout.GLMMToExcelColWidth(lay.FrontWidthMM / float64(len(lay.ExcelColumns)))
 	for _, ec := range lay.ExcelColumns {
 		cl, _ := excelize.ColumnNumberToName(ec.Col)
 		w := avgWidth
@@ -154,12 +154,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 }
 
 // glLayout 返回当前 GL 布局，供写入和读取端统一使用。
-func glLayout() layout.Layout {
-	return layout.ComputeLayout(layout.DefaultGLSpec())
+func glLayout() layout.GLLayout {
+	return layout.GLComputeLayout(layout.DefaultGLSpec())
 }
 
 // dataCol 根据 pageNum 奇偶决定写入列，奇数→FrontStartCol，偶数→BackStartCol。
-func dataCol(lay layout.Layout, pageNum, offset int) int {
+func dataCol(lay layout.GLLayout, pageNum, offset int) int {
 	if pageNum%2 == 1 {
 		return lay.FrontStartCol + offset
 	}
@@ -168,7 +168,7 @@ func dataCol(lay layout.Layout, pageNum, offset int) int {
 
 
 // hasPageBreakAt 检查 row 中是否有"过次页"标记（在 Front 或 Back 区域）。
-func hasPageBreakAt(row []string, lay layout.Layout) bool {
+func hasPageBreakAt(row []string, lay layout.GLLayout) bool {
 	return (len(row) > lay.BindingLeftCols+2 && row[lay.BindingLeftCols+2] == pageBreakLabel) ||
 		(len(row) > lay.BackStartCol+1 && row[lay.BackStartCol+1] == pageBreakLabel)
 }

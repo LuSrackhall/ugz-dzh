@@ -41,7 +41,7 @@ func TestAppendMergeEntries_NoConfig(t *testing.T) {
 }
 
 func TestAppendMergeEntries_Basic(t *testing.T) {
-	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 	wb := newTestWB(balance.GlobalSettings{
 		MergeGLAccounts: []string{"固定资产"},
 	})
@@ -112,7 +112,7 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 }
 
 func TestAppendMergeEntries_SummaryFormat(t *testing.T) {
-	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 	wb := newTestWB(balance.GlobalSettings{
 		MergeGLAccounts: []string{"库存现金"},
 	})
@@ -145,7 +145,7 @@ func TestAppendMergeEntries_SummaryFormat(t *testing.T) {
 }
 
 func TestAppendMergeEntries_MultipleDetails(t *testing.T) {
-	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 	wb := newTestWB(balance.GlobalSettings{
 		MergeGLAccounts: []string{"固定资产"},
 	})

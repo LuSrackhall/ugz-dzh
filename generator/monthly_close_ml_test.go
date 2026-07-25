@@ -14,7 +14,7 @@ import (
 // "本季合计"和"本年累计"的 A-G 列使用全路径(key: general-detail)
 // 聚合所有明细科目的累计值，而非仅当月发生额。
 func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
-	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	lay := layout.MLComputeLayout(layout.DefaultMLSpec())
 	cfg := &balance.GlobalConfig{
 		Tree: map[string]balance.AccountNode{
 			"银行存款-工行": {

@@ -214,7 +214,7 @@ func TestMLDetailStartCol(t *testing.T) {
 
 func TestMLPrintMarkCol(t *testing.T) {
 	got := mlPrintMarkCol()
-	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 	want := lay.FrontStartCol + 7 + 14 // 24
 	if got != want {
 		t.Errorf("mlPrintMarkCol() = %d, want %d", got, want)
@@ -224,7 +224,7 @@ func TestMLPrintMarkCol(t *testing.T) {
 // TestGLColumnLayoutConsistency 验证写入使用 Layout 坐标后，GetRows 能从正确索引位置读回数据。
 // 这是保护列映射正确性的核心 TDD 测试，拦截任何因索引偏移导致的数据错乱。
 func TestGLColumnLayoutConsistency(t *testing.T) {
-	lay := layout.ComputeLayout(layout.DefaultGLSpec())
+	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 	f := excelize.NewFile()
 	sheet := "Sheet1"
 

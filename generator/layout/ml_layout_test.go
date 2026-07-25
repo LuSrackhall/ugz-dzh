@@ -1,11 +1,9 @@
 package layout
 
-import (
-	"testing"
-)
+import "testing"
 
-func TestDefaultGLSpec(t *testing.T) {
-	spec := DefaultGLSpec()
+func TestDefaultMLSpec(t *testing.T) {
+	spec := DefaultMLSpec()
 	if spec.PaperWidthMM != 297 || spec.PaperHeightMM != 210 {
 		t.Errorf("A4 size: want 297x210, got %gx%g", spec.PaperWidthMM, spec.PaperHeightMM)
 	}
@@ -22,28 +20,24 @@ func TestDefaultGLSpec(t *testing.T) {
 	}
 }
 
-func TestComputeLayout_Basic(t *testing.T) {
-	spec := DefaultGLSpec()
-	lay := ComputeLayout(spec)
+func TestMLComputeLayout_Basic(t *testing.T) {
+	spec := DefaultMLSpec()
+	lay := MLComputeLayout(spec)
 
-	// 正面区起始 = 左边距
 	if lay.FrontLeftMM != spec.LeftMarginMM {
 		t.Errorf("front start: want %g, got %g", spec.LeftMarginMM, lay.FrontLeftMM)
 	}
 
-	// 正面区宽度 = (纸宽 - 边距*2 - 页间隙)/2
 	wantWidth := (spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM - spec.PageGapMM) / 2
 	if lay.FrontWidthMM != wantWidth {
 		t.Errorf("front width: want %g, got %g", wantWidth, lay.FrontWidthMM)
 	}
 
-	// 正面区 + 页间隙 + 反面区 = 纸宽
 	total := lay.FrontWidthMM + lay.PageGapWidthMM + lay.BackWidthMM + spec.LeftMarginMM + spec.RightMarginMM
 	if total > spec.PaperWidthMM+0.01 || total < spec.PaperWidthMM-0.01 {
 		t.Errorf("width sum: want %g, got %g", spec.PaperWidthMM, total)
 	}
 
-	// Excel 列分配
 	if lay.FrontStartCol <= lay.BindingLeftCols {
 		t.Errorf("front should start after binding cols")
 	}
@@ -54,15 +48,14 @@ func TestComputeLayout_Basic(t *testing.T) {
 		t.Errorf("total should include back area")
 	}
 
-	// 正面和反面列数一致
 	if len(lay.ExcelColumns) != len(spec.ColProportions) {
 		t.Errorf("excel columns: want %d, got %d", len(spec.ColProportions), len(lay.ExcelColumns))
 	}
 }
 
-func TestComputeLayout_ColWidthSum(t *testing.T) {
-	spec := DefaultGLSpec()
-	lay := ComputeLayout(spec)
+func TestMLComputeLayout_ColWidthSum(t *testing.T) {
+	spec := DefaultMLSpec()
+	lay := MLComputeLayout(spec)
 
 	var sum float64
 	for _, c := range lay.Columns {
@@ -73,12 +66,10 @@ func TestComputeLayout_ColWidthSum(t *testing.T) {
 	}
 }
 
-func TestComputeLayout_Rows(t *testing.T) {
-	spec := DefaultGLSpec()
-	lay := ComputeLayout(spec)
+func TestMLComputeLayout_Rows(t *testing.T) {
+	spec := DefaultMLSpec()
+	lay := MLComputeLayout(spec)
 
-	// 当前 TitleRow/PageNumRow/AccountRow 合并在同一行
-	// 后续可独立拆分为多行
 	if lay.HeaderRow < lay.TitleRow {
 		t.Errorf("header row should be at or after title row")
 	}

@@ -17,8 +17,8 @@ const (
 )
 
 // mlLayout 返回多科目明细账的布局规格（独立于 GL 布局）。
-func mlLayout() layout.Layout {
-	return layout.ComputeLayout(layout.DefaultGLSpec())
+func mlLayout() layout.MLLayout {
+	return layout.MLComputeLayout(layout.DefaultMLSpec())
 }
 
 // mlPrintMarkCol 返回多科目明细账打印标记列号（Layout 内容区末列）。
@@ -28,12 +28,12 @@ func mlPrintMarkCol() int {
 }
 
 // mlDetailExcelCol 返回多科目明细账第 i 个明细列的 Excel 列号（Layout 坐标）。
-func mlDetailExcelCol(lay layout.Layout, i int) int {
+func mlDetailExcelCol(lay layout.MLLayout, i int) int {
 	return lay.FrontStartCol + 7 + i
 }
 
 // mlDetailRowIdx 返回多科目明细账第 i 个明细列在 GetRows 中的索引（Layout 坐标）。
-func mlDetailRowIdx(lay layout.Layout, i int) int {
+func mlDetailRowIdx(lay layout.MLLayout, i int) int {
 	return lay.BindingLeftCols + 7 + i
 }
 
@@ -46,7 +46,7 @@ func mlCellName(col, row int) string {
 }
 
 // mlHasPageBreakAt 检查行中是否有"过次页"标记。
-func mlHasPageBreakAt(row []string, lay layout.Layout) bool {
+func mlHasPageBreakAt(row []string, lay layout.MLLayout) bool {
 	return (len(row) > lay.BindingLeftCols+2 && row[lay.BindingLeftCols+2] == pageBreakLabel) ||
 		(len(row) > lay.BackStartCol+1 && row[lay.BackStartCol+1] == pageBreakLabel)
 }

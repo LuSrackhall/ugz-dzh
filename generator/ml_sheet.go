@@ -100,6 +100,7 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 }
 
 // (wb *Workbook) mlLastPageBalance 获取最后一个过次页行的余额（仅从 Back 侧余额列读取）。
+// 无过次页时回退到查找 期末余额。
 func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -121,22 +122,18 @@ func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 		}
 		return 0
 	}
-	// 无过次页 → 从后往前找最近的余额（跳过承前页行和结构行）
+	// 无过次页 — 回退到 期末余额
 	for i := len(rows) - 1; i >= 0; i-- {
 		r := rows[i]
-		if mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
-			continue
-		}
-		if len(r) > lay.BindingLeftCols+2 &&
-			(r[lay.BindingLeftCols+2] == carryForwardLabel || r[lay.BindingLeftCols+2] == "上年结转") {
-			continue
-		}
-		balIdx := lay.BindingLeftCols + 6
-		if len(r) <= balIdx {
-			continue
-		}
-		if v, err := yuanStrToCents(r[balIdx]); err == nil {
-			return v
+		labelIdx := lay.BindingLeftCols + 2
+		if len(r) > labelIdx && r[labelIdx] == periodEndLabel {
+			balIdx := lay.BindingLeftCols + 6
+			if len(r) > balIdx {
+				if v, err := yuanStrToCents(r[balIdx]); err == nil {
+					return v
+				}
+			}
+			return 0
 		}
 	}
 	return 0

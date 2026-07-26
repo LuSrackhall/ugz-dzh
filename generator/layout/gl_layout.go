@@ -45,8 +45,8 @@ type GLLayout struct {
 	ExcelColumns []GLExcelCol
 	TitleRow     int
 	PageNumRow   int
-	AccountRow   int
 	HeaderRow    int
+	SubHeaderRow int
 	DataStartRow int
 	TitleColLeft     int
 	TitleColRight    int
@@ -79,17 +79,18 @@ func DefaultGLSpec() GLSpec {
 		PageGapMM:         8,
 		TitleRowCount:     3,
 		TitleSplitRatio:   0.5,
-		ColHeaderRowCount: 1,
+		ColHeaderRowCount: 2,
 		DataRowsPerPage:   20,
 		ColProportions: []GLColProportion{
-			{Name: "日期", Ratio: 10},
-			{Name: "凭证号", Ratio: 9},
-			{Name: "摘要", Ratio: 25},
+			{Name: "月", Ratio: 6},
+			{Name: "日", Ratio: 6},
+			{Name: "字", Ratio: 5},
+			{Name: "号", Ratio: 5},
+			{Name: "摘要", Ratio: 27},
 			{Name: "借方金额", Ratio: 16},
 			{Name: "贷方金额", Ratio: 16},
 			{Name: "方向", Ratio: 5},
 			{Name: "余额", Ratio: 14},
-			{Name: "金额分栏", Ratio: 5},
 		},
 	}
 }
@@ -147,10 +148,10 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 		BindingRightCols:  bindingRightCols,
 		TotalCols:         total,
 		ExcelColumns:      exc,
-		TitleRow:          1,
-		PageNumRow:        0,
-		AccountRow:        2,
-		HeaderRow:         4,
+		TitleRow:          0,
+		PageNumRow:        1,
+		HeaderRow:         3,
+			SubHeaderRow:      4,
 		DataStartRow:      5,
 		TitleColLeft:      frontStart,
 		TitleColRight:     frontStart + titleCols - 1,
@@ -164,7 +165,7 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 // GLMMToExcelColWidth 将 mm 宽度近似转换为 Excel 列宽单位。
 func GLMMToExcelColWidth(mm float64) float64 {
 	const pxPerMM = 96.0 / 25.4
-	const pxPerColUnit = 7.0
+	const pxPerColUnit = 3.5
 	return mm * pxPerMM / pxPerColUnit
 }
 

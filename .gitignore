@@ -32,3 +32,7 @@ test/e2e/output/*
 test/e2e/out/*
 example/
 ledger
+
+# e2e test output
+test/e2e/out/
+test/e2e/test_data

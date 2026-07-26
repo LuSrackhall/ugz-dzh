@@ -131,7 +131,12 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("保存配置: %w", err)
 	}
 
-	// 11. 保存 xlsx
+	// 11. 页末写红色"过次页"标签
+	if err := wb.finalizeAllGLSheets(); err != nil {
+		return fmt.Errorf("页末补齐: %w", err)
+	}
+
+	// 12. 保存 xlsx
 	if err := wb.Save(); err != nil {
 		return fmt.Errorf("保存 xlsx: %w", err)
 	}

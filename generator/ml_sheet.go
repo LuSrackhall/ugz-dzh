@@ -496,32 +496,26 @@ func (wb *Workbook) checkMLDetailOrderConflict(sheet string, existingDetails []s
 	return nil
 }
 
-// writeMLTitle 写入多科目明细账标题行和列标题，固定 7 基础列 + 14 明细列。
-// 标题和列标题使用 Layout 坐标（基础列在 FrontStartCol+0~6，明细列在 FrontStartCol+7~20）。
+// writeMLTitle 写入 Paper1 Front 占位页（只写 Front 侧标题 + 明细列表头）。
+// Paper1 Front 不包含基础列标题（日期/凭证号等），基础列标题由 writeMLPageHeader 负责。
 func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error {
 	lay := mlLayout()
-	nCols := 7 + mlMaxDetails                      // 总列数 = 基础列 + 明细列
-	lastCol := lay.FrontStartCol + nCols                     // 最后数据列（不含打印标记）
-	titleStart := mlCellName(lay.FrontStartCol, 1)
-	titleEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 1)
 
-	title := "多科目明细账 — " + general
-	wb.File.SetCellValue(sheet, titleStart, title)
-	wb.File.MergeCell(sheet, titleStart, titleEndCell)
+	// Paper1 Front 占位：只写 Front 侧标题/表头
+	// Row 1: "多科目明细账 — XXX" (Front 区)
+	titleStart := mlCellName(lay.FrontStartCol, 1)
+	titleEnd := mlCellName(lay.FrontTitleColRight, 1)
+	wb.File.SetCellValue(sheet, titleStart, "多科目明细账 — "+general)
+	wb.File.MergeCell(sheet, titleStart, titleEnd)
 
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, titleStart, titleEndCell, titleStyle)
+	wb.File.SetCellStyle(sheet, titleStart, titleEnd, titleStyle)
 	wb.File.SetRowHeight(sheet, 1, 22)
 
-	// 基础列标题 FrontStartCol+0~6（日期/凭证号/摘要/借方/贷方/方向/余额）
-	for i, h := range glHeaders {
-		cell := mlCellName(lay.FrontStartCol+i, 2)
-		wb.File.SetCellValue(sheet, cell, h)
-	}
-	// 明细列标题 FrontStartCol+7~20（H-U 对应）
+	// Row 2: 明细列标题（写入全部 14 列，i<4 写入 Back 侧明细1~4，i>=4 写入 Front 侧明细5~14）
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, 2)
@@ -535,23 +529,13 @@ func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error 
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10},
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#808080", Style: 1},
-		},
+		Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	headerEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 2)
-	wb.File.SetCellStyle(sheet, titleStart, headerEndCell, headerStyle)
+	endCell := mlCellName(lay.FrontTitleColRight, 2)
+	wb.File.SetCellStyle(sheet, titleStart, endCell, headerStyle)
 
-	// 基础列宽
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+0), cellColLetter(lay.FrontStartCol+0), 12)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+1), cellColLetter(lay.FrontStartCol+1), 8)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+2), cellColLetter(lay.FrontStartCol+2), 35)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+3), cellColLetter(lay.FrontStartCol+3), 14)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+4), cellColLetter(lay.FrontStartCol+4), 14)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+5), cellColLetter(lay.FrontStartCol+5), 6)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+6), cellColLetter(lay.FrontStartCol+6), 16)
-	// 明细列宽
+	// 列宽（Front 侧明细列）
 	for i := 0; i < mlMaxDetails; i++ {
 		colLetter := cellColLetter(mlDetailCol(lay, i))
 		wb.File.SetColWidth(sheet, colLetter, colLetter, 14)
@@ -992,25 +976,33 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 
 
 // writeMLPageHeader 写入多科目明细账后续页双面标题行（过次页之后、承前页之前调用）。
-// 写入 Back 和/或 Front 两侧的标题、页码、科目名、列标题。
-// hasBack/hasFront 控制是否写对应侧；backPageNum/frontPageNum 分别是两侧的"分第N页"。
+// 写入 Back 和 Front 两侧的标题、页码、科目名、列标题。
 // 行结构（5 行）：
 //   Row +0: 分第 n 页 — Back 侧标题区 + Front 侧标题区
 //   Row +1: 多科目明细账 — XXX（Back 侧标题区）| 科目名（Front 侧标题区，印章红）
 //   Row +2: 科目名 — Back 侧 + Front 侧科目区（印章红）
 //   Row +3: [空行]
-//   Row +4: 列标题 — Back 侧（年|凭证|摘要|借方|贷方|方向|余额 + 明细1~4）| Front 侧（明细5~14）
-//   Row +5: 子表头 — Back 侧（月|日|字|号，仅前4列有内容）
-func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontPageNum int, general string, hasBack, hasFront bool) error {
+//   Row +4: 列标题 — Back 侧（7基础列 + 明细1~4）| Front 侧（明细5~14）
+func (wb *Workbook) writeMLPageHeader(sheet string, row int, pageNum int, general string) error {
 	lay := mlLayout()
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
-	// Row N+0: 分第 n 页（右侧，绿色，数字印章红）
-	pnLeft := mlCellName(lay.BackAccountColLeft, row)
-	pnRight := mlCellName(lay.BackAccountColRight, row)
-	wb.File.MergeCell(sheet, pnLeft, pnRight)
-	wb.File.SetCellRichText(sheet, pnLeft, []excelize.RichTextRun{
+	// Row +0: "分第N页" — Back 侧
+	pnBack := mlCellName(lay.BackTitleColLeft, row)
+	pnBackEnd := mlCellName(lay.BackTitleColRight, row)
+	wb.File.MergeCell(sheet, pnBack, pnBackEnd)
+	wb.File.SetCellRichText(sheet, pnBack, []excelize.RichTextRun{
+		{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+		{Text: fmt.Sprintf("%d", pageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
+		{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+	})
+
+	// Row +0: "分第N页" — Front 侧
+	pnFront := mlCellName(lay.FrontTitleColLeft, row)
+	pnFrontEnd := mlCellName(lay.FrontTitleColRight, row)
+	wb.File.MergeCell(sheet, pnFront, pnFrontEnd)
+	wb.File.SetCellRichText(sheet, pnFront, []excelize.RichTextRun{
 		{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
 		{Text: fmt.Sprintf("%d", pageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
 		{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
@@ -1018,79 +1010,78 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	wb.File.SetRowHeight(sheet, row, 18)
 	row++
 
-	// Row N+1: 多科目明细账 — 科目名（居中）+ 科目名称（右侧）
-	tl := mlCellName(lay.BackTitleColLeft, row)
-	tr := mlCellName(lay.BackTitleColRight, row)
-	wb.File.MergeCell(sheet, tl, tr)
-	wb.File.SetCellValue(sheet, tl, "多科目明细账 — "+general)
+	// Row +1: 标题 — Back 侧（"多科目明细账 — XXX"）
+	tlBack := mlCellName(lay.BackTitleColLeft, row)
+	trBack := mlCellName(lay.BackTitleColRight, row)
+	wb.File.MergeCell(sheet, tlBack, trBack)
+	wb.File.SetCellValue(sheet, tlBack, "多科目明细账 — "+general)
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, tl, tr, titleStyle)
+	wb.File.SetCellStyle(sheet, tlBack, trBack, titleStyle)
 
-	al := mlCellName(lay.BackAccountColLeft, row)
-	ar := mlCellName(lay.BackAccountColRight, row)
-	wb.File.MergeCell(sheet, al, ar)
-	wb.File.SetCellValue(sheet, al, general)
+	// Row +1: Front 侧标题区（科目名，印章红）
+	tlFront := mlCellName(lay.FrontTitleColLeft, row)
+	trFront := mlCellName(lay.FrontTitleColRight, row)
+	wb.File.MergeCell(sheet, tlFront, trFront)
+	wb.File.SetCellValue(sheet, tlFront, general)
 	accStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Color: sealRed, Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, al, ar, accStyle)
+	wb.File.SetCellStyle(sheet, tlFront, trFront, accStyle)
+
+	// Row +1: Front 侧科目区（科目名，印章红）
+	alFront := mlCellName(lay.FrontAccountColLeft, row)
+	arFront := mlCellName(lay.FrontAccountColRight, row)
+	wb.File.MergeCell(sheet, alFront, arFront)
+	wb.File.SetCellValue(sheet, alFront, general)
+	wb.File.SetCellStyle(sheet, alFront, arFront, accStyle)
 	wb.File.SetRowHeight(sheet, row, 28)
 	row++
 
-	// Row N+2: 科目名称（右侧，印章红）
-	acLeft := mlCellName(lay.BackAccountColLeft, row)
-	acRight := mlCellName(lay.BackAccountColRight, row)
-	wb.File.MergeCell(sheet, acLeft, acRight)
-	wb.File.SetCellValue(sheet, acLeft, general)
+	// Row +2: 科目名 — Back 侧
+	acBack := mlCellName(lay.BackAccountColLeft, row)
+	acBackEnd := mlCellName(lay.BackAccountColRight, row)
+	wb.File.MergeCell(sheet, acBack, acBackEnd)
+	wb.File.SetCellValue(sheet, acBack, general)
 	acRowStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Color: sealRed, Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	wb.File.SetCellStyle(sheet, acLeft, acRight, acRowStyle)
+	wb.File.SetCellStyle(sheet, acBack, acBackEnd, acRowStyle)
+
+	// Row +2: 科目名 — Front 侧
+	acFront := mlCellName(lay.FrontAccountColLeft, row)
+	acFrontEnd := mlCellName(lay.FrontAccountColRight, row)
+	wb.File.MergeCell(sheet, acFront, acFrontEnd)
+	wb.File.SetCellValue(sheet, acFront, general)
+	wb.File.SetCellStyle(sheet, acFront, acFrontEnd, acRowStyle)
 	wb.File.SetRowHeight(sheet, row, 18)
 	row++
 
 	// Row +3: 空行
 	row++
 
-	// Row +4: 列标题 — Back 侧（两行表头：年|凭证 合并，子表头 月|日|字|号）
-	year := wb.Month[:4]
-	if hasBack {
-		// "年" 合并月+日两列
-		yearLeft := mlCellName(lay.BackStartCol, row)
-		yearRight := mlCellName(lay.BackStartCol+1, row)
-		wb.File.MergeCell(sheet, yearLeft, yearRight)
-		wb.File.SetCellValue(sheet, yearLeft, year+"年")
-		// "凭证" 合并字+号两列
-		vouchLeft := mlCellName(lay.BackStartCol+2, row)
-		vouchRight := mlCellName(lay.BackStartCol+3, row)
-		wb.File.MergeCell(sheet, vouchLeft, vouchRight)
-		wb.File.SetCellValue(sheet, vouchLeft, "凭证")
-		// 摘要 ~ 余额 各占单列
-		otherCols := []string{"摘要", "借方金额", "贷方金额", "方向", "余额"}
-		for i, h := range otherCols {
-			cell := mlCellName(lay.BackStartCol+4+i, row)
-			wb.File.SetCellValue(sheet, cell, h)
-		}
-		// Back 侧明细1~4 列标题
-		for i := 0; i < 4 && i < mlMaxDetails; i++ {
-			col := mlDetailCol(lay, i)
-			cell := mlCellName(col, row)
-			wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
-		}
+	// Row +4: 列标题 — Back 侧（7基础列 + 明细1~4）
+	backColNames := []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "方向", "余额"}
+	for i, h := range backColNames {
+		cell := mlCellName(lay.BackStartCol+i, row)
+		wb.File.SetCellValue(sheet, cell, h)
+	}
+	// Back 侧明细1~4 列标题
+	for i := 0; i < 4 && i < mlMaxDetails; i++ {
+		col := mlDetailCol(lay, i)
+		cell := mlCellName(col, row)
+		wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
 	}
 
 	// Row +4: 列标题 — Front 侧（明细5~14）
-	if hasFront {
-		for i := 4; i < mlMaxDetails; i++ {
-			col := mlDetailCol(lay, i)
-			cell := mlCellName(col, row)
-			wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
-		}
+	for i := 4; i < mlMaxDetails; i++ {
+		col := mlDetailCol(lay, i)
+		cell := mlCellName(col, row)
+		wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
 	}
 
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -1099,41 +1090,19 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 		Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	// Back 侧基础列表头样式（Row +4）
-	if hasBack {
-		hsBack := mlCellName(lay.BackStartCol, row)
-		heBack := mlCellName(lay.BackStartCol+6, row)
-		wb.File.SetCellStyle(sheet, hsBack, heBack, headerStyle)
-		for i := 0; i < 4 && i < mlMaxDetails; i++ {
-			cell := mlCellName(mlDetailCol(lay, i), row)
-			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
-		}
+	// Back 侧基础列表头样式
+	hsBack := mlCellName(lay.BackStartCol, row)
+	heBack := mlCellName(lay.BackStartCol+len(backColNames)-1, row)
+	wb.File.SetCellStyle(sheet, hsBack, heBack, headerStyle)
+	// Back 侧明细1~4 表头样式
+	for i := 0; i < 4 && i < mlMaxDetails; i++ {
+		cell := mlCellName(mlDetailCol(lay, i), row)
+		wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 	}
-	// Front 侧明细5~14 表头样式（Row +4）
-	if hasFront {
-		for i := 4; i < mlMaxDetails; i++ {
-			cell := mlCellName(mlDetailCol(lay, i), row)
-			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
-		}
-	}
-	row++
-
-	// Row +5: 子表头 — Back 侧前4列（月/日/字/号）
-	if hasBack {
-		subHeaders := []string{"月", "日", "字", "号"}
-		for i, h := range subHeaders {
-			cell := mlCellName(lay.BackStartCol+i, row)
-			wb.File.SetCellValue(sheet, cell, h)
-		}
-		subStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font: &excelize.Font{Size: 9, Color: darkGreen},
-			Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
-			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		})
-		subLeft := mlCellName(lay.BackStartCol, row)
-		subRight := mlCellName(lay.BackStartCol+3, row)
-		wb.File.SetCellStyle(sheet, subLeft, subRight, subStyle)
+	// Front 侧明细5~14 表头样式
+	for i := 4; i < mlMaxDetails; i++ {
+		cell := mlCellName(mlDetailCol(lay, i), row)
+		wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 	}
 
 	return nil

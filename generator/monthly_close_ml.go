@@ -192,6 +192,8 @@ func (wb *Workbook) WriteMLMonthClosings(
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
 		wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+		// 补齐当前页至 20 数据行，写入红字过次页
+		wb.completeMLPage(sheet, row, endBalance)
 	}
 
 	return nil

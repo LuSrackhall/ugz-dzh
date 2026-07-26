@@ -789,6 +789,11 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), pageBreakLabel)
+	// 过次页标签红色加粗
+	redStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+	})
+	wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol+2, row), mlCellName(lay.BackStartCol+2, row), redStyle)
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, row), centsToYuan(pageDebit))
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
@@ -857,6 +862,28 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 	}
 
 // 翻页触发时 writeMLPageBreakRow 覆盖为完整数据；不触发时红色文字作为模板结构保留。
+}
+
+// completeMLPage 在月结后补齐当前页至 20 数据行，写入过次页。
+// 过次页的借贷合计传 0（跨月合计不在本函数计算范围内）。
+// balance 为当前余额，pageDetails 为明细净额（均传 0 也可）。
+func (wb *Workbook) completeMLPage(sheet string, currentRow int, balance int64) int {
+	pageStart := wb.mlPageStartRow(sheet)
+	dataUsed := currentRow - pageStart
+
+	if dataUsed >= pageSize {
+		// 页已满或超了 — 直接写过次页
+		wb.writeMLPageBreakRow(sheet, currentRow, balance, 0, 0, make([]mlDetailTotals, mlMaxDetails))
+		return currentRow + 1
+	}
+
+	emptyCount := pageSize - dataUsed
+	for i := 0; i < emptyCount; i++ {
+		currentRow++
+	}
+
+	wb.writeMLPageBreakRow(sheet, currentRow, balance, 0, 0, make([]mlDetailTotals, mlMaxDetails))
+	return currentRow + 1
 }
 
 

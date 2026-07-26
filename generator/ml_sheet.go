@@ -775,10 +775,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		row++
 	}
 
-	// ── PaperN Back 尾页占位 ──
-	// 只写 Back 侧标题+表头，不写数据
-	wb.writeMLPageHeader(sheet, row, 0, 0, general, true, false)
-
 	return nil
 }
 

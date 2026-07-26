@@ -65,12 +65,12 @@ func mlHasPageBreakAt(row []string, lay layout.MLLayout) bool {
 	return len(row) > summaryIdx && row[summaryIdx] == pageBreakLabel
 }
 
-// mlIsStructuralBreak 检查过次页行是否为结构预写（借方列为空，无翻页数据）。
+// mlIsStructuralBreak 检查过次页行是否为结构预写（借方列为空字符串，无翻页数据）。
+// 注意：借方为 "0.00" 的过次页是真实翻页（借贷金额为零），不属于结构预写。
 func mlIsStructuralBreak(row []string, lay layout.MLLayout) bool {
 	debIdx := lay.BindingLeftCols + 3
 	return len(row) <= debIdx ||
-		strings.TrimSpace(row[debIdx]) == "" ||
-		strings.TrimSpace(row[debIdx]) == "0.00"
+		strings.TrimSpace(row[debIdx]) == ""
 }
 
 // (wb *Workbook) mlNextDataRow 返回 Sheet 中下一个可用数据行号。
@@ -102,17 +102,32 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	if dataStart == 1 {
 		dataStart = lay.DataStartRow + 1
 	}
-	usedDataRows := len(rows) - dataStart + 1
-		// 最后一行为结构预写时不计入数据行
-		if usedDataRows > 0 && len(rows) > 0 {
-			if r := rows[len(rows)-1]; mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
-				usedDataRows--
+	effRows := len(rows)
+	for effRows > 0 {
+		r := rows[effRows-1]
+		// 跳过结构过次页和尾部空行
+		if mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
+			effRows--
+			continue
+		}
+		isEmpty := true
+		for k := 0; k < len(r); k++ {
+			if strings.TrimSpace(r[k]) != "" {
+				isEmpty = false
+				break
 			}
 		}
-	if usedDataRows >= pageSize {
-		return len(rows) + 1, nil
+		if isEmpty {
+			effRows--
+			continue
+		}
+		break
 	}
-	return len(rows) + 1, nil
+	usedDataRows := effRows - dataStart + 1
+	if usedDataRows >= pageSize {
+		return effRows + 1, nil
+	}
+	return effRows + 1, nil
 }
 
 // (wb *Workbook) mlLastPageBalance 获取上一个过次页结束的余额。
@@ -246,11 +261,25 @@ func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 	}
 	lastBreak := 0
 		effRows := len(rows)
-		if effRows > 0 {
-			if r := rows[effRows-1]; mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
-				effRows--
+	for effRows > 0 {
+		r := rows[effRows-1]
+		if mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
+			effRows--
+			continue
+		}
+		isEmpty := true
+		for k := 0; k < len(r); k++ {
+			if strings.TrimSpace(r[k]) != "" {
+				isEmpty = false
+				break
 			}
 		}
+		if isEmpty {
+			effRows--
+			continue
+		}
+		break
+	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		r := rows[i]
 		if mlHasPageBreakAt(r, lay) && !mlIsStructuralBreak(r, lay) || (len(r) > lay.BindingLeftCols+2 &&
@@ -706,7 +735,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		}
 		wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
 		row++ // = 12：第一条分录
-		wb.preWriteMLPageBreak(sheet)
 		// preWrite removed — 由 break handler 负责
 	} else {
 		// 已有数据 — 找到下一个可用数据行
@@ -743,8 +771,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
 			row++
-			wb.preWriteMLPageBreak(sheet)
-			pageDebit = 0
+				pageDebit = 0
 			pageCredit = 0
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
@@ -758,8 +785,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel)
 			row++
-			wb.preWriteMLPageBreak(sheet)
-			pageDebit = 0
+				pageDebit = 0
 			pageCredit = 0
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
@@ -841,18 +867,6 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 		wb.setMoneyStyle(sheet, row, col)
 	}
 
-}
-// preWriteMLPageBreak 在当前页第21行（pageStart+pageSize）预写红字"过次页"。
-// 翻页触发时 writeMLPageBreakRow 覆盖为完整数据；不触发时红色文字作为模板结构保留。
-func (wb *Workbook) preWriteMLPageBreak(sheet string) {
-	lay := mlLayout()
-	breakRow := wb.mlPageStartRow(sheet) + pageSize
-	cell := mlCellName(lay.BackStartCol+2, breakRow)
-	wb.File.SetCellValue(sheet, cell, pageBreakLabel)
-	redStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-	})
-	wb.File.SetCellStyle(sheet, cell, cell, redStyle)
 }
 // writeMLCarryForwardRow 写多科目明细账的"承前页"行，双面写入（结构与过次页相同，标签可定制）。
 
@@ -1041,8 +1055,8 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 		}
 	}
-
 	return nil
+
 }
 
 // lastBreakDetailTotals 读取最后一个过次页行的各明细列净额。

@@ -192,7 +192,15 @@ func (wb *Workbook) WriteMLMonthClosings(
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
 		wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
-		// 补齐当前页至 20 数据行，写入红字过次页
+		// 确保第21行有红字过次页（月结后写入，不会被覆盖）
+		breakRow := wb.mlPageStartRow(sheet) + pageSize
+		breakCell := mlCellName(lay.BackStartCol+2, breakRow)
+		wb.File.SetCellValue(sheet, breakCell, pageBreakLabel)
+		redBr, _ := wb.File.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+		})
+		wb.File.SetCellStyle(sheet, breakCell, breakCell, redBr)
+		wb.File.SetCellStyle(sheet, breakCell, breakCell, redBr)
 	}
 
 	return nil

@@ -41,30 +41,30 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 	sheet := "多科目明细账-银行存款"
 	wb.File.NewSheet(sheet)
 
-	// 标题行 — 占位列保证 GetRows 列对齐
+	// Paper1 Front 占位行 — 保证 GetRows 列对齐
 	for col := 1; col <= lay.TotalCols; col++ {
-		cell, _ := excelize.CoordinatesToCellName(col, 1)
-		wb.File.SetCellValue(sheet, cell, "")
-		cell, _ = excelize.CoordinatesToCellName(col, 2)
-		wb.File.SetCellValue(sheet, cell, "")
+		for r := 1; r <= 5; r++ {
+			cell, _ := excelize.CoordinatesToCellName(col, r)
+			wb.File.SetCellValue(sheet, cell, "")
+		}
 	}
-	// 明细列标题（Layout 坐标）
-	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 0), 2), "工行")
-	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 1), 2), "建行")
+	// 明细列标题（Paper1 Front 第5行）
+	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), 5), "工行")
+	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 1), 5), "建行")
 
-	// 数据行 — 使用 Layout 坐标
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, 3), "2026-03-05")
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, 3), "记-1")
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, 3), "存入")
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, 3), "1000.00")
-	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 0), 3), "1000.00")
+	// 数据行 — 使用 Layout 坐标（第12行起，在 Paper1 Front + 数据页标题 + 承前页之后）
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, 12), "2026-03-05")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, 12), "记-1")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, 12), "存入")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, 12), "1000.00")
+	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), 12), "1000.00")
 
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, 4), "2026-03-10")
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, 4), "记-2")
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, 4), "支出")
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, 4), "500.00")
-	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, 4), "200.00")
-	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 1), 4), "-300.00")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, 13), "2026-03-10")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, 13), "记-2")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, 13), "支出")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, 13), "500.00")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, 13), "200.00")
+	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 1), 13), "-300.00")
 
 	entries := []voucher.Entry{
 		{GeneralAccount: "银行存款", DetailAccount: "工行", DebitCents: 100000, CreditCents: 0},

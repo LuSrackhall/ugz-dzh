@@ -21,6 +21,7 @@ type Workbook struct {
 	OutputDir    string
 	ConfigPath   string
 	moneyStyleID int
+	MLSheetBalances map[string]int64 // sheet名 → 最近期末余额
 }
 
 // NewWorkbook 创建或加载工作薄。若上月 xlsx 存在则复制之，否则新建。
@@ -145,6 +146,7 @@ const pageSize = 20
 // yuanStrToCents 将 "1234.56" 格式字符串转为分。
 func yuanStrToCents(s string) (int64, error) {
 	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, ",", "")
 	if s == "" || s == "0" {
 		return 0, nil
 	}

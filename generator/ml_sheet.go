@@ -914,18 +914,18 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), pageBreakLabel)
-	// 过次页标签红色加粗
-	redStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-	})
-	wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol+2, row), mlCellName(lay.BackStartCol+2, row), redStyle)
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, row), centsToYuan(pageDebit))
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(dispBal))
 
-	for i, pd := range pageDetails {
-		net := pd.debit - pd.credit
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+
+	// Back 侧：明细1~4 净额
+	for i := 0; i < 4 && i < len(pageDetails); i++ {
+		net := pageDetails[i].debit - pageDetails[i].credit
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
@@ -939,10 +939,7 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 		wb.setMoneyStyle(sheet, row, col)
 	}
 
-}
 // writeMLCarryForwardRow 写多科目明细账的"承前页"行，双面写入（结构与过次页相同，标签可定制）。
-
-// 翻页触发时 writeMLPageBreakRow 会覆盖为完整数据。
 func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals, label string) {
 	lay := mlLayout()
 	dir, dispBal := directionFor(balance, 0)
@@ -956,8 +953,21 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(dispBal))
 
-	for i, pd := range pageDetails {
-		net := pd.debit - pd.credit
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+
+	// Back 侧：明细1~4 净额
+	for i := 0; i < 4 && i < len(pageDetails); i++ {
+		net := pageDetails[i].debit - pageDetails[i].credit
+		col := mlDetailCol(lay, i)
+		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
+		wb.setMoneyStyle(sheet, row, col)
+	}
+
+	// Front 侧：明细5~14 净额
+	for i := 4; i < len(pageDetails); i++ {
+		net := pageDetails[i].debit - pageDetails[i].credit
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)

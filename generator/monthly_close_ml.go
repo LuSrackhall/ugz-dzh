@@ -71,78 +71,38 @@ func (wb *Workbook) WriteMLMonthClosings(
 		}
 
 		lay := mlLayout()
-
-		// 如果当前位置到达过次页位置，先翻页再写月结
-		// 用当前页起始 + 20 计算，不依赖 mlPageStartRow（后者可能找到后续真实过次页）
-		bRows, _ := wb.File.GetRows(sheet)
-		curPageStart := lay.DataStartRow + 1 + lay.DataStartRow
-		for i := len(bRows) - 1; i >= 0; i-- {
-			if mlHasPageBreakAt(bRows[i], lay) {
-				curPageStart = i + 2 + lay.DataStartRow
-				break
-			}
-		}
-		initBreakPos := curPageStart + pageSize
-		if row >= initBreakPos {
-			bal := wb.mlLastPageBalance(sheet)
-			pageNum := 1
-			for _, br := range bRows {
-				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
-					pageNum++
-				}
-			}
-			pageNum++
-			wb.writeMLPageBreakRow(sheet, initBreakPos, bal, 0, 0, make([]mlDetailTotals, numDetails))
-			wb.writeMLPageHeader(sheet, initBreakPos+1, pageNum, pageNum, general, true, true)
-			cfRow := initBreakPos + 1 + lay.DataStartRow
-			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
-			row = cfRow + 1
-		}
-
-		// 检查是否需要过次页翻页（月结行逐行检查）
-		// 用当前页起始 + 20 计算过次页位置
-		findPageBreakRow := func() int {
-			bRows, _ := wb.File.GetRows(sheet)
-			ps := lay.DataStartRow + 1 + lay.DataStartRow
-			for i := len(bRows) - 1; i >= 0; i-- {
-				if mlHasPageBreakAt(bRows[i], lay) {
-					ps = i + 2 + lay.DataStartRow
-					break
-				}
-			}
-			return ps + pageSize
-		}
-		mlCheckPageBreak := func(r int) int {
-			pbRow := findPageBreakRow()
-			if r < pbRow {
-				return r
-			}
-			// 到达过次页位置 → 翻页
-			bal := wb.mlLastPageBalance(sheet)
-			pageNum := 1
-			bRows, _ := wb.File.GetRows(sheet)
-			for _, br := range bRows {
-				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
-					pageNum++
-				}
-			}
-			pageNum++
-			wb.writeMLPageBreakRow(sheet, pbRow, bal, 0, 0, make([]mlDetailTotals, numDetails))
-			wb.writeMLPageHeader(sheet, pbRow+1, pageNum, pageNum, general, true, true)
-			cfRow := pbRow + 1 + lay.DataStartRow
-			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
-			return cfRow + 1
-		}
+		lastDetailCol := mlDetailCol(lay, numDetails-1)
 
 		// 本月合计
-		row = mlCheckPageBreak(row)
-		wb.writeMLClosingRow(sheet, row, "本月合计", mtdDebit, mtdCredit, mtdDetails, details, lay)
+		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+0, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+1, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+2, row), "本月合计")
+		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+3, row), centsToYuan(mtdDebit))
+		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+4, row), centsToYuan(mtdCredit))
+		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+5, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+6, row), "")
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] != "" {
+				net := mtdDetails[i].debit - mtdDetails[i].credit
+				wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, i), row), centsToYuan(net))
+			}
+		}
+
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "top", Color: "#808080", Style: 1}},
 		})
-		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), monthlyStyle)
-		wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), monthlyStyle)
+		wb.File.SetCellStyle(sheet, mlCellName(lay.FrontStartCol, row), mlCellName(lastDetailCol, row), monthlyStyle)
+
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] != "" {
+				wb.setMoneyStyle(sheet, row, mlDetailCol(lay, i))
+			}
+		}
+
 		row++
 
 		if isQuarterEnd(wb.Month) {
@@ -167,13 +127,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 				if details[i] != "" {
 					prevQt := wb.getDetailPrevQuarterTotal(general, details[i])
 					net := qtDetails[i].debit - qtDetails[i].credit + prevQt
-					if net >= 0 {
-						qtDetails[i].debit = net
-						qtDetails[i].credit = 0
-					} else {
-						qtDetails[i].debit = 0
-						qtDetails[i].credit = -net
-					}
+					wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, i), row), centsToYuan(net))
 				}
 			}
 
@@ -182,8 +136,17 @@ func (wb *Workbook) WriteMLMonthClosings(
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
-			wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), qtStyle)
-			wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), qtStyle)
+			wb.File.SetCellStyle(sheet, mlCellName(lay.FrontStartCol, row), mlCellName(lastDetailCol, row), qtStyle)
+
+			wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+			wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+			wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
+			for i := 0; i < mlMaxDetails; i++ {
+				if details[i] != "" {
+					wb.setMoneyStyle(sheet, row, mlDetailCol(lay, i))
+				}
+			}
+
 			row++
 		}
 
@@ -208,13 +171,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			if details[i] != "" {
 				prevYtd := wb.getDetailPrevYearTotal(general, details[i])
 				net := ytdDetails[i].debit - ytdDetails[i].credit + prevYtd
-				if net >= 0 {
-					ytdDetails[i].debit = net
-					ytdDetails[i].credit = 0
-				} else {
-					ytdDetails[i].debit = 0
-					ytdDetails[i].credit = -net
-				}
+				wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, i), row), centsToYuan(net))
 			}
 		}
 
@@ -224,8 +181,17 @@ func (wb *Workbook) WriteMLMonthClosings(
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		})
-		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), cumStyle)
-		wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), cumStyle)
+		wb.File.SetCellStyle(sheet, mlCellName(lay.FrontStartCol, row), mlCellName(lastDetailCol, row), cumStyle)
+
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
+		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
+		for i := 0; i < mlMaxDetails; i++ {
+			if details[i] != "" {
+				wb.setMoneyStyle(sheet, row, mlDetailCol(lay, i))
+			}
+		}
+
 		row++
 
 		// 期末余额

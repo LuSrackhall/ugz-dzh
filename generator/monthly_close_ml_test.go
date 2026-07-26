@@ -41,33 +41,30 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 	sheet := "多科目明细账-银行存款"
 	wb.File.NewSheet(sheet)
 
-	// Paper1 Front 占位行 — 保证 GetRows 列对齐
+	// 标题行 — 占位列保证 GetRows 列对齐
 	for col := 1; col <= lay.TotalCols; col++ {
-		for r := 1; r <= 5; r++ {
-			cell, _ := excelize.CoordinatesToCellName(col, r)
-			wb.File.SetCellValue(sheet, cell, "")
-		}
+		cell, _ := excelize.CoordinatesToCellName(col, 1)
+		wb.File.SetCellValue(sheet, cell, "")
+		cell, _ = excelize.CoordinatesToCellName(col, 2)
+		wb.File.SetCellValue(sheet, cell, "")
 	}
+	// 明细列标题（Layout 坐标）
+	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 0), 2), "工行")
+	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 1), 2), "建行")
 
-	// 明细列标题（数据页列标题行）
-	colHeaderRow := 6 + lay.DataStartRow - 1 // = 11
-	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), colHeaderRow), "工行")
-	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 1), colHeaderRow), "建行")
+	// 数据行 — 使用 Layout 坐标
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, 3), "2026-03-05")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, 3), "记-1")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, 3), "存入")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, 3), "1000.00")
+	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 0), 3), "1000.00")
 
-	// 数据行 — 使用 Back 侧坐标
-	dataRow := 6 + lay.DataStartRow // = 12
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, dataRow), "2026-03-05")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, dataRow), "记-1")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, dataRow), "存入")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, dataRow), "1000.00")
-	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), dataRow), "1000.00")
-
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, dataRow+1), "2026-03-10")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, dataRow+1), "记-2")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, dataRow+1), "支出")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, dataRow+1), "500.00")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, dataRow+1), "200.00")
-	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 1), dataRow+1), "-300.00")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+0, 4), "2026-03-10")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1, 4), "记-2")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2, 4), "支出")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+3, 4), "500.00")
+	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4, 4), "200.00")
+	wb.File.SetCellValue(sheet, cellName(mlDetailCol(lay, 1), 4), "-300.00")
 
 	entries := []voucher.Entry{
 		{GeneralAccount: "银行存款", DetailAccount: "工行", DebitCents: 100000, CreditCents: 0},
@@ -108,11 +105,11 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 		t.Fatalf("GetRows: %v", err)
 	}
 
-	bIdx := lay.BindingLeftCols
+	frontIdx := lay.FrontStartCol - 1
 	var qtRow, ytdRow []string
 	for _, r := range rows {
-		if len(r) >= bIdx+3 {
-			switch r[bIdx+2] {
+		if len(r) >= frontIdx+3 {
+			switch r[frontIdx+2] {
 			case "本季合计":
 				qtRow = r
 			case "本年累计":
@@ -127,18 +124,18 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 		t.Fatal("未找到'本年累计'行")
 	}
 
-	// 在 Layout 坐标下，借贷金额列在 index bIdx+3 和 bIdx+4
-	if len(qtRow) > bIdx+4 && qtRow[bIdx+3] != "4000" {
-		t.Errorf("本季合计 D(debit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[bIdx+3], "4000")
+	// 在 Layout 坐标下，借贷金额列在 index frontIdx+3 和 frontIdx+4
+	if len(qtRow) > frontIdx+4 && qtRow[frontIdx+3] != "4000" {
+		t.Errorf("本季合计 D(debit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[frontIdx+3], "4000")
 	}
-	if len(qtRow) > bIdx+4 && qtRow[bIdx+4] != "1000" {
-		t.Errorf("本季合计 E(credit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[bIdx+4], "1000")
+	if len(qtRow) > frontIdx+4 && qtRow[frontIdx+4] != "1000" {
+		t.Errorf("本季合计 E(credit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[frontIdx+4], "1000")
 	}
 
-	if len(ytdRow) > bIdx+4 && ytdRow[bIdx+3] != "6500" {
-		t.Errorf("本年累计 D(debit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[bIdx+3], "6500")
+	if len(ytdRow) > frontIdx+4 && ytdRow[frontIdx+3] != "6500" {
+		t.Errorf("本年累计 D(debit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[frontIdx+3], "6500")
 	}
-	if len(ytdRow) > bIdx+4 && ytdRow[bIdx+4] != "1700" {
-		t.Errorf("本年累计 E(credit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[bIdx+4], "1700")
+	if len(ytdRow) > frontIdx+4 && ytdRow[frontIdx+4] != "1700" {
+		t.Errorf("本年累计 E(credit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[frontIdx+4], "1700")
 	}
 }

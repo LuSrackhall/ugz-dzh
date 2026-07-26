@@ -218,7 +218,9 @@ func TestMLPrintMarkCol(t *testing.T) {
 	backLast := lay.BackStartCol + lay.BackColCount
 	frontLast := lay.FrontStartCol + lay.FrontColCount
 	want := backLast
-	if frontLast > want { want = frontLast }
+	if frontLast > want {
+		want = frontLast
+	}
 	if got != want {
 		t.Errorf("mlPrintMarkCol() = %d, want %d", got, want)
 	}

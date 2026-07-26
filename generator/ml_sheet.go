@@ -372,7 +372,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 			lay := mlLayout()
 			for _, nd := range newAppended {
 				col := mlDetailCol(lay, finalIdx[nd])
-				cell := mlCellName(col, 5)
+				cell := mlCellName(col, 2)
 				wb.File.SetCellValue(name, cell, nd)
 		}
 			// 更新列宽（Front 侧明细列）
@@ -496,6 +496,69 @@ func (wb *Workbook) checkMLDetailOrderConflict(sheet string, existingDetails []s
 	return nil
 }
 
+// writeMLTitle 写入多科目明细账标题行和列标题，固定 7 基础列 + 14 明细列。
+// 标题和列标题使用 Layout 坐标（基础列在 FrontStartCol+0~6，明细列在 FrontStartCol+7~20）。
+func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error {
+	lay := mlLayout()
+	nCols := 7 + mlMaxDetails                      // 总列数 = 基础列 + 明细列
+	lastCol := lay.FrontStartCol + nCols                     // 最后数据列（不含打印标记）
+	titleStart := mlCellName(lay.FrontStartCol, 1)
+	titleEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 1)
+
+	title := "多科目明细账 — " + general
+	wb.File.SetCellValue(sheet, titleStart, title)
+	wb.File.MergeCell(sheet, titleStart, titleEndCell)
+
+	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 14},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	wb.File.SetCellStyle(sheet, titleStart, titleEndCell, titleStyle)
+	wb.File.SetRowHeight(sheet, 1, 22)
+
+	// 基础列标题 FrontStartCol+0~6（日期/凭证号/摘要/借方/贷方/方向/余额）
+	for i, h := range glHeaders {
+		cell := mlCellName(lay.FrontStartCol+i, 2)
+		wb.File.SetCellValue(sheet, cell, h)
+	}
+	// 明细列标题 FrontStartCol+7~20（H-U 对应）
+	for i := 0; i < mlMaxDetails; i++ {
+		col := mlDetailCol(lay, i)
+		cell := mlCellName(col, 2)
+		label := ""
+		if i < len(details) {
+			label = details[i]
+		}
+		wb.File.SetCellValue(sheet, cell, label)
+	}
+
+	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 10},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "bottom", Color: "#808080", Style: 1},
+		},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	headerEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 2)
+	wb.File.SetCellStyle(sheet, titleStart, headerEndCell, headerStyle)
+
+	// 基础列宽
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+0), cellColLetter(lay.FrontStartCol+0), 12)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+1), cellColLetter(lay.FrontStartCol+1), 8)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+2), cellColLetter(lay.FrontStartCol+2), 35)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+3), cellColLetter(lay.FrontStartCol+3), 14)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+4), cellColLetter(lay.FrontStartCol+4), 14)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+5), cellColLetter(lay.FrontStartCol+5), 6)
+	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+6), cellColLetter(lay.FrontStartCol+6), 16)
+	// 明细列宽
+	for i := 0; i < mlMaxDetails; i++ {
+		colLetter := cellColLetter(mlDetailCol(lay, i))
+		wb.File.SetColWidth(sheet, colLetter, colLetter, 14)
+	}
+
+	return nil
+}
 
 // cellColLetter 返回列号的字母表示。
 func cellColLetter(col int) string {
@@ -509,7 +572,7 @@ func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
-		cell := mlCellName(col, colHeaderRow)
+		cell := mlCellName(col, 2)
 		label := ""
 		if i < len(details) {
 			label = details[i]
@@ -877,13 +940,8 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(dispBal))
 
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
-
-	// Back 侧：明细1~4 净额
-	for i := 0; i < 4 && i < len(pageDetails); i++ {
-		net := pageDetails[i].debit - pageDetails[i].credit
+	for i, pd := range pageDetails {
+		net := pd.debit - pd.credit
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
@@ -914,13 +972,8 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(dispBal))
 
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
-
-	// Back 侧：明细1~4 净额
-	for i := 0; i < 4 && i < len(pageDetails); i++ {
-		net := pageDetails[i].debit - pageDetails[i].credit
+	for i, pd := range pageDetails {
+		net := pd.debit - pd.credit
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)

@@ -144,19 +144,24 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 		startMM += w
 	}
 
-	// Excel 列号布局（保持向后兼容）
-	frontStart := bindingLeftCols + 1          // 左半起始（旧 Front 区）
-	pageGapStart := frontStart + backColCount  // 间隙
-	backStart := pageGapStart + 1              // 右半起始（旧 Back 区）
-	total := backStart + frontColCount + bindingRightCols
+	// Excel 列号布局
+	// A-B: Binding left (2 cols)
+	// C-M: Back 区 (11 cols: 7 basic + 4 detail) → 起始 col=3
+	// N:   Page gap (1 col)                      → 起始 col=14
+	// O-X: Front 区 (10 cols: 明细5~14)          → 起始 col=15
+	// Y-Z: Binding right (2 cols)
+	backStart := bindingLeftCols + 1          // = col 3 (左半 = Back 区)
+	pageGapStart := backStart + backColCount  // = col 14
+	frontStart := pageGapStart + 1            // = col 15 (右半 = Front 区)
+	total := frontStart + frontColCount + bindingRightCols
 
 	// 合并列名映射（Back + Front 两段）
 	var exc []MLExcelCol
 	for i, c := range backCols {
-		exc = append(exc, MLExcelCol{Name: c.Name, Col: frontStart + i})
+		exc = append(exc, MLExcelCol{Name: c.Name, Col: backStart + i})
 	}
 	for i, c := range frontCols {
-		exc = append(exc, MLExcelCol{Name: c.Name, Col: backStart + i})
+		exc = append(exc, MLExcelCol{Name: c.Name, Col: frontStart + i})
 	}
 
 	// Back 侧标题/科目合并列（左半）
@@ -194,14 +199,14 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 		AccountRow:        2,
 		HeaderRow:         4,
 		DataStartRow:      5,
-		BackTitleColLeft:      frontStart,
-		BackTitleColRight:     frontStart + backTitleSplit - 1,
-		BackAccountColLeft:    frontStart + backTitleSplit,
-		BackAccountColRight:   frontStart + backColCount - 1,
-		FrontTitleColLeft:     backStart,
-		FrontTitleColRight:    backStart + frontTitleSplit - 1,
-		FrontAccountColLeft:   backStart + frontTitleSplit,
-		FrontAccountColRight:  backStart + frontColCount - 1,
+		BackTitleColLeft:      backStart,
+		BackTitleColRight:     backStart + backTitleSplit - 1,
+		BackAccountColLeft:    backStart + backTitleSplit,
+		BackAccountColRight:   backStart + backColCount - 1,
+		FrontTitleColLeft:     frontStart,
+		FrontTitleColRight:    frontStart + frontTitleSplit - 1,
+		FrontAccountColLeft:   frontStart + frontTitleSplit,
+		FrontAccountColRight:  frontStart + frontColCount - 1,
 	}
 }
 

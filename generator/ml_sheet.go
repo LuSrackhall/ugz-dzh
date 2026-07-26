@@ -343,7 +343,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 
 	// Paper1 Front 占位页：Front 侧，页码=1，不写 Back 侧
 	lay := mlLayout()
-	if err := wb.writeMLPageHeader(name, 1, 0, 1, general, false, true); err != nil {
+	if err := wb.writeMLPageHeader(name, 1, 0, 0, general, false, true); err != nil {
 		return "", nil, nil, err
 	}
 	// Paper1 Front 表头行（第5行）写入实际明细科目名
@@ -640,7 +640,7 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 }
 
 // appendToMLSheet 追加分录到指定总账科目的多科目明细账 Sheet。
-// 采用滑动窗口页码：Back 侧页 = ppBack，Front 侧页 = ppBack+1。
+// 逻辑页号：数据块两侧页码相同
 // Paper1 Front 占位页已经由 ensureMLSheet 写入第1-5行。
 // 数据页标题从第6行开始。
 func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, detailIdx map[string]int, initial int64) error {
@@ -651,14 +651,14 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	rows, _ := wb.File.GetRows(sheet)
 	isNew := len(rows) <= 5
 
-	// ── 计算 ppBack：物理纸号（Back 侧页码）──
-	// ppBack = 已有过次页数 + 1
+	// ── 计算逻辑页号──
+	// logicalPageNum = 已有过次页数 + 1
 	// 首页 Back=Paper1, Front=Paper2
 	// 第 N 个数据块 Back=N, Front=N+1
-	ppBack := 1
+	logicalPageNum := 1
 	for _, r := range rows {
 		if len(r) > lay.BindingLeftCols+2 && r[lay.BindingLeftCols+2] == pageBreakLabel {
-			ppBack++
+			logicalPageNum++
 		}
 	}
 
@@ -677,8 +677,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 	if isNew {
 		// Paper1 Front 已在 rows 1-5（ensureMLSheet 写入）
-		// 写入第一个数据页标题：Back=Paper1(ppBack), Front=Paper2(ppBack+1)
-		wb.writeMLPageHeader(sheet, 6, ppBack, ppBack+1, general, true, true)
+		// 写入第一个数据页标题：两侧同一逻辑页号
+		wb.writeMLPageHeader(sheet, 6, logicalPageNum, logicalPageNum, general, true, true)
 
 		// 结转行在第11行（6 + DataStartRow = 6 + 5）
 		row = 6 + lay.DataStartRow // = 11
@@ -718,8 +718,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		if wb.mlLastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.mlLastBreakTotals(sheet)
 			pbDetails := wb.lastBreakDetailTotals(sheet)
-			ppBack++
-			wb.writeMLPageHeader(sheet, row, ppBack, ppBack+1, general, true, true)
+			logicalPageNum++
+			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
 			row++
@@ -732,8 +732,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		if wb.mlRowIsPageBreak(sheet, row) {
 			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails)
 			row++
-			ppBack++
-			wb.writeMLPageHeader(sheet, row, ppBack, ppBack+1, general, true, true)
+			logicalPageNum++
+			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel)
 			row++
@@ -777,7 +777,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 	// ── PaperN Back 尾页占位 ──
 	// 只写 Back 侧标题+表头，不写数据
-	wb.writeMLPageHeader(sheet, row, ppBack+1, 0, general, true, false)
+	wb.writeMLPageHeader(sheet, row, 0, 0, general, true, false)
 
 	return nil
 }
@@ -878,27 +878,27 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
-	// Row +0: "分第N页" — Back 侧
-	if hasBack {
+	// Row +0: "分第N页(左)" — Back 侧（backPageNum>0 时显示）
+	if hasBack && backPageNum > 0 {
 		pnBack := mlCellName(lay.BackTitleColLeft, row)
 		pnBackEnd := mlCellName(lay.BackTitleColRight, row)
 		wb.File.MergeCell(sheet, pnBack, pnBackEnd)
 		wb.File.SetCellRichText(sheet, pnBack, []excelize.RichTextRun{
 			{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
 			{Text: fmt.Sprintf("%d", backPageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
-			{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+			{Text: " 页(左)", Font: &excelize.Font{Color: darkGreen, Size: 10}},
 		})
 	}
 
-	// Row +0: "分第N页" — Front 侧
-	if hasFront {
+	// Row +0: "分第N页(右)" — Front 侧（frontPageNum>0 时显示）
+	if hasFront && frontPageNum > 0 {
 		pnFront := mlCellName(lay.FrontTitleColLeft, row)
 		pnFrontEnd := mlCellName(lay.FrontTitleColRight, row)
 		wb.File.MergeCell(sheet, pnFront, pnFrontEnd)
 		wb.File.SetCellRichText(sheet, pnFront, []excelize.RichTextRun{
 			{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
 			{Text: fmt.Sprintf("%d", frontPageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
-			{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+			{Text: " 页(右)", Font: &excelize.Font{Color: darkGreen, Size: 10}},
 		})
 	}
 	wb.File.SetRowHeight(sheet, row, 18)

@@ -65,81 +65,16 @@ func mlHasPageBreakAt(row []string, lay layout.MLLayout) bool {
 	return len(row) > summaryIdx && row[summaryIdx] == pageBreakLabel
 }
 
-// mlIsStructuralBreak 检查过次页行是否为结构预写（余额列为空字符串，无翻页数据）。
-// 注意：借方为 "0" 的过次页可能是真实翻页（收入类科目无借方），用余额列判断更可靠。
-func mlIsStructuralBreak(row []string, lay layout.MLLayout) bool {
-	balIdx := lay.BindingLeftCols + 6
-	return len(row) <= balIdx ||
-		strings.TrimSpace(row[balIdx]) == ""
-}
-
-// mlLastPeriodEndRow 从 Sheet 中找到最后一个"期末余额"行的行号（1-based）。
-// 期末余额永远是月结的最后一行，用它定位本月数据尾行，无需额外标记列。
-func (wb *Workbook) mlLastPeriodEndRow(sheet string) int {
-	rows, _ := wb.File.GetRows(sheet)
-	for i := len(rows) - 1; i >= 0; i-- {
-		if len(rows[i]) > 4 && rows[i][4] == periodEndLabel {
-			return i + 1
-		}
-	}
-	return 0
-}
-
-// mlLastContentRow 返回 Sheet 中最后一个有内容的行索引（0-based）。
-// 跳过尾部空行，但不跳过结构过次页（它是模板的一部分）。
-// 找不到返回 -1。
-func mlLastContentRow(rows [][]string) int {
-	for i := len(rows) - 1; i >= 0; i-- {
-		isEmpty := true
-		for k := 0; k < len(rows[i]); k++ {
-			if strings.TrimSpace(rows[i][k]) != "" {
-				isEmpty = false
-				break
-			}
-		}
-		if !isEmpty {
-			return i
-		}
-	}
-	return -1
-}
-
-// mlLastDataBeforeBreak 返回 Sheet 中最后一个数据行索引（0-based）。
-// 只跳过结构过次页（余额为空）和尾部空行。
-// 真实过次页（有余额数据）和月结行都算数据行。
-func mlLastDataBeforeBreak(rows [][]string, lay layout.MLLayout) int {
-	for i := len(rows) - 1; i >= 0; i-- {
-		// 只跳过结构过次页
-		if mlHasPageBreakAt(rows[i], lay) && mlIsStructuralBreak(rows[i], lay) {
-			continue
-		}
-		isEmpty := true
-		for k := 0; k < len(rows[i]); k++ {
-			if strings.TrimSpace(rows[i][k]) != "" {
-				isEmpty = false
-				break
-			}
-		}
-		if isEmpty {
-			continue
-		}
-		return i
-	}
-	return -1
-}
-
 // (wb *Workbook) mlNextDataRow 返回 Sheet 中下一个可用数据行号。
 // 找最后一条数据行（跳过空行和过次页），返回其下一行。
 // 数据自然填满空行，到第21行（过次页位置）时 mlRowIsPageBreak 触发翻页。
 func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
-	if err != nil || len(rows) < 3 {
+	if err != nil {
 		return lay.DataStartRow + 1, nil
 	}
-
-	lastDataIdx := mlLastDataBeforeBreak(rows, lay)
-	if lastDataIdx < 0 {
+	if len(rows) < 3 {
 		return lay.DataStartRow + 1, nil
 	}
 
@@ -147,13 +82,24 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	if mlHasPageBreakAt(rows[lastDataIdx], lay) && !mlIsStructuralBreak(rows[lastDataIdx], lay) {
 		return lastDataIdx + 2 + lay.DataStartRow, nil
 	}
-
-	return lastDataIdx + 2, nil // 0-indexed → 1-based, then +1 for next row
+	if lastBreak > 0 && lastBreak == len(rows) {
+		return lastBreak + 1, nil
+	}
+	if lastBreak > 0 && lastBreak+1 == len(rows) {
+		return len(rows) + 1, nil
+	}
+	dataStart := lastBreak + 1
+	if dataStart == 1 {
+		dataStart = lay.DataStartRow + 1
+	}
+	usedDataRows := len(rows) - dataStart + 1
+	if usedDataRows >= pageSize {
+		return len(rows) + 1, nil
+	}
+	return len(rows) + 1, nil
 }
 
-// (wb *Workbook) mlLastPageBalance 获取最近一个过次页结束的余额。
-// 有过次页时读最后一个过次页之前最近的期末余额或数据行余额。
-// 无过次页时从最后一行往前找最近的余额（跳过承前页和结构行）。
+// (wb *Workbook) mlLastPageBalance 获取最后一个过次页行的余额（仅从 Back 侧余额列读取）。
 func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -167,42 +113,9 @@ func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 			lastBreak = i
 			break
 		}
-	}
-	if lastBreak >= 0 {
-		// 找上一个过次页（或页首），确定当前页范围
-		prevBreak := 0
-		for i := lastBreak - 1; i >= 0; i-- {
-			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-				prevBreak = i + 1
-				break
-			}
-		}
-		// 优先：找最近的非承前页、非月结行的数据行余额（即分录行的 running balance）
-		for i := lastBreak - 1; i >= prevBreak; i-- {
-			r := rows[i]
-			if len(r) <= lay.BindingLeftCols+6 {
-				continue
-			}
-			summary := ""
-			if len(r) > lay.BindingLeftCols+2 {
-				summary = r[lay.BindingLeftCols+2]
-			}
-			// 跳过承前页行、月结行
-			if summary == carryForwardLabel || summary == "上年结转" ||
-				summary == "本月合计" || summary == "本季合计" || summary == "本年累计" || summary == periodEndLabel {
-				continue
-			}
-			balStr := strings.TrimSpace(r[lay.BindingLeftCols+6])
-			if balStr == "" {
-				continue
-			}
-			if v, err := yuanStrToCents(balStr); err == nil {
-				return v
-			}
-		}
-		// 回退到过次页行自身余额
-		if len(rows[lastBreak]) > lay.BindingLeftCols+6 {
-			if v, err := yuanStrToCents(rows[lastBreak][lay.BindingLeftCols+6]); err == nil {
+		balIdx := lay.BindingLeftCols + 6
+		if len(rows[i]) > balIdx {
+			if v, err := yuanStrToCents(rows[i][balIdx]); err == nil {
 				return v
 			}
 		}
@@ -280,7 +193,7 @@ func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < 3 {
-		return lay.DataStartRow + 1 + lay.DataStartRow
+		return lay.DataStartRow + 1
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
@@ -317,17 +230,19 @@ func (wb *Workbook) mlPageHasBreakRow(sheet string) bool {
 func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
-	if err != nil || len(rows) < 3 {
+	if err != nil {
 		return lay.DataStartRow + 1, nil
 	}
-
-	tailRow := wb.mlLastPeriodEndRow(sheet)
-	if tailRow > 0 {
-		// 检查尾行之后是否有真实过次页
-		for i := tailRow; i < len(rows); i++ {
-			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-				return i + 2 + lay.DataStartRow, nil
-			}
+	if len(rows) < 3 {
+		return lay.DataStartRow + 1, nil
+	}
+	lastBreak := 0
+	for i := len(rows) - 1; i >= 0; i-- {
+		r := rows[i]
+		if mlHasPageBreakAt(r, lay) || (len(r) > lay.BindingLeftCols+2 &&
+			(r[lay.BindingLeftCols+2] == "本月合计" || r[lay.BindingLeftCols+2] == periodEndLabel)) {
+			lastBreak = i + 1
+			break
 		}
 		return tailRow + 1, nil
 	}

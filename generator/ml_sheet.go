@@ -706,6 +706,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		}
 		wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
 		row++ // = 12：第一条分录
+		wb.preWriteMLPageBreak(sheet)
 		// preWrite removed — 由 break handler 负责
 	} else {
 		// 已有数据 — 找到下一个可用数据行

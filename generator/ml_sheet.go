@@ -501,7 +501,7 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 
 	rowData := rows[colHeaderRow-1]
 	for i := 0; i < mlMaxDetails; i++ {
-		colIdx := mlDetailRowIdx(lay, i)
+		colIdx := mlDetailRowIdx(lay, i) // GetRows 索引：i<4→BindingLeftCols+7+i(Back侧), i>=4→FrontStartCol-1+(i-4)(Front侧)
 		label := ""
 		if colIdx < len(rowData) {
 			label = strings.TrimSpace(rowData[colIdx])

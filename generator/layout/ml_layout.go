@@ -12,7 +12,8 @@ type MLSpec struct {
 	TitleSplitRatio   float64
 	ColHeaderRowCount int
 	DataRowsPerPage   int
-	ColProportions []MLColProportion
+	BackColProportions  []MLColProportion
+	FrontColProportions []MLColProportion
 }
 
 // MLColProportion 定义多科目明细账一列在内容区中的宽度占比。
@@ -29,13 +30,16 @@ type MLLayout struct {
 	PageGapWidthMM float64
 	BackLeftMM  float64
 	BackWidthMM float64
-	Columns []MLColumnPos
+	BackColumns []MLColumnPos
+	FrontColumns []MLColumnPos
 	BindingLeftCols  int
 	FrontStartCol    int
 	PageGapStartCol  int
 	BackStartCol     int
 	BindingRightCols int
 	TotalCols        int
+	BackColCount     int
+	FrontColCount    int
 	ExcelColumns []MLExcelCol
 	TitleRow     int
 	PageNumRow   int
@@ -48,6 +52,14 @@ type MLLayout struct {
 	AccountColRight  int
 	TitleColSpan     int
 	AccountColSpan   int
+	BackTitleColLeft      int
+	BackTitleColRight     int
+	FrontTitleColLeft     int
+	FrontTitleColRight    int
+	BackAccountColLeft    int
+	BackAccountColRight   int
+	FrontAccountColLeft   int
+	FrontAccountColRight  int
 }
 
 // MLColumnPos 列在一侧内容区中的位置（mm）
@@ -63,7 +75,7 @@ type MLExcelCol struct {
 	Col  int
 }
 
-// DefaultMLSpec 返回多科目明细账的默认布局配置（A4 横向，12 列/区）。
+// DefaultMLSpec 返回多科目明细账的默认布局配置（A4 横向，双面打印）。
 func DefaultMLSpec() MLSpec {
 	return MLSpec{
 		PaperWidthMM:      297,
@@ -75,19 +87,30 @@ func DefaultMLSpec() MLSpec {
 		TitleSplitRatio:   0.5,
 		ColHeaderRowCount: 1,
 		DataRowsPerPage:   20,
-		ColProportions: []MLColProportion{
+		BackColProportions: []MLColProportion{
 			{Name: "日期", Ratio: 8},
 			{Name: "凭证号", Ratio: 7},
 			{Name: "摘要", Ratio: 15},
 			{Name: "借方金额", Ratio: 10},
 			{Name: "贷方金额", Ratio: 10},
 			{Name: "方向", Ratio: 4},
-			{Name: "余额", Ratio: 8},
-			{Name: "明细1~4", Ratio: 8},
-			{Name: "明细5~6", Ratio: 8},
-			{Name: "明细7~8", Ratio: 8},
-			{Name: "明细9~10", Ratio: 8},
-			{Name: "金额分栏", Ratio: 6},
+			{Name: "余额", Ratio: 10},
+			{Name: "明细1", Ratio: 9},
+			{Name: "明细2", Ratio: 9},
+			{Name: "明细3", Ratio: 9},
+			{Name: "明细4", Ratio: 9},
+		},
+		FrontColProportions: []MLColProportion{
+			{Name: "明细5", Ratio: 10},
+			{Name: "明细6", Ratio: 10},
+			{Name: "明细7", Ratio: 10},
+			{Name: "明细8", Ratio: 10},
+			{Name: "明细9", Ratio: 10},
+			{Name: "明细10", Ratio: 10},
+			{Name: "明细11", Ratio: 10},
+			{Name: "明细12", Ratio: 10},
+			{Name: "明细13", Ratio: 10},
+			{Name: "明细14", Ratio: 10},
 		},
 	}
 }
@@ -101,34 +124,43 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 	bindingLeftCols := 2
 	bindingRightCols := 2
 
-	var cols []MLColumnPos
+	// Back 列（左侧区域 = 纸背数据）
+	var backCols []MLColumnPos
 	var startMM float64
-	for _, p := range spec.ColProportions {
+	for _, p := range spec.BackColProportions {
 		w := contentWidth * p.Ratio / 100.0
-		cols = append(cols, MLColumnPos{
-			Name:    p.Name,
-			StartMM: startMM,
-			WidthMM: w,
-		})
+		backCols = append(backCols, MLColumnPos{Name: p.Name, StartMM: startMM, WidthMM: w})
 		startMM += w
 	}
 
-	nCol := len(spec.ColProportions)
-	frontStart := bindingLeftCols + 1
-	pageGapStart := frontStart + nCol
-	backStart := pageGapStart + 1
-	total := backStart + nCol + bindingRightCols
-
-	var exc []MLExcelCol
-	for i := range cols {
-		exc = append(exc, MLExcelCol{Name: cols[i].Name, Col: frontStart + i})
+	// Front 列（右侧区域 = 纸正数据）
+	var frontCols []MLColumnPos
+	startMM = 0
+	for _, p := range spec.FrontColProportions {
+		w := contentWidth * p.Ratio / 100.0
+		frontCols = append(frontCols, MLColumnPos{Name: p.Name, StartMM: startMM, WidthMM: w})
+		startMM += w
 	}
 
-	titleCols := int(float64(nCol) * spec.TitleSplitRatio)
+	backColCount := len(spec.BackColProportions)
+	frontColCount := len(spec.FrontColProportions)
+	backStart := bindingLeftCols + 1           // = 3（左侧 = Back 数据）
+	pageGapStart := backStart + backColCount   // = 3 + 11 = 14
+	frontStart := pageGapStart + 1             // = 15（右侧 = Front 数据）
+	total := frontStart + frontColCount + bindingRightCols
+
+	// Front 区 Excel 列映射
+	var exc []MLExcelCol
+	for i := range frontCols {
+		exc = append(exc, MLExcelCol{Name: frontCols[i].Name, Col: frontStart + i})
+	}
+
+	// 向后兼容：Title/Account 按 Front 区拆分（与旧渲染器一致）
+	titleCols := frontColCount / 2
 	if titleCols < 1 {
 		titleCols = 1
 	}
-	accountCols := nCol - titleCols
+	accountCols := frontColCount - titleCols
 
 	return MLLayout{
 		FrontLeftMM:       frontLeft,
@@ -137,25 +169,38 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 		PageGapWidthMM:    spec.PageGapMM,
 		BackLeftMM:        backLeft,
 		BackWidthMM:       contentWidth,
-		Columns:           cols,
+		BackColumns:       backCols,
+		FrontColumns:      frontCols,
 		BindingLeftCols:   bindingLeftCols,
-		FrontStartCol:     frontStart,
-		PageGapStartCol:   pageGapStart,
 		BackStartCol:      backStart,
+		PageGapStartCol:   pageGapStart,
+		FrontStartCol:     frontStart,
 		BindingRightCols:  bindingRightCols,
 		TotalCols:         total,
+		BackColCount:      backColCount,
+		FrontColCount:     frontColCount,
 		ExcelColumns:      exc,
 		TitleRow:          1,
 		PageNumRow:        0,
 		AccountRow:        2,
 		HeaderRow:         4,
 		DataStartRow:      5,
+		// 向后兼容：旧 Title/Account 列（Front 区拆分）
 		TitleColLeft:      frontStart,
 		TitleColRight:     frontStart + titleCols - 1,
 		AccountColLeft:    frontStart + titleCols,
-		AccountColRight:   frontStart + nCol - 1,
+		AccountColRight:   frontStart + frontColCount - 1,
 		TitleColSpan:      titleCols,
 		AccountColSpan:    accountCols,
+		// 新 Back/Front 标题/科目列（各自占满整区宽度）
+		BackTitleColLeft:      backStart,
+		BackTitleColRight:     backStart + backColCount - 1,
+		FrontTitleColLeft:     frontStart,
+		FrontTitleColRight:    frontStart + frontColCount - 1,
+		BackAccountColLeft:    backStart,
+		BackAccountColRight:   backStart + backColCount - 1,
+		FrontAccountColLeft:   frontStart,
+		FrontAccountColRight:  frontStart + frontColCount - 1,
 	}
 }
 

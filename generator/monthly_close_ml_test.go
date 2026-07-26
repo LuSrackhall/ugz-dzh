@@ -105,11 +105,11 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 		t.Fatalf("GetRows: %v", err)
 	}
 
-	frontIdx := lay.FrontStartCol - 1
+	backIdx := lay.BackStartCol - 1
 	var qtRow, ytdRow []string
 	for _, r := range rows {
-		if len(r) >= frontIdx+3 {
-			switch r[frontIdx+2] {
+		if len(r) >= backIdx+3 {
+			switch r[backIdx+2] {
 			case "本季合计":
 				qtRow = r
 			case "本年累计":
@@ -124,18 +124,18 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 		t.Fatal("未找到'本年累计'行")
 	}
 
-	// 在 Layout 坐标下，借贷金额列在 index frontIdx+3 和 frontIdx+4
-	if len(qtRow) > frontIdx+4 && qtRow[frontIdx+3] != "4000" {
-		t.Errorf("本季合计 D(debit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[frontIdx+3], "4000")
+	// 月结行现在写入 Back 侧（索引 backIdx+3=借方, backIdx+4=贷方）
+	if len(qtRow) > backIdx+4 && qtRow[backIdx+3] != "4000" {
+		t.Errorf("本季合计 debit = %q, want %q (当月+本季累计全路径聚合)", qtRow[backIdx+3], "4000")
 	}
-	if len(qtRow) > frontIdx+4 && qtRow[frontIdx+4] != "1000" {
-		t.Errorf("本季合计 E(credit) = %q, want %q (当月+本季累计全路径聚合)", qtRow[frontIdx+4], "1000")
+	if len(qtRow) > backIdx+4 && qtRow[backIdx+4] != "1000" {
+		t.Errorf("本季合计 credit = %q, want %q (当月+本季累计全路径聚合)", qtRow[backIdx+4], "1000")
 	}
 
-	if len(ytdRow) > frontIdx+4 && ytdRow[frontIdx+3] != "6500" {
-		t.Errorf("本年累计 D(debit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[frontIdx+3], "6500")
+	if len(ytdRow) > backIdx+4 && ytdRow[backIdx+3] != "6500" {
+		t.Errorf("本年累计 debit = %q, want %q (当月+本年累计全路径聚合)", ytdRow[backIdx+3], "6500")
 	}
-	if len(ytdRow) > frontIdx+4 && ytdRow[frontIdx+4] != "1700" {
-		t.Errorf("本年累计 E(credit) = %q, want %q (当月+本年累计全路径聚合)", ytdRow[frontIdx+4], "1700")
+	if len(ytdRow) > backIdx+4 && ytdRow[backIdx+4] != "1700" {
+		t.Errorf("本年累计 credit = %q, want %q (当月+本年累计全路径聚合)", ytdRow[backIdx+4], "1700")
 	}
 }

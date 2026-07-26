@@ -193,7 +193,7 @@ func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < 3 {
-		return lay.DataStartRow + 1
+		return lay.DataStartRow + 1 + lay.DataStartRow
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {

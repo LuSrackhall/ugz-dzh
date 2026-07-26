@@ -913,24 +913,17 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 		wb.File.SetCellStyle(sheet, tlBack, trBack, titleStyle)
 	}
 
-	// Row +1: Front 侧标题区（科目名，印章红）
+	// Row +1: Front 侧标题（多科目明细账 — XXX），跨整个 Front 区
 	if hasFront {
-		tlFront := mlCellName(lay.FrontTitleColLeft, row)
-		trFront := mlCellName(lay.FrontTitleColRight, row)
+		tlFront := mlCellName(lay.FrontStartCol, row)
+		trFront := mlCellName(lay.FrontStartCol+lay.FrontColCount-1, row)
 		wb.File.MergeCell(sheet, tlFront, trFront)
-		wb.File.SetCellValue(sheet, tlFront, general)
-		accStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Color: sealRed, Size: 10},
+		wb.File.SetCellValue(sheet, tlFront, "多科目明细账 — "+general)
+		frontTitleStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Bold: true, Size: 14, Color: "006100", Underline: "double"},
 			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		})
-		wb.File.SetCellStyle(sheet, tlFront, trFront, accStyle)
-
-		// Row +1: Front 侧科目区（科目名，印章红）
-		alFront := mlCellName(lay.FrontAccountColLeft, row)
-		arFront := mlCellName(lay.FrontAccountColRight, row)
-		wb.File.MergeCell(sheet, alFront, arFront)
-		wb.File.SetCellValue(sheet, alFront, general)
-		wb.File.SetCellStyle(sheet, alFront, arFront, accStyle)
+		wb.File.SetCellStyle(sheet, tlFront, trFront, frontTitleStyle)
 	}
 	wb.File.SetRowHeight(sheet, row, 28)
 	row++

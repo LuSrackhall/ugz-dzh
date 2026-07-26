@@ -864,28 +864,6 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 // 翻页触发时 writeMLPageBreakRow 覆盖为完整数据；不触发时红色文字作为模板结构保留。
 }
 
-// completeMLPage 在月结后补齐当前页至 20 数据行，写入过次页。
-// 过次页的借贷合计传 0（跨月合计不在本函数计算范围内）。
-// balance 为当前余额，pageDetails 为明细净额（均传 0 也可）。
-func (wb *Workbook) completeMLPage(sheet string, currentRow int, balance int64) int {
-	pageStart := wb.mlPageStartRow(sheet)
-	dataUsed := currentRow - pageStart
-
-	if dataUsed >= pageSize {
-		// 页已满或超了 — 直接写过次页
-		wb.writeMLPageBreakRow(sheet, currentRow, balance, 0, 0, make([]mlDetailTotals, mlMaxDetails))
-		return currentRow + 1
-	}
-
-	emptyCount := pageSize - dataUsed
-	for i := 0; i < emptyCount; i++ {
-		currentRow++
-	}
-
-	wb.writeMLPageBreakRow(sheet, currentRow, balance, 0, 0, make([]mlDetailTotals, mlMaxDetails))
-	return currentRow + 1
-}
-
 
 // writeMLPageHeader 写入多科目明细账后续页双面标题行（过次页之后、承前页之前调用）。
 // 写入 Back 和/或 Front 两侧的标题、页码、科目名、列标题。

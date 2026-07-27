@@ -152,7 +152,7 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			Border: []excelize.Border{
 				{Type: "top", Color: "#006100", Style: 1},
 				{Type: "right", Color: "#006100", Style: 1},
-				{Type: "bottom", Color: "#006100", Style: 2},
+				{Type: "bottom", Color: "#006100", Style: 1},
 				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})

@@ -114,7 +114,7 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("多科目明细账月结: %w", err)
 	}
 
-	// 9.2 补齐多科目明细账最后一页 + 尾部占位页
+	// 9.2 补齐多科目明细账最后一页
 	wb.FinalizeMLPages()
 
 	// 9.5. 生成独立期末余额汇总 Sheet

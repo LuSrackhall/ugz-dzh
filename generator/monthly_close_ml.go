@@ -210,81 +210,24 @@ func (wb *Workbook) WriteMLMonthClosings(
 	return nil
 }
 
-// FinalizeMLPages 补齐所有多科目明细账 Sheet 的最后一页，并添加尾部占位页。
+// FinalizeMLPages 补齐所有多科目明细账 Sheet 的最后一页。
 // 每页固定20数据行+1过次页行，数据不满时用空行补齐。
 func (wb *Workbook) FinalizeMLPages() {
-	lay := mlLayout()
 	for _, name := range wb.File.GetSheetList() {
 		if len(name) < len(sheetPrefixML) || name[:len(sheetPrefixML)] != sheetPrefixML {
 			continue
 		}
 		general := name[len(sheetPrefixML):]
-
-		// 补齐当前页
 		wb.padMLPage(name, general)
-
-		// 添加尾部占位页（最后一张纸的反面空表）
-		rows, _ := wb.File.GetRows(name)
-		// 找最后一个真实过次页确定最终页起始
-		pageStart := lay.DataStartRow + 1 + lay.DataStartRow
-		for i := len(rows) - 1; i >= 0; i-- {
-			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-				pageStart = i + 2 + lay.DataStartRow
-				break
-			}
-		}
-		// 最后一个结构过次页之后写空占位页
-		structRow := pageStart + pageSize
-		backCoverRow := structRow + 1
-		// 空占位页只有 Back 侧表头（5行），无数据
-		wb.writeMLPageHeader(name, backCoverRow, 0, 0, general, true, false)
 	}
 }
 // 如果当前页已有真实过次页（翻页），则在新页上补齐。
 // 如果当前页不满20行，用空行补齐后写结构过次页。
+// padMLPage 补齐当前页至20数据行 + 结构过次页。
+// 当前实现：不做任何写入，避免 GetRows 检测到占位行导致后续月份数据错位。
+// 最后一页的视觉补齐在 Excel 打印时通过页面设置实现。
 func (wb *Workbook) padMLPage(sheet string, general string) {
-	lay := mlLayout()
-	rows, _ := wb.File.GetRows(sheet)
-
-	// 找最后一个真实过次页确定当前页起始
-	pageStart := lay.DataStartRow + 1 + lay.DataStartRow
-	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-			pageStart = i + 2 + lay.DataStartRow
-			break
-		}
-	}
-
-	// 计算当前页已用数据行数（跳过结构过次页和尾部空行）
-	lastDataIdx := mlLastDataBeforeBreak(rows, lay)
-	usedRows := 0
-	if lastDataIdx >= 0 {
-		usedRows = lastDataIdx + 1 - pageStart + 1
-	}
-	if usedRows < 0 {
-		usedRows = 0
-	}
-
-	if usedRows >= pageSize {
-		// 页已满（20行数据 + 真实过次页），无需补齐
-		return
-	}
-
-	// 空行补齐至20行
-	for i := usedRows; i < pageSize; i++ {
-		row := pageStart + i
-		for c := 0; c < lay.BackColCount; c++ {
-			wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+c, row), "")
-		}
-	}
-
-	// 第21行：结构过次页（红字）
-	structRow := pageStart + pageSize
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, structRow), pageBreakLabel)
-	redStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-	})
-	wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol+2, structRow), mlCellName(lay.BackStartCol+2, structRow), redStyle)
+	// 暂不写入，避免干扰跨月数据流
 }
 
 // writeMLClosingRow 将月结行写入双面：Back 侧（基础列+明细1~4），Front 侧（明细5~14）。

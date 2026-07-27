@@ -1057,14 +1057,16 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 		}
 	}
 
-	// 预写第21行红字"过次页"（视觉模板，不参与数据逻辑）
-	preRow := headerRow + lay.DataStartRow + pageSize
-	preCell := mlCellName(lay.BackStartCol+2, preRow)
-	wb.File.SetCellValue(sheet, preCell, pageBreakLabel)
-	preStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-	})
-	wb.File.SetCellStyle(sheet, preCell, preCell, preStyle)
+	// 真实数据页（非 Paper1 Front 占位）预写第21行红字"过次页"
+	if hasBack {
+		preRow := headerRow + lay.DataStartRow + pageSize
+		preCell := mlCellName(lay.BackStartCol+2, preRow)
+		wb.File.SetCellValue(sheet, preCell, pageBreakLabel)
+		preStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+		})
+		wb.File.SetCellStyle(sheet, preCell, preCell, preStyle)
+	}
 	return nil
 
 

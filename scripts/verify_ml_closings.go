@@ -10,6 +10,8 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+const mlBindingLeftCols = 2
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: go run scripts/verify_ml_closings.go <year_dir>\n")
@@ -94,7 +96,7 @@ func main() {
 			// Read detail headers from row 2
 			if detailHeaders[sheet] == nil && len(rows) >= 2 {
 				detailHeaders[sheet] = make(map[int]string)
-				for col := 7; col < len(rows[1]); col++ {
+				for col := mlBindingLeftCols + 7; col < len(rows[1]); col++ {
 					name := strings.TrimSpace(rows[1][col])
 					if name != "" {
 						detailHeaders[sheet][col] = name
@@ -109,11 +111,11 @@ func main() {
 				if len(r) < 3 {
 					continue
 				}
-				label := strings.TrimSpace(r[2])
+				label := strings.TrimSpace(r[mlBindingLeftCols+2])
 				if label == "本月合计" || label == "本季合计" || label == "本年累计" || label == "期末余额" {
 					break
 				}
-				if len(r) > 0 && strings.HasPrefix(strings.TrimSpace(r[0]), m) {
+				if len(r) > 0 && strings.HasPrefix(strings.TrimSpace(r[mlBindingLeftCols+0]), m) {
 					hasEntries = true
 					break
 				}
@@ -132,14 +134,14 @@ func main() {
 				if len(r) < 3 {
 					continue
 				}
-				label := strings.TrimSpace(r[2])
+				label := strings.TrimSpace(r[mlBindingLeftCols+2])
 				switch label {
 				case "本月合计":
 					if len(r) > 3 {
-						cd.monthDebit = yuanToCents(r[3])
+						cd.monthDebit = yuanToCents(r[mlBindingLeftCols+3])
 					}
 					if len(r) > 4 {
-						cd.monthCredit = yuanToCents(r[4])
+						cd.monthCredit = yuanToCents(r[mlBindingLeftCols+4])
 					}
 					for col := range detailHeaders[sheet] {
 						if col < len(r) {
@@ -148,17 +150,17 @@ func main() {
 					}
 				case "本季合计":
 					if len(r) > 3 {
-						cd.qtDebit = yuanToCents(r[3])
+						cd.qtDebit = yuanToCents(r[mlBindingLeftCols+3])
 					}
 					if len(r) > 4 {
-						cd.qtCredit = yuanToCents(r[4])
+						cd.qtCredit = yuanToCents(r[mlBindingLeftCols+4])
 					}
 				case "本年累计":
 					if len(r) > 3 {
-						cd.ytdDebit = yuanToCents(r[3])
+						cd.ytdDebit = yuanToCents(r[mlBindingLeftCols+3])
 					}
 					if len(r) > 4 {
-						cd.ytdCredit = yuanToCents(r[4])
+						cd.ytdCredit = yuanToCents(r[mlBindingLeftCols+4])
 					}
 					for col := range detailHeaders[sheet] {
 						if col < len(r) {
@@ -312,10 +314,10 @@ func main() {
 				if len(r) < 3 {
 					continue
 				}
-				if strings.TrimSpace(r[2]) == "本月合计" {
+				if strings.TrimSpace(r[mlBindingLeftCols+2]) == "本月合计" {
 					break
 				}
-				if len(r) > 0 && strings.HasPrefix(strings.TrimSpace(r[0]), m) {
+				if len(r) > 0 && strings.HasPrefix(strings.TrimSpace(r[mlBindingLeftCols+0]), m) {
 					hasEntries = true
 					break
 				}
@@ -325,11 +327,11 @@ func main() {
 			}
 			// Find YTD row in this inactive sheet
 			for _, r := range rows {
-				if len(r) >= 3 && strings.TrimSpace(r[2]) == "本年累计" {
-					ytdD := yuanToCents(r[3])
+				if len(r) >= 3 && strings.TrimSpace(r[mlBindingLeftCols+2]) == "本年累计" {
+					ytdD := yuanToCents(r[mlBindingLeftCols+3])
 					ytdC := int64(0)
 					if len(r) > 4 {
-						ytdC = yuanToCents(r[4])
+						ytdC = yuanToCents(r[mlBindingLeftCols+4])
 					}
 					if ytdD != lastActive.ytdDebit || ytdC != lastActive.ytdCredit {
 						fmt.Printf("FAIL %s %s (inactive): YTD(D=%d E=%d) != lastActive %s YTD(D=%d E=%d)\n",

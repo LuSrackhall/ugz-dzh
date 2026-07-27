@@ -62,11 +62,7 @@ type MLSpec struct {
 | 明细3 | 6 |
 | 明细4 | 6 |
 
-**Front（右半）**— 最多 10 明细列，等宽：
-
-| 列名 | 比例 |
-|---|---|
-| 明细5~14 | 各 10（等宽，动态） |
+**Front（右半）**— 最多 10 明细列，等宽。
 
 ## MLLayout 改动（Layer 2 输出）
 
@@ -77,20 +73,31 @@ type MLLayout struct {
     PageGapLeftMM, PageGapWidthMM float64
     BackLeftMM, BackWidthMM float64
 
-    // ⬇ 拆成两套
-    BackColumns  []MLColumnPos   // 左半列位置（11 列基准）
-    FrontColumns []MLColumnPos   // 右半列位置（最多 10 列，动态）
+    // ⬇ 拆成两套列坐标
+    BackColumns  []MLColumnPos   // 左半列位置
+    FrontColumns []MLColumnPos   // 右半列位置
 
-    // Excel 列映射（改意义）
+    // Excel 列映射
     BindingLeftCols  int   // 2
-    BackStartCol     int   // Front area → now means Back columns start
-    PageGapStartCol  int   // 1 col gap
-    FrontStartCol    int   // Back area → now means Front columns start
+    BackStartCol     int   // 左半起始列（基本列 + 明细1~4）
+    PageGapStartCol  int   // 间隙列
+    FrontStartCol    int   // 右半起始列（明细5~14）
     BindingRightCols int   // 2
     TotalCols        int
 
+    // Back 侧列数（用于计算 Back 区域宽度）
+    BackColCount    int
+    // Front 侧列数（用于计算 Front 区域宽度）
+    FrontColCount   int
+
     // 行号（不变，两侧共享）
     TitleRow, PageNumRow, AccountRow, HeaderRow, DataStartRow int
+
+    // 合并单元格用（两侧独立）
+    BackTitleColLeft, BackTitleColRight int
+    FrontTitleColLeft, FrontTitleColRight int
+    BackAccountColLeft, BackAccountColRight int
+    FrontAccountColLeft, FrontAccountColRight int
 }
 ```
 
@@ -155,7 +162,7 @@ type Spread struct {
 
 ## 月结适配
 
-Back 侧写基础列合计明细，Front 侧写明细5~14 净额。期末余额只在 Back 侧。
+Back 侧写基础列合计+明细1~4 净额，Front 侧写明细5~14 净额。期末余额只在 Back 侧。
 
 ## 测试策略
 

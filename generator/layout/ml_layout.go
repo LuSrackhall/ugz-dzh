@@ -198,7 +198,7 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 		PageNumRow:        0,
 		AccountRow:        2,
 		HeaderRow:         4,
-		DataStartRow:      6,
+		DataStartRow:      5,
 		BackTitleColLeft:      backStart,
 		BackTitleColRight:     backStart + backTitleSplit - 1,
 		BackAccountColLeft:    backStart + backTitleSplit,

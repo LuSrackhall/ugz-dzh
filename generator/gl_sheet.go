@@ -140,7 +140,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	yearLeft := cellName(lay.FrontStartCol, lay.HeaderRow+1)
 	yearRight := cellName(lay.FrontStartCol+1, lay.HeaderRow+1)
 	wb.File.MergeCell(sheet, yearLeft, yearRight)
-	wb.File.SetCellValue(sheet, yearLeft, year+"年")
+	// 年份用富文本：数字红色，"年"字绿色
+	yearRichText := []excelize.RichTextRun{
+		{Text: year, Font: &excelize.Font{Bold: true, Size: 10, Color: "CC0000"}},
+		{Text: "年", Font: &excelize.Font{Bold: true, Size: 10, Color: "006100"}},
+	}
+	wb.File.SetCellRichText(sheet, yearLeft, yearRichText)
 	// "凭证" 合并字+号两列
 	vouchLeft := cellName(lay.FrontStartCol+2, lay.HeaderRow+1)
 	vouchRight := cellName(lay.FrontStartCol+3, lay.HeaderRow+1)
@@ -168,7 +173,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	tickStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Color: "006100", Size: 12},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	for _, offset := range []int{6, 8, 11} {
 		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+offset, lay.HeaderRow+1),
@@ -176,9 +186,11 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	}
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10, Color: "006100"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
 		Border: []excelize.Border{
-			{Type: "bottom", Color: "#808080", Style: 1},
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
@@ -190,7 +202,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
-		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	dirCell := cellName(lay.FrontStartCol+9, lay.HeaderRow+1) // glColDir = 9
 	wb.File.SetCellStyle(sheet, dirCell, dirCell, wrapStyle)
@@ -459,6 +476,18 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
+		// 数据行绿色边框
+		dataBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Border: []excelize.Border{
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "left", Color: "#006100", Style: 1},
+			},
+		})
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+			cellName(dataCol(lay, pageNum, glColCount-1), row), dataBorderStyle)
+
 	}
 
 	return nil
@@ -634,9 +663,16 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), pageBreakLabel)
 	pbStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Color: "CC0000", Size: 10},
+		Font: &excelize.Font{Color: "CC0000", Size: 10},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
-	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 4), row), cellName(dataCol(lay, pageNum, 4), row), pbStyle)
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+		cellName(dataCol(lay, pageNum, glColCount-1), row), pbStyle)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(pageDebit))
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
@@ -662,6 +698,17 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	// 承前页行绿色边框
+	cfBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+		cellName(dataCol(lay, pageNum, glColCount-1), row), cfBorderStyle)
 }
 
 // writePageHeader 写入后续页标题行（过次页之后、承前页之前调用），包含页码、总分类账、科目名称、列标题。
@@ -796,9 +843,11 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	}
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10, Color: "006100"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
 		Border: []excelize.Border{
-			{Type: "bottom", Color: "#808080", Style: 1},
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
@@ -810,7 +859,12 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
-		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	dirCell := cellName(lay.FrontStartCol+9+colOffset, row) // glColDir = 9
 	wb.File.SetCellStyle(sheet, dirCell, dirCell, wrapStyle)

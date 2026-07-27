@@ -213,12 +213,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.HeaderRow+1),
 		cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1), topBorderStyle)
 
-	// 年、凭证列右侧红色边框（在顶部边框之后应用，覆盖右侧边框）
+	// 年、凭证列右侧红色边框（保留顶部红色边框）
 	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "top", Color: "CC0000", Style: 6},
 			{Type: "right", Color: "CC0000", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -969,12 +969,12 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOffset, row),
 		cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row), topBorderStyle)
 
-	// 年、凭证列右侧红色边框（在顶部边框之后应用，覆盖右侧边框）
+	// 年、凭证列右侧红色边框（保留顶部红色边框）
 	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "top", Color: "CC0000", Style: 6},
 			{Type: "right", Color: "CC0000", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},

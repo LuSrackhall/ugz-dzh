@@ -511,22 +511,12 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
-		// 应用金额样式（包含边框，每5行底边加粗）
+		// 计算是否为每5行
 		pageStart := wb.pageStartRow(sheet)
 		rowInPage := row - pageStart + 1
 		isThickRow := rowInPage%5 == 0
 
-		if isThickRow {
-			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
-			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
-			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
-		} else {
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-		}
-
-		// 非金额列边框（每5行底边加粗）
+		// 1. 先应用边框样式到整行（包含正确的底边粗细）
 		bottomBorder := 1
 		if isThickRow {
 			bottomBorder = 2
@@ -542,7 +532,7 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), borderStyle)
 
-		// 重新应用金额样式（覆盖非金额列边框中的金额列）
+		// 2. 再应用金额样式到金额列（覆盖边框，但保留金额格式）
 		if isThickRow {
 			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
 			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
@@ -751,6 +741,12 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), pageBreakLabel)
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(pageCredit))
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
+
+	// 过次页样式：红色字体、居中、底部双线红色边框
 	pbStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Color: "CC0000", Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
@@ -760,16 +756,10 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 			{Type: "bottom", Color: "CC0000", Style: 6},
 			{Type: "left", Color: "#006100", Style: 1},
 		},
+		CustomNumFmt: stringPtr("#,##0.00"),
 	})
 	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 		cellName(dataCol(lay, pageNum, glColCount-1), row), pbStyle)
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(pageDebit))
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(pageCredit))
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 }
 
 // writeCarryForwardRow 写"承前页"行。

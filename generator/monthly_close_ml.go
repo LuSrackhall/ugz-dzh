@@ -72,7 +72,26 @@ func (wb *Workbook) WriteMLMonthClosings(
 
 		lay := mlLayout()
 
-		// 检查是否需要过次页翻页
+		// 如果当前行到达结构过次页位置，先翻页再写月结
+		breakPos := wb.mlPageStartRow(sheet) + pageSize
+		if row >= breakPos {
+			bal := wb.mlLastPageBalance(sheet)
+			pageNum := 1
+			bRows, _ := wb.File.GetRows(sheet)
+			for _, br := range bRows {
+				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
+					pageNum++
+				}
+			}
+			pageNum++
+			wb.writeMLPageBreakRow(sheet, breakPos, bal, 0, 0, make([]mlDetailTotals, numDetails))
+			wb.writeMLPageHeader(sheet, breakPos+1, pageNum, pageNum, general, true, true)
+			cfRow := breakPos + 1 + lay.DataStartRow
+			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
+			row = cfRow + 1
+		}
+
+		// 检查是否需要过次页翻页（月结行逐行检查）
 		mlCheckPageBreak := func(r int) int {
 			breakPos := wb.mlPageStartRow(sheet) + pageSize
 			if r < breakPos {

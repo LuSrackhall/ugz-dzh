@@ -859,6 +859,21 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		row++
 	}
 
+	// 补齐结构过次页：如果当前页未满20行且无真实过次页，写红字占位
+	// 确保月结行写在新页面上，过次页在固定第21行位置
+	if !wb.mlPageHasBreakRow(sheet) {
+		breakPos := wb.mlPageStartRow(sheet) + pageSize
+		structCell := mlCellName(lay.BackStartCol+2, breakPos)
+		structVal, _ := wb.File.GetCellValue(sheet, structCell)
+		if structVal == "" {
+			wb.File.SetCellValue(sheet, structCell, pageBreakLabel)
+			redStyle, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+			})
+			wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
+		}
+	}
+
 	return nil
 }
 

@@ -151,8 +151,8 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	vouchRight := cellName(lay.FrontStartCol+3, lay.HeaderRow+1)
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
-	// 写列标题：摘要 | 借       方 | ✓ | 贷       方 | ✓ | 借或贷 | 余       额 | ✓
-	headerCols := []string{"摘要", "借       方", "✓", "贷       方", "✓", "借或贷", "余       额", "✓"}
+	// 写列标题：摘要 | 借                方 | ✓ | 贷                方 | ✓ | 借或贷 | 余                额 | ✓
+	headerCols := []string{"摘要", "借                方", "✓", "贷                方", "✓", "借或贷", "余                额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i, lay.HeaderRow+1)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -199,27 +199,37 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	he := cellName(lay.FrontStartCol+len(headerCols)+3, lay.SubHeaderRow+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// 年、凭证列右侧红色边框
-	redRightBorder, _ := wb.File.NewStyle(&excelize.Style{
+	// 年、凭证列右侧红色边框（叠加到已有样式上）
+	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "CC0000", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
 		},
 	})
 	// "年"列右侧（列1）
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+1, lay.HeaderRow+1),
-		cellName(lay.FrontStartCol+1, lay.SubHeaderRow+1), redRightBorder)
+		cellName(lay.FrontStartCol+1, lay.SubHeaderRow+1), redRightStyle)
 	// "凭证"列右侧（列3）
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3, lay.HeaderRow+1),
-		cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), redRightBorder)
+		cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), redRightStyle)
 
-	// 表格顶部双线红色边框（仅Row 4的上边框）
-	topRedBorder, _ := wb.File.NewStyle(&excelize.Style{
+	// 表格顶部双线红色边框（仅Row 4的上边框，保留其他边框）
+	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "top", Color: "CC0000", Style: 6},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
 		},
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.HeaderRow+1),
-		cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1), topRedBorder)
+		cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1), topBorderStyle)
 
 	// 借或贷列允许换行（覆盖已应用的表头样式）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -501,11 +511,7 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-
-		// 数据行绿色边框（每5行底边加粗）
+		// 数据行绿色边框（每5行底边加粗）— 先应用边框
 		pageStart := wb.pageStartRow(sheet)
 		rowInPage := row - pageStart + 1
 		bottomStyle := 1 // 细线
@@ -522,6 +528,11 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		})
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), dataBorderStyle)
+
+		// 再应用金额样式（包含边框，不会覆盖）
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
 	}
 

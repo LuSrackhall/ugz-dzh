@@ -61,6 +61,12 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 
 	moneyStyle, err := wb.File.NewStyle(&excelize.Style{
 		CustomNumFmt: stringPtr("#,##0.00"),
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建金额样式: %w", err)

@@ -64,6 +64,23 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), monthlyStyle)
 
+		// 应用每5行底边加粗样式
+		pageStart := wb.pageStartRow(sheet)
+		rowInPage := row - pageStart + 1
+		if rowInPage%5 == 0 {
+			thickBottomStyle, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Bold: true, Size: 10},
+				Border: []excelize.Border{
+					{Type: "top", Color: "#006100", Style: 1},
+					{Type: "right", Color: "#006100", Style: 1},
+					{Type: "bottom", Color: "#006100", Style: 2},
+					{Type: "left", Color: "#006100", Style: 1},
+				},
+			})
+			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+				cellName(dataCol(lay, pageNum, glColCount-1), row), thickBottomStyle)
+		}
+
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))

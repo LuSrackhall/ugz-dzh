@@ -151,8 +151,8 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	vouchRight := cellName(lay.FrontStartCol+3, lay.HeaderRow+1)
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
-	// 写列标题：摘要 | 借                方 | ✓ | 贷                方 | ✓ | 借或贷 | 余                额 | ✓
-	headerCols := []string{"摘要", "借                方", "✓", "贷                方", "✓", "借或贷", "余                额", "✓"}
+	// 写列标题：摘要 | 借                         方 | ✓ | 贷                         方 | ✓ | 借或贷 | 余                         额 | ✓
+	headerCols := []string{"摘要", "借                         方", "✓", "贷                         方", "✓", "借或贷", "余                         额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i, lay.HeaderRow+1)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -931,6 +931,38 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	hs := cellName(lay.FrontStartCol+colOffset, row)
 	he := cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
+
+	// 年、凭证列右侧红色边框
+	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "CC0000", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	// "年"列右侧（列1）
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+1+colOffset, row),
+		cellName(lay.FrontStartCol+1+colOffset, row+1), redRightStyle)
+	// "凭证"列右侧（列3）
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3+colOffset, row),
+		cellName(lay.FrontStartCol+3+colOffset, row+1), redRightStyle)
+
+	// 每页表格顶部双线红色边框
+	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "CC0000", Style: 6},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOffset, row),
+		cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row), topBorderStyle)
 
 	// 借或贷列允许换行（覆盖已应用的表头样式）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{

@@ -151,8 +151,8 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	vouchRight := cellName(lay.FrontStartCol+3, lay.HeaderRow+1)
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
-	// 写列标题：摘要 | 借方金额 | ✓ | 贷方金额 | ✓ | 借或贷 | 余额 | ✓
-	headerCols := []string{"摘要", "借方金额", "✓", "贷方金额", "✓", "借或贷", "余额", "✓"}
+	// 写列标题：摘要 | 借       方 | ✓ | 贷       方 | ✓ | 借或贷 | 余       额 | ✓
+	headerCols := []string{"摘要", "借       方", "✓", "贷       方", "✓", "借或贷", "余       额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i, lay.HeaderRow+1)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -198,6 +198,30 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	hs := cellName(lay.FrontStartCol, lay.HeaderRow+1)
 	he := cellName(lay.FrontStartCol+len(headerCols)+3, lay.SubHeaderRow+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
+
+	// 年、凭证列右侧红色边框
+	redRightBorder, _ := wb.File.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "right", Color: "CC0000", Style: 1},
+		},
+	})
+	// "年"列右侧（列1）
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+1, lay.HeaderRow+1),
+		cellName(lay.FrontStartCol+1, lay.SubHeaderRow+1), redRightBorder)
+	// "凭证"列右侧（列3）
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3, lay.HeaderRow+1),
+		cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), redRightBorder)
+
+	// 表格顶部和底部双线红色边框
+	doubleRedBorder, _ := wb.File.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "top", Color: "CC0000", Style: 6},
+			{Type: "bottom", Color: "CC0000", Style: 6},
+		},
+	})
+	// 顶部边框（Row 4）
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.HeaderRow+1),
+		cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1), doubleRedBorder)
 
 	// 借或贷列允许换行（覆盖已应用的表头样式）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -694,11 +718,12 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), pageBreakLabel)
 	pbStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10},
+		Font:      &excelize.Font{Color: "CC0000", Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
-			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "CC0000", Style: 6},
 			{Type: "left", Color: "#006100", Style: 1},
 		},
 	})
@@ -976,11 +1001,12 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 	// 写红色过次页标签（仅文字，无金额）
 	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4+colOff, breakRow), pageBreakLabel)
 	pbStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: sealRed, Size: 10},
+		Font:      &excelize.Font{Color: sealRed, Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
-			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "CC0000", Style: 6},
 			{Type: "left", Color: "#006100", Style: 1},
 		},
 	})
@@ -988,19 +1014,31 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 		cellName(lay.FrontStartCol+glColCount-1+colOff, breakRow), pbStyle)
 
 	// 为当前页所有数据行（20行+过次页行=21行）添加绿色边框
-	borderStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Border: []excelize.Border{
-			{Type: "top", Color: "#006100", Style: 1},
-			{Type: "right", Color: "#006100", Style: 1},
-			{Type: "bottom", Color: "#006100", Style: 1},
-			{Type: "left", Color: "#006100", Style: 1},
-		},
-	})
+	// 每5行底边加粗
 	startRow := pageStart
 	endRow := breakRow
 	for row := startRow; row <= endRow; row++ {
+		// 计算当前行是页内第几行（从1开始）
+		rowInPage := row - startRow + 1
+		// 每5行底边加粗
+		bottomStyle := 1 // 细线
+		if rowInPage%5 == 0 {
+			bottomStyle = 2 // 中粗
+		}
+		// 过次页行使用双线红色底边
+		if row == endRow {
+			continue // 过次页行已经有特殊样式
+		}
+		rowBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Border: []excelize.Border{
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: bottomStyle},
+				{Type: "left", Color: "#006100", Style: 1},
+			},
+		})
 		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, row),
-			cellName(lay.FrontStartCol+glColCount-1+colOff, row), borderStyle)
+			cellName(lay.FrontStartCol+glColCount-1+colOff, row), rowBorderStyle)
 	}
 
 	return nil

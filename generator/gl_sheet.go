@@ -987,6 +987,22 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, breakRow),
 		cellName(lay.FrontStartCol+glColCount-1+colOff, breakRow), pbStyle)
 
+	// 为当前页所有数据行（20行+过次页行=21行）添加绿色边框
+	borderStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	startRow := pageStart
+	endRow := breakRow
+	for row := startRow; row <= endRow; row++ {
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, row),
+			cellName(lay.FrontStartCol+glColCount-1+colOff, row), borderStyle)
+	}
+
 	return nil
 }
 

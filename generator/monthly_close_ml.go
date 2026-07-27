@@ -72,6 +72,15 @@ func (wb *Workbook) WriteMLMonthClosings(
 
 		lay := mlLayout()
 
+		// 月结不能覆盖预写的过次页，超了则翻到下一页
+		psStart := wb.mlPageStartRow(sheet)
+		preRow := psStart + pageSize
+		closingCount := 3
+		if isQuarterEnd(wb.Month) { closingCount = 4 }
+		if row+closingCount > preRow {
+			row = preRow + 1
+		}
+
 
 		// 本月合计
 		wb.writeMLClosingRow(sheet, row, "本月合计", mtdDebit, mtdCredit, mtdDetails, details, lay)

@@ -919,6 +919,7 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 //   Row +4: 列标题 — Back 侧（7基础列 + 明细1~4）| Front 侧（明细5~14）
 func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontPageNum int, general string, hasBack, hasFront bool) error {
 	lay := mlLayout()
+	headerRow := row
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
@@ -1055,6 +1056,15 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 		}
 	}
+
+	// 预写第21行红字"过次页"（视觉模板，不参与数据逻辑）
+	preRow := headerRow + lay.DataStartRow + pageSize
+	preCell := mlCellName(lay.BackStartCol+2, preRow)
+	wb.File.SetCellValue(sheet, preCell, pageBreakLabel)
+	preStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+	})
+	wb.File.SetCellStyle(sheet, preCell, preCell, preStyle)
 	return nil
 
 

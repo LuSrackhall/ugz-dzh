@@ -368,11 +368,12 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		}
 		_ = finalDetails
 
-		// 更新标题行（仅更新新增的列，Paper1 Front 表头在第5行）
+		// 更新标题行（仅更新新增的列，数据页列标题行）
 			lay := mlLayout()
+			colHeaderRow := 6 + lay.DataStartRow - 1
 			for _, nd := range newAppended {
 				col := mlDetailCol(lay, finalIdx[nd])
-				cell := mlCellName(col, 5)
+				cell := mlCellName(col, colHeaderRow)
 				wb.File.SetCellValue(name, cell, nd)
 		}
 			// 更新列宽（Front 侧明细列）
@@ -431,10 +432,11 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 	if err := wb.writeMLPageHeader(name, 1, 0, 0, general, false, true); err != nil {
 		return "", nil, nil, err
 	}
-	// Paper1 Front 表头行（第5行）写入实际明细科目名
+	// 数据页列标题行写入实际明细科目名
+	colHeaderRow := 6 + lay.DataStartRow - 1
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
-		cell := mlCellName(col, 5)
+		cell := mlCellName(col, colHeaderRow)
 		label := ""
 		if i < len(initDetails) {
 			label = initDetails[i]
@@ -502,13 +504,13 @@ func cellColLetter(col int) string {
 	return l
 }
 
-// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（Paper1 Front 第5行），以匹配当月明细科目集。
+// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（数据页列标题行），以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	lay := mlLayout()
 	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
-		cell := mlCellName(col, 5)
+		cell := mlCellName(col, colHeaderRow)
 		label := ""
 		if i < len(details) {
 			label = details[i]
@@ -528,16 +530,18 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取 Sheet %s: %w", sheet, err)
 	}
-	if len(rows) < 5 {
+
+	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based row number
+	if len(rows) < colHeaderRow {
 		return detailIdx, details, nil
 	}
 
-	row5 := rows[4]
+	rowData := rows[colHeaderRow-1]
 	for i := 0; i < mlMaxDetails; i++ {
 		colIdx := mlDetailRowIdx(lay, i)
 		label := ""
-		if colIdx < len(row5) {
-			label = strings.TrimSpace(row5[colIdx])
+		if colIdx < len(rowData) {
+			label = strings.TrimSpace(rowData[colIdx])
 		}
 		details[i] = label
 		if label != "" {

@@ -48,9 +48,11 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 			wb.File.SetCellValue(sheet, cell, "")
 		}
 	}
-	// 明细列标题（Paper1 Front 第5行）
-	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), 5), "工行")
-	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 1), 5), "建行")
+
+	// 明细列标题（数据页列标题行）
+	colHeaderRow := 6 + lay.DataStartRow - 1 // = 11
+	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), colHeaderRow), "工行")
+	wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 1), colHeaderRow), "建行")
 
 	// 数据行 — 使用 Layout 坐标（第12行起，在 Paper1 Front + 数据页标题 + 承前页之后）
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, 12), "2026-03-05")

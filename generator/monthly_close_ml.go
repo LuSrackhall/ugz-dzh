@@ -223,11 +223,40 @@ func (wb *Workbook) FinalizeMLPages() {
 }
 // 如果当前页已有真实过次页（翻页），则在新页上补齐。
 // 如果当前页不满20行，用空行补齐后写结构过次页。
-// padMLPage 补齐当前页至20数据行 + 结构过次页。
-// 当前实现：不做任何写入，避免 GetRows 检测到占位行导致后续月份数据错位。
-// 最后一页的视觉补齐在 Excel 打印时通过页面设置实现。
+// padMLPage 补齐当前页的结构过次页。
+// 空行不写入任何内容（SetCellValue 和 SetCellStyle 都会被 GetRows 检测到）。
 func (wb *Workbook) padMLPage(sheet string, general string) {
-	// 暂不写入，避免干扰跨月数据流
+	lay := mlLayout()
+	rows, _ := wb.File.GetRows(sheet)
+
+	pageStart := lay.DataStartRow + 1 + lay.DataStartRow
+	for i := len(rows) - 1; i >= 0; i-- {
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+			pageStart = i + 2 + lay.DataStartRow
+			break
+		}
+	}
+
+	lastDataIdx := mlLastDataBeforeBreak(rows, lay)
+	usedRows := 0
+	if lastDataIdx >= 0 {
+		usedRows = lastDataIdx + 1 - pageStart + 1
+	}
+	if usedRows < 0 || usedRows >= pageSize {
+		return
+	}
+
+	// 只写结构过次页的值（红字"过次页"），不碰空行
+	structRow := pageStart + pageSize
+	structCell := mlCellName(lay.BackStartCol+2, structRow)
+	structVal, _ := wb.File.GetCellValue(sheet, structCell)
+	if structVal == "" {
+		wb.File.SetCellValue(sheet, structCell, pageBreakLabel)
+		redStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+		})
+		wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
+	}
 }
 
 // writeMLClosingRow 将月结行写入双面：Back 侧（基础列+明细1~4），Front 侧（明细5~14）。

@@ -773,20 +773,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			return err
 		}
 		balance = wb.mlLastPageBalance(sheet)
-		if !wb.mlPageHasBreakRow(sheet) {
-			wb.markExistingMLPageForPrint(sheet)
-		}
-		wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
-		row++ // = 12：第一条分录
-		// preWrite removed — 由 break handler 负责
-	} else {
-		// 已有数据 — 找到下一个可用数据行
-		var err error
-		row, err = wb.mlNextDataRow(sheet)
-		if err != nil {
-			return err
-		}
-		balance = wb.mlLastPageBalance(sheet)
 		// 打印标记延迟到 FinalizeMLPages 统一添加
 	}
 

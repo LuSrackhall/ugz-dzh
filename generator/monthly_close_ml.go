@@ -72,31 +72,24 @@ func (wb *Workbook) WriteMLMonthClosings(
 
 		lay := mlLayout()
 
-		// 如果当前行到达结构过次页位置，先翻页再写月结
-		breakPos := wb.mlPageStartRow(sheet) + pageSize
-		if row >= breakPos {
-			bal := wb.mlLastPageBalance(sheet)
-			pageNum := 1
+		// 检查是否需要过次页翻页（月结行逐行检查）
+		// 只查找真实过次页，结构过次页只是模板占位不算翻页
+		findPageBreakRow := func() int {
 			bRows, _ := wb.File.GetRows(sheet)
-			for _, br := range bRows {
-				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
-					pageNum++
+			pageStart := wb.mlPageStartRow(sheet)
+			for i := pageStart; i < pageStart+pageSize+1 && i < len(bRows); i++ {
+				if mlHasPageBreakAt(bRows[i], lay) && !mlIsStructuralBreak(bRows[i], lay) {
+					return i + 1 // 1-based
 				}
 			}
-			pageNum++
-			wb.writeMLPageBreakRow(sheet, breakPos, bal, 0, 0, make([]mlDetailTotals, numDetails))
-			wb.writeMLPageHeader(sheet, breakPos+1, pageNum, pageNum, general, true, true)
-			cfRow := breakPos + 1 + lay.DataStartRow
-			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
-			row = cfRow + 1
+			return pageStart + pageSize
 		}
-
-		// 检查是否需要过次页翻页（月结行逐行检查）
 		mlCheckPageBreak := func(r int) int {
-			breakPos := wb.mlPageStartRow(sheet) + pageSize
-			if r < breakPos {
+			pbRow := findPageBreakRow()
+			if r < pbRow {
 				return r
 			}
+			// 到达过次页位置 → 翻页
 			bal := wb.mlLastPageBalance(sheet)
 			pageNum := 1
 			bRows, _ := wb.File.GetRows(sheet)
@@ -106,9 +99,9 @@ func (wb *Workbook) WriteMLMonthClosings(
 				}
 			}
 			pageNum++
-			wb.writeMLPageBreakRow(sheet, breakPos, bal, 0, 0, make([]mlDetailTotals, numDetails))
-			wb.writeMLPageHeader(sheet, breakPos+1, pageNum, pageNum, general, true, true)
-			cfRow := breakPos + 1 + lay.DataStartRow
+			wb.writeMLPageBreakRow(sheet, pbRow, bal, 0, 0, make([]mlDetailTotals, numDetails))
+			wb.writeMLPageHeader(sheet, pbRow+1, pageNum, pageNum, general, true, true)
+			cfRow := pbRow + 1 + lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
 			return cfRow + 1
 		}
@@ -224,6 +217,46 @@ func (wb *Workbook) WriteMLMonthClosings(
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
 		wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+
+		// 月结结束后补齐过次页：在当前页的固定第21行位置写红字占位
+		// 用数据行的最后位置计算，而非 mlPageStartRow（后者可能找不到结构过次页）
+		bRows, _ := wb.File.GetRows(sheet)
+		lastData := 0
+		for i := len(bRows) - 1; i >= 0; i-- {
+			if len(bRows[i]) > 4 && bRows[i][4] == "过次页" {
+				break // 已有过次页，不需要补齐
+			}
+			isEmpty := true
+			for _, c := range bRows[i] {
+				if c != "" { isEmpty = false; break }
+			}
+			if !isEmpty {
+				lastData = i + 1
+				break
+			}
+		}
+		if lastData > 0 {
+			// 计算当前页起始
+			pStart := lay.DataStartRow + 1 + lay.DataStartRow
+			for i := lastData - 1; i >= 0; i-- {
+				if len(bRows[i]) > 4 && bRows[i][4] == "过次页" {
+					pStart = i + 2 + lay.DataStartRow
+					break
+				}
+			}
+			padPos := pStart + pageSize
+			if padPos > len(bRows) {
+				padCell := mlCellName(lay.BackStartCol+2, padPos)
+				padVal, _ := wb.File.GetCellValue(sheet, padCell)
+				if padVal == "" {
+					wb.File.SetCellValue(sheet, padCell, pageBreakLabel)
+					redStyle, _ := wb.File.NewStyle(&excelize.Style{
+						Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+					})
+					wb.File.SetCellStyle(sheet, padCell, padCell, redStyle)
+				}
+			}
+		}
 	}
 
 	return nil

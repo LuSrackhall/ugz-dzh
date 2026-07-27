@@ -275,7 +275,7 @@ func (wb *Workbook) mlLastRowIsOrphanBreak(sheet string) bool {
 }
 
 // (wb *Workbook) mlPageStartRow 返回当前页第一个有效数据行的行号。
-// 只找真实过次页（有数据的），跳过结构过次页（模板占位）。
+// 结构过次页和真实过次页都算页面边界。
 func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -283,7 +283,7 @@ func (wb *Workbook) mlPageStartRow(sheet string) int {
 		return lay.DataStartRow + 1 + lay.DataStartRow
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) {
 			return i + 2 + lay.DataStartRow
 		}
 	}
@@ -857,21 +857,6 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 		// 打印标记延迟到 FinalizeMLPages 统一添加
 		row++
-	}
-
-	// 补齐结构过次页：如果当前页未满20行且无真实过次页，写红字占位
-	// 确保月结行写在新页面上，过次页在固定第21行位置
-	if !wb.mlPageHasBreakRow(sheet) {
-		breakPos := wb.mlPageStartRow(sheet) + pageSize
-		structCell := mlCellName(lay.BackStartCol+2, breakPos)
-		structVal, _ := wb.File.GetCellValue(sheet, structCell)
-		if structVal == "" {
-			wb.File.SetCellValue(sheet, structCell, pageBreakLabel)
-			redStyle, _ := wb.File.NewStyle(&excelize.Style{
-				Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-			})
-			wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
-		}
 	}
 
 	return nil

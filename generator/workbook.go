@@ -142,7 +142,7 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 const (
 	sheetPrefixGL = "总分类账-"
 	sheetPrefixML = "多科目明细账-"
-	pageBreakLabel = "过 次 页"
+	pageBreakLabel = "过    次    页"
 	periodEndLabel = "期末余额"
 )
 

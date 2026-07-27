@@ -212,16 +212,14 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3, lay.HeaderRow+1),
 		cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), redRightBorder)
 
-	// 表格顶部和底部双线红色边框
-	doubleRedBorder, _ := wb.File.NewStyle(&excelize.Style{
+	// 表格顶部双线红色边框（仅Row 4的上边框）
+	topRedBorder, _ := wb.File.NewStyle(&excelize.Style{
 		Border: []excelize.Border{
 			{Type: "top", Color: "CC0000", Style: 6},
-			{Type: "bottom", Color: "CC0000", Style: 6},
 		},
 	})
-	// 顶部边框（Row 4）
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.HeaderRow+1),
-		cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1), doubleRedBorder)
+		cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1), topRedBorder)
 
 	// 借或贷列允许换行（覆盖已应用的表头样式）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -507,12 +505,18 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
-		// 数据行绿色边框
+		// 数据行绿色边框（每5行底边加粗）
+		pageStart := wb.pageStartRow(sheet)
+		rowInPage := row - pageStart + 1
+		bottomStyle := 1 // 细线
+		if rowInPage%5 == 0 {
+			bottomStyle = 2 // 中粗
+		}
 		dataBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Border: []excelize.Border{
 				{Type: "top", Color: "#006100", Style: 1},
 				{Type: "right", Color: "#006100", Style: 1},
-				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: bottomStyle},
 				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})

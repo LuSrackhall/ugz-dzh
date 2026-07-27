@@ -746,9 +746,9 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
-	// 过次页样式：红色字体、居中、底部双线红色边框
-	pbStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Color: "CC0000", Size: 10},
+	// 过次页样式：其他列黑色字体、居中、绿色边框+红色底边双线
+	normalStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "top", Color: "#006100", Style: 1},
@@ -759,7 +759,21 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 		CustomNumFmt: stringPtr("#,##0.00"),
 	})
 	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
-		cellName(dataCol(lay, pageNum, glColCount-1), row), pbStyle)
+		cellName(dataCol(lay, pageNum, glColCount-1), row), normalStyle)
+
+	// 过次页标签列：红色字体
+	redLabelStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Color: "CC0000", Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "CC0000", Style: 6},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 4), row),
+		cellName(dataCol(lay, pageNum, 4), row), redLabelStyle)
 }
 
 // writeCarryForwardRow 写"承前页"行。
@@ -1056,8 +1070,10 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 
 	// 写红色过次页标签（仅文字，无金额）
 	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+4+colOff, breakRow), pageBreakLabel)
-	pbStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Color: sealRed, Size: 10},
+
+	// 其他列样式：黑色字体、居中、绿色边框+红色底边双线
+	normalStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "top", Color: "#006100", Style: 1},
@@ -1067,7 +1083,21 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 		},
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, breakRow),
-		cellName(lay.FrontStartCol+glColCount-1+colOff, breakRow), pbStyle)
+		cellName(lay.FrontStartCol+glColCount-1+colOff, breakRow), normalStyle)
+
+	// 标签列样式：红色字体
+	redLabelStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Color: sealRed, Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "CC0000", Style: 6},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+4+colOff, breakRow),
+		cellName(lay.FrontStartCol+4+colOff, breakRow), redLabelStyle)
 
 	// 为当前页所有数据行（20行+过次页行=21行）添加绿色边框
 	// 每5行底边加粗

@@ -269,7 +269,7 @@ func (wb *Workbook) mlLastRowIsOrphanBreak(sheet string) bool {
 }
 
 // (wb *Workbook) mlPageStartRow 返回当前页第一个有效数据行的行号。
-// 结构过次页和真实过次页都算页面边界。
+// 从后往前找最近的过次页（结构或真实），用它作为当前页边界。
 func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)

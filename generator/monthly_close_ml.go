@@ -76,6 +76,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			breakPos := wb.mlPageStartRow(sheet) + pageSize
 			if row >= breakPos {
 				bal := wb.mlLastPageBalance(sheet)
+				// 计算新页页码：已有真实过次页数 + 本次翻页 = 新页码
 				pageNum := 1
 				bRows, _ := wb.File.GetRows(sheet)
 				for _, br := range bRows {
@@ -83,6 +84,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 						pageNum++
 					}
 				}
+				pageNum++ // 加上本次即将写入的过次页
 				wb.writeMLPageBreakRow(sheet, breakPos, bal, 0, 0, make([]mlDetailTotals, mlMaxDetails))
 				wb.writeMLPageHeader(sheet, breakPos+1, pageNum, pageNum, general, true, true)
 				cfRow := breakPos + 1 + lay.DataStartRow

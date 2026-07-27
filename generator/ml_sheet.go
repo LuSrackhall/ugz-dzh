@@ -1036,11 +1036,23 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	// Row +3: 空行
 	row++
 
-	// Row +4: 列标题 — Back 侧（7基础列 + 明细1~4）
+	// Row +4: 列标题 — Back 侧（两行表头：年|凭证 合并，子表头 月|日|字|号）
+	year := wb.Month[:4]
 	if hasBack {
-		backColNames := []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "方向", "余额"}
-		for i, h := range backColNames {
-			cell := mlCellName(lay.BackStartCol+i, row)
+		// "年" 合并月+日两列
+		yearLeft := mlCellName(lay.BackStartCol, row)
+		yearRight := mlCellName(lay.BackStartCol+1, row)
+		wb.File.MergeCell(sheet, yearLeft, yearRight)
+		wb.File.SetCellValue(sheet, yearLeft, year+"年")
+		// "凭证" 合并字+号两列
+		vouchLeft := mlCellName(lay.BackStartCol+2, row)
+		vouchRight := mlCellName(lay.BackStartCol+3, row)
+		wb.File.MergeCell(sheet, vouchLeft, vouchRight)
+		wb.File.SetCellValue(sheet, vouchLeft, "凭证")
+		// 摘要 ~ 余额 各占单列
+		otherCols := []string{"摘要", "借方金额", "贷方金额", "方向", "余额"}
+		for i, h := range otherCols {
+			cell := mlCellName(lay.BackStartCol+4+i, row)
 			wb.File.SetCellValue(sheet, cell, h)
 		}
 		// Back 侧明细1~4 列标题
@@ -1066,28 +1078,44 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 		Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	// Back 侧基础列表头样式
+	// Back 侧基础列表头样式（Row +4）
 	if hasBack {
 		hsBack := mlCellName(lay.BackStartCol, row)
 		heBack := mlCellName(lay.BackStartCol+6, row)
 		wb.File.SetCellStyle(sheet, hsBack, heBack, headerStyle)
-		// Back 侧明细1~4 表头样式
 		for i := 0; i < 4 && i < mlMaxDetails; i++ {
 			cell := mlCellName(mlDetailCol(lay, i), row)
 			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 		}
 	}
-	// Front 侧明细5~14 表头样式
+	// Front 侧明细5~14 表头样式（Row +4）
 	if hasFront {
 		for i := 4; i < mlMaxDetails; i++ {
 			cell := mlCellName(mlDetailCol(lay, i), row)
 			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 		}
 	}
+	row++
+
+	// Row +5: 子表头 — Back 侧前4列（月/日/字/号）
+	if hasBack {
+		subHeaders := []string{"月", "日", "字", "号"}
+		for i, h := range subHeaders {
+			cell := mlCellName(lay.BackStartCol+i, row)
+			wb.File.SetCellValue(sheet, cell, h)
+		}
+		subStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Size: 9, Color: darkGreen},
+			Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		})
+		subLeft := mlCellName(lay.BackStartCol, row)
+		subRight := mlCellName(lay.BackStartCol+3, row)
+		wb.File.SetCellStyle(sheet, subLeft, subRight, subStyle)
+	}
 
 	return nil
-
-
 }
 
 // lastBreakDetailTotals 读取最后一个过次页行的各明细列净额。

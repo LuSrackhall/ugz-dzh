@@ -104,13 +104,14 @@ func mlLastContentRow(rows [][]string) int {
 	return -1
 }
 
-// mlLastDataBeforeBreak 返回 Sheet 中最后一个真实过次页之前的有效数据行索引（0-based）。
-// 跳过结构预写行、真实过次页行、以及尾部空行。
-// 找不到返回 -1。
+// mlLastDataBeforeBreak 返回 Sheet 中最后一个数据行索引（0-based）。
+// 只跳过结构过次页（余额为空）和尾部空行。
+// 真实过次页（有余额数据）和月结行都算数据行。
 func mlLastDataBeforeBreak(rows [][]string, lay layout.MLLayout) int {
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
-			continue // 所有过次页（结构或真实）都跳过
+		// 只跳过结构过次页
+		if mlHasPageBreakAt(rows[i], lay) && mlIsStructuralBreak(rows[i], lay) {
+			continue
 		}
 		isEmpty := true
 		for k := 0; k < len(rows[i]); k++ {
@@ -140,6 +141,11 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	lastDataIdx := mlLastDataBeforeBreak(rows, lay)
 	if lastDataIdx < 0 {
 		return lay.DataStartRow + 1, nil
+	}
+
+	// 如果最后一条数据是真实过次页 → 新页面，承前页在 DataStartRow 后
+	if mlHasPageBreakAt(rows[lastDataIdx], lay) && !mlIsStructuralBreak(rows[lastDataIdx], lay) {
+		return lastDataIdx + 2 + lay.DataStartRow, nil
 	}
 
 	return lastDataIdx + 2, nil // 0-indexed → 1-based, then +1 for next row
@@ -269,7 +275,7 @@ func (wb *Workbook) mlLastRowIsOrphanBreak(sheet string) bool {
 }
 
 // (wb *Workbook) mlPageStartRow 返回当前页第一个有效数据行的行号。
-// 从后往前找最近的过次页（结构或真实），用它作为当前页边界。
+// 只找真实过次页（有数据的），跳过结构过次页（模板占位）。
 func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -277,7 +283,7 @@ func (wb *Workbook) mlPageStartRow(sheet string) int {
 		return lay.DataStartRow + 1 + lay.DataStartRow
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			return i + 2 + lay.DataStartRow
 		}
 	}

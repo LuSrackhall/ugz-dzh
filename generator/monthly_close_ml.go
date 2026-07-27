@@ -205,6 +205,9 @@ func (wb *Workbook) WriteMLMonthClosings(
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
 		wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+
+		// 写入月度尾行标记：标记本月数据到此为止
+		wb.writeMLMonthTail(sheet, row, wb.Month)
 	}
 
 	return nil

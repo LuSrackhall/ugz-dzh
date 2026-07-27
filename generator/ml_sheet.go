@@ -14,6 +14,7 @@ import (
 const (
 	mlMaxDetails     = 14 // 明细科目上限
 	mlDetailStartCol = 8  // 明细列起始列 H（保留常量用于非 Layout 上下文）
+	mlMonthTailCol   = 1  // 月度尾行标记列（B列，BindingLeftCols 内）
 )
 
 // mlLayout 返回多科目明细账的布局规格（独立于 GL 布局）。
@@ -71,6 +72,23 @@ func mlIsStructuralBreak(row []string, lay layout.MLLayout) bool {
 	balIdx := lay.BindingLeftCols + 6
 	return len(row) <= balIdx ||
 		strings.TrimSpace(row[balIdx]) == ""
+}
+
+// writeMLMonthTail 在指定行的标记列写入月份标识，标记本月数据到此为止。
+func (wb *Workbook) writeMLMonthTail(sheet string, row int, month string) {
+	wb.File.SetCellValue(sheet, mlCellName(mlMonthTailCol+1, row), month) // +1 因为 mlCellName 是1-based
+}
+
+// mlLastMonthTailRow 从标记列找到最后一个有月份标记的行号（1-based）。
+// 找不到返回 0。
+func (wb *Workbook) mlLastMonthTailRow(sheet string) int {
+	rows, _ := wb.File.GetRows(sheet)
+	for i := len(rows) - 1; i >= 0; i-- {
+		if mlMonthTailCol < len(rows[i]) && strings.TrimSpace(rows[i][mlMonthTailCol]) != "" {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // mlLastDataBeforeBreak 返回 Sheet 中最后一个真实过次页之前的有效数据行索引（0-based）。
@@ -299,8 +317,8 @@ func (wb *Workbook) mlPageHasBreakRow(sheet string) bool {
 	return false
 }
 
-// (wb *Workbook) mlNextDataRowAfterBreak 返回过次页/月结等非数据行后的下一个可用数据行（ML 版）。
-// 与 mlNextDataRow 的区别：此函数用于月结追加，需识别已有分录行作为数据边界。
+// (wb *Workbook) mlNextDataRowAfterBreak 返回月结追加的下一个可用数据行（ML 版）。
+// 优先使用月度尾行标记列定位，无标记时回退到行扫描。
 func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -308,21 +326,30 @@ func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 		return lay.DataStartRow + 1, nil
 	}
 
+	// 优先：从标记列找到最后一个月度尾行
+	tailRow := wb.mlLastMonthTailRow(sheet)
+	if tailRow > 0 {
+		// 检查尾行之后是否有真实过次页（翻页）
+		for i := tailRow; i < len(rows); i++ {
+			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+				return i + 2 + lay.DataStartRow, nil
+			}
+		}
+		return tailRow + 1, nil
+	}
+
+	// 回退：旧行扫描逻辑
 	lastDataIdx := mlLastDataBeforeBreak(rows, lay)
 	if lastDataIdx < 0 {
 		return lay.DataStartRow + 1, nil
 	}
-
-	lastRow := lastDataIdx + 1 // 1-based
-
-	// 从 lastDataIdx 往后找真实过次页
+	lastRow := lastDataIdx + 1
 	for i := lastDataIdx + 1; i < len(rows); i++ {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			return i + 2 + lay.DataStartRow, nil
 		}
 		return tailRow + 1, nil
 	}
-
 	return lastRow + 1, nil
 }
 

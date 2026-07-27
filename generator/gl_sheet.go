@@ -204,6 +204,14 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.SubHeaderRow+1), cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), subHStyle)
 
+	// ── 行高 ──
+	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 26)  // Row 4: 表头行1
+	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 26)  // Row 5: 表头行2
+	// 数据区默认行高 23（Row 6+）
+	for row := lay.DataStartRow + 1; row <= lay.DataStartRow+pageSize+1; row++ {
+		wb.File.SetRowHeight(sheet, row, 23)
+	}
+
 	// ── 列宽（按比例分配） ──
 	for i, c := range lay.Columns {
 		if i >= len(lay.ExcelColumns) {
@@ -745,6 +753,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	row++
 
 	// Row N+3: 顶层列标题 — N 年（合并月/日两列）+ 凭证号/摘要/金额
+	wb.File.SetRowHeight(sheet, row, 26) // 表头行1
 	year := wb.Month[:4]
 	yearLeft := cellName(lay.FrontStartCol+colOffset, row)
 	yearRight := cellName(lay.FrontStartCol+1+colOffset, row)
@@ -804,6 +813,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	row++
 
 	// Row N+4: 子表头 — 月 | 日 | 字 | 号
+	wb.File.SetRowHeight(sheet, row, 26) // 表头行2
 	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+colOffset, row), "月")
 	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+1+colOffset, row), "日")
 	wb.File.SetCellValue(sheet, cellName(lay.FrontStartCol+2+colOffset, row), "字")
@@ -813,7 +823,11 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOffset, row), cellName(lay.FrontStartCol+3+colOffset, row), subHStyle)
-	row++
+
+	// 数据区行高 23（Row N+5 起，共 pageSize 行）
+	for i := 1; i <= pageSize+1; i++ {
+		wb.File.SetRowHeight(sheet, row+i, 23)
+	}
 
 	return nil
 }

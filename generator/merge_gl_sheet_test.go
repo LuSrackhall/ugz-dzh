@@ -83,16 +83,16 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 		t.Errorf("row 6 summary = %q, want [打印机] 购打印机", got)
 	}
 	// Money columns
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+5); got == "" || got == "0" {
+	if got := getRowCol(rows, 5, lay.BindingLeftCols+glColDebit); got == "" || got == "0" {
 		t.Errorf("row 5 debit empty, got %q", got)
 	}
-	if got := getRowCol(rows, 6, lay.BindingLeftCols+5); got == "" || got == "0" {
+	if got := getRowCol(rows, 6, lay.BindingLeftCols+glColDebit); got == "" || got == "0" {
 		t.Errorf("row 6 debit empty, got %q", got)
 	}
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+8); got == "" || got == "0" {
+	if got := getRowCol(rows, 5, lay.BindingLeftCols+glColBalance); got == "" || got == "0" {
 		t.Errorf("row 5 balance empty, got %q", got)
 	}
-	if got := getRowCol(rows, 6, lay.BindingLeftCols+8); got == "" || got == "0" {
+	if got := getRowCol(rows, 6, lay.BindingLeftCols+glColBalance); got == "" || got == "0" {
 		t.Errorf("row 6 balance empty, got %q", got)
 	}
 }

@@ -141,7 +141,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "top", Color: "#808080", Style: 1}},
 		})
-		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), monthlyStyle)
+		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+mlOffBalance, row), monthlyStyle)
 		wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), monthlyStyle)
 		row++
 
@@ -182,7 +182,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
-			wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), qtStyle)
+			wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+mlOffBalance, row), qtStyle)
 			wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), qtStyle)
 			row++
 		}
@@ -224,7 +224,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		})
-		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), cumStyle)
+		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+mlOffBalance, row), cumStyle)
 		wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), cumStyle)
 		row++
 
@@ -232,26 +232,29 @@ func (wb *Workbook) WriteMLMonthClosings(
 		row = mlCheckPageBreak(row)
 		endBalance := initials[general] + mtdDebit - mtdCredit
 		endDir, endDisp := directionFor(endBalance, 0)
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), periodEndLabel)
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, row), "")
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), "")
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), endDir)
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(endDisp))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffMonth, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDay, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffVouChar, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffVouNum, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffSummary, row), periodEndLabel)
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDebit, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffCredit, row), "")
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDir, row), endDir)
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffBalance, row), centsToYuan(endDisp))
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "bottom", Color: "#000000", Style: 2}},
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
-		wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+		wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffBalance)
 
 		// 月结结束后补齐过次页：在当前页的固定第21行位置写红字占位
 		// 用数据行的最后位置计算，而非 mlPageStartRow（后者可能找不到结构过次页）
+		sumIdx := lay.BindingLeftCols + mlOffSummary
 		bRows2, _ := wb.File.GetRows(sheet)
 		lastData := 0
 		for i := len(bRows2) - 1; i >= 0; i-- {
-			if len(bRows2[i]) > 4 && bRows2[i][4] == "过次页" {
+			if len(bRows2[i]) > sumIdx && bRows2[i][sumIdx] == "过次页" {
 				break // 已有过次页，不需要补齐
 			}
 			isEmpty := true
@@ -267,14 +270,14 @@ func (wb *Workbook) WriteMLMonthClosings(
 			// 计算当前页起始
 			pStart := lay.DataStartRow + 1 + lay.DataStartRow
 			for i := lastData - 1; i >= 0; i-- {
-				if len(bRows2[i]) > 4 && bRows2[i][4] == "过次页" {
+				if len(bRows2[i]) > sumIdx && bRows2[i][sumIdx] == "过次页" {
 					pStart = i + 2 + lay.DataStartRow
 					break
 				}
 			}
 			padPos := pStart + pageSize
 			if padPos > len(bRows) {
-				padCell := mlCellName(lay.BackStartCol+2, padPos)
+				padCell := mlCellName(lay.BackStartCol+mlOffSummary, padPos)
 				padVal, _ := wb.File.GetCellValue(sheet, padCell)
 				if padVal == "" {
 					wb.File.SetCellValue(sheet, padCell, pageBreakLabel)
@@ -328,7 +331,7 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 
 	// 只写结构过次页的值（红字"过次页"），不碰空行
 	structRow := pageStart + pageSize
-	structCell := mlCellName(lay.BackStartCol+2, structRow)
+	structCell := mlCellName(lay.BackStartCol+mlOffSummary, structRow)
 	structVal, _ := wb.File.GetCellValue(sheet, structCell)
 	if structVal == "" {
 		wb.File.SetCellValue(sheet, structCell, pageBreakLabel)
@@ -337,20 +340,33 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 		})
 		wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
 	}
+
+	// PaperN Back 尾部占位：反面空白占位表（Back 侧标题，无页码）
+	wb.writeMLPageHeader(sheet, structRow+1, 0, 0, general, true, false)
+	// 占位页底部结构过次页
+	pnStructRow := structRow + 1 + lay.DataStartRow + pageSize
+	pnCell := mlCellName(lay.BackStartCol+mlOffSummary, pnStructRow)
+	wb.File.SetCellValue(sheet, pnCell, pageBreakLabel)
+	redS, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+	})
+	wb.File.SetCellStyle(sheet, pnCell, pnCell, redS)
 }
 
 // writeMLClosingRow 将月结行写入双面：Back 侧（基础列+明细1~4），Front 侧（明细5~14）。
 func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit, credit int64, details []mlDetailTotals, detailsList []string, lay layout.MLLayout) {
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), label)
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, row), centsToYuan(debit))
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), centsToYuan(credit))
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), "")
-	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), "")
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
-	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffMonth, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDay, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffVouChar, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffVouNum, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffSummary, row), label)
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDebit, row), centsToYuan(debit))
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffCredit, row), centsToYuan(credit))
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDir, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffBalance, row), "")
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffDebit)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffCredit)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffBalance)
 
 	for i := 0; i < 4 && i < len(details); i++ {
 		if i < len(detailsList) && detailsList[i] != "" {

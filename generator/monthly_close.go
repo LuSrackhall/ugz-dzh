@@ -55,10 +55,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
-				{Type: "top", Color: "#808080", Style: 1},
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColBalance), row), monthlyStyle)
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+			cellName(dataCol(lay, pageNum, glColCount-1), row), monthlyStyle)
 
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
@@ -82,8 +86,15 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
+				Border: []excelize.Border{
+					{Type: "top", Color: "#006100", Style: 1},
+					{Type: "right", Color: "#006100", Style: 1},
+					{Type: "bottom", Color: "#006100", Style: 1},
+					{Type: "left", Color: "#006100", Style: 1},
+				},
 			})
-			wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColBalance), row), qtStyle)
+			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+				cellName(dataCol(lay, pageNum, glColCount-1), row), qtStyle)
 
 			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
@@ -108,10 +119,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
-				{Type: "bottom", Color: "#808080", Style: 1},
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColBalance), row), cumStyle)
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+			cellName(dataCol(lay, pageNum, glColCount-1), row), cumStyle)
 
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
@@ -135,10 +150,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
-				{Type: "bottom", Color: "#000000", Style: 2},
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 2},
+				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColBalance), row), endStyle)
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+			cellName(dataCol(lay, pageNum, glColCount-1), row), endStyle)
 
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 	}

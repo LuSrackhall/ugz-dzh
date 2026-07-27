@@ -220,6 +220,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	subHStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 9, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.SubHeaderRow+1), cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), subHStyle)
 
@@ -835,7 +841,12 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	tickStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Color: "006100", Size: 12},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	for _, offset := range []int{6, 8, 11} {
 		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+offset+colOffset, row),
@@ -879,6 +890,12 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	subHStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 9, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOffset, row), cellName(lay.FrontStartCol+3+colOffset, row), subHStyle)
 

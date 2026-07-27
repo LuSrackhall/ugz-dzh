@@ -186,10 +186,10 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	he := cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// 借或贷列允许换行，使用justify减少行间距
+	// 借或贷列允许换行
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "justify", WrapText: true},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
 	})
 	dirCell := cellName(lay.FrontStartCol+9, lay.HeaderRow+1) // glColDir = 9
@@ -806,10 +806,10 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	he := cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// 借或贷列允许换行，使用justify减少行间距
+	// 借或贷列允许换行
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "justify", WrapText: true},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
 	})
 	dirCell := cellName(lay.FrontStartCol+9+colOffset, row) // glColDir = 9

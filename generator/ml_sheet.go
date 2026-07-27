@@ -140,41 +140,63 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 }
 
 // (wb *Workbook) mlLastPageBalance 获取最近一个过次页结束的余额。
-// 有过次页时优先读其后方的期末余额行（月结会更新余额），无则读过次页行自身。
-// 无过次页时从最后一行往前找最近的非零余额（跳过承前页和结构行）。
+// 有过次页时读最后一个过次页之前最近的期末余额或数据行余额。
+// 无过次页时从最后一行往前找最近的余额（跳过承前页和结构行）。
 func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 0
 	}
-	// 从后往前找真实过次页
+	// 从后往前找最后一个真实过次页
+	lastBreak := -1
 	for i := len(rows) - 1; i >= 0; i-- {
-		if !mlHasPageBreakAt(rows[i], lay) || mlIsStructuralBreak(rows[i], lay) {
-			continue
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+			lastBreak = i
+			break
 		}
-		// 找到真实过次页 → 检查其后方是否有更新的期末余额行
-		for j := i + 1; j < len(rows); j++ {
-			if len(rows[j]) > lay.BindingLeftCols+2 &&
-				rows[j][lay.BindingLeftCols+2] == periodEndLabel {
-				balIdx := lay.BindingLeftCols + 6
-				if len(rows[j]) > balIdx {
-					if v, err := yuanStrToCents(rows[j][balIdx]); err == nil {
-						return v
-					}
-				}
+	}
+	if lastBreak >= 0 {
+		// 找上一个过次页（或页首），确定当前页范围
+		prevBreak := 0
+		for i := lastBreak - 1; i >= 0; i-- {
+			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+				prevBreak = i + 1
+				break
 			}
 		}
-		// 无更新的期末余额 → 读过次页行自身余额
-		balIdx := lay.BindingLeftCols + 6
-		if len(rows[i]) > balIdx {
-			if v, err := yuanStrToCents(rows[i][balIdx]); err == nil {
+		// 优先：找最近的非承前页、非月结行的数据行余额（即分录行的 running balance）
+		for i := lastBreak - 1; i >= prevBreak; i-- {
+			r := rows[i]
+			if len(r) <= lay.BindingLeftCols+6 {
+				continue
+			}
+			summary := ""
+			if len(r) > lay.BindingLeftCols+2 {
+				summary = r[lay.BindingLeftCols+2]
+			}
+			// 跳过承前页行、月结行
+			if summary == carryForwardLabel || summary == "上年结转" ||
+				summary == "本月合计" || summary == "本季合计" || summary == "本年累计" || summary == periodEndLabel {
+				continue
+			}
+			balStr := strings.TrimSpace(r[lay.BindingLeftCols+6])
+			if balStr == "" {
+				continue
+			}
+			if v, err := yuanStrToCents(balStr); err == nil {
+				return v
+			}
+		}
+		// 回退到过次页行自身余额
+		if len(rows[lastBreak]) > lay.BindingLeftCols+6 {
+			if v, err := yuanStrToCents(rows[lastBreak][lay.BindingLeftCols+6]); err == nil {
 				return v
 			}
 		}
 		return 0
 	}
-	// 无过次页 → 从后往前找最近的非零余额（跳过承前页行和结构行）
+	// 无过次页 → 从后往前找最近的余额（跳过承前页行和结构行）
 	for i := len(rows) - 1; i >= 0; i-- {
 		r := rows[i]
 		if mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
@@ -188,7 +210,7 @@ func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 		if len(r) <= balIdx {
 			continue
 		}
-		if v, err := yuanStrToCents(r[balIdx]); err == nil && v != 0 {
+		if v, err := yuanStrToCents(r[balIdx]); err == nil {
 			return v
 		}
 	}

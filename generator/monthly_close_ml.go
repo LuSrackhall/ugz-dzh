@@ -71,39 +71,39 @@ func (wb *Workbook) WriteMLMonthClosings(
 		}
 
 		lay := mlLayout()
+		endBalance := initials[general] + mtdDebit - mtdCredit
 
-			// 月结遇过次页则正常翻页
+		// 检查是否需要过次页翻页
+		mlCheckPageBreak := func(r int) int {
 			breakPos := wb.mlPageStartRow(sheet) + pageSize
-			if row >= breakPos {
-				bal := wb.mlLastPageBalance(sheet)
-				// 计算新页页码：已有真实过次页数 + 本次翻页 = 新页码
-				pageNum := 1
-				bRows, _ := wb.File.GetRows(sheet)
-				for _, br := range bRows {
-					if mlHasPageBreakAt(br, mlLayout()) && !mlIsStructuralBreak(br, mlLayout()) {
-						pageNum++
-					}
-				}
-				pageNum++ // 加上本次即将写入的过次页
-				wb.writeMLPageBreakRow(sheet, breakPos, bal, 0, 0, make([]mlDetailTotals, mlMaxDetails))
-				wb.writeMLPageHeader(sheet, breakPos+1, pageNum, pageNum, general, true, true)
-				cfRow := breakPos + 1 + lay.DataStartRow
-				wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, mlMaxDetails), carryForwardLabel)
-				row = cfRow + 1
+			if r < breakPos {
+				return r
 			}
-
-
+			bal := wb.mlLastPageBalance(sheet)
+			pageNum := 1
+			bRows, _ := wb.File.GetRows(sheet)
+			for _, br := range bRows {
+				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
+					pageNum++
+				}
+			}
+			pageNum++
+			wb.writeMLPageBreakRow(sheet, breakPos, bal, 0, 0, make([]mlDetailTotals, numDetails))
+			wb.writeMLPageHeader(sheet, breakPos+1, pageNum, pageNum, general, true, true)
+			cfRow := breakPos + 1 + lay.DataStartRow
+			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
+			return cfRow + 1
+		}
 
 		// 本月合计
+		row = mlCheckPageBreak(row)
 		wb.writeMLClosingRow(sheet, row, "本月合计", mtdDebit, mtdCredit, mtdDetails, details, lay)
-
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "top", Color: "#808080", Style: 1}},
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), monthlyStyle)
 		wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), monthlyStyle)
-
 		row++
 
 		if isQuarterEnd(wb.Month) {
@@ -124,8 +124,6 @@ func (wb *Workbook) WriteMLMonthClosings(
 					qtCredit += qtdCredit[key]
 				}
 			}
-
-			// Adjust qtDetails to include previous quarter month net totals
 			for i := range qtDetails {
 				if details[i] != "" {
 					prevQt := wb.getDetailPrevQuarterTotal(general, details[i])
@@ -140,14 +138,13 @@ func (wb *Workbook) WriteMLMonthClosings(
 				}
 			}
 
+			row = mlCheckPageBreak(row)
 			wb.writeMLClosingRow(sheet, row, "本季合计", qtDebit, qtCredit, qtDetails, details, lay)
-
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
 			wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), qtStyle)
 			wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), qtStyle)
-
 			row++
 		}
 
@@ -168,8 +165,6 @@ func (wb *Workbook) WriteMLMonthClosings(
 				cumCredit += ytdCredit[key]
 			}
 		}
-
-		// Adjust ytdDetails to include previous year month net totals
 		for i := range ytdDetails {
 			if details[i] != "" {
 				prevYtd := wb.getDetailPrevYearTotal(general, details[i])
@@ -184,22 +179,19 @@ func (wb *Workbook) WriteMLMonthClosings(
 			}
 		}
 
+		row = mlCheckPageBreak(row)
 		wb.writeMLClosingRow(sheet, row, "本年累计", cumDebit, cumCredit, ytdDetails, details, lay)
-
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(lay.BackStartCol+6, row), cumStyle)
 		wb.File.SetCellStyle(sheet, mlCellName(mlDetailCol(lay, 4), row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), cumStyle)
-
 		row++
 
 		// 期末余额
 		row = mlCheckPageBreak(row)
-		endBalance := initials[general] + mtdDebit - mtdCredit
 		endDir, endDisp := directionFor(endBalance, 0)
-
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), periodEndLabel)
@@ -207,21 +199,19 @@ func (wb *Workbook) WriteMLMonthClosings(
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), "")
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), endDir)
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(endDisp))
-
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "bottom", Color: "#000000", Style: 2}},
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
 		wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
-	}  // 补齐当前页
+	}
 
 	return nil
 }
 
 // writeMLClosingRow 将月结行写入双面：Back 侧（基础列+明细1~4），Front 侧（明细5~14）。
 func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit, credit int64, details []mlDetailTotals, detailsList []string, lay layout.MLLayout) {
-	// Back 侧：基础列
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), label)
@@ -233,7 +223,6 @@ func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit
 	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
 	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
 
-	// Back 侧：明细1~4（索引0~3）
 	for i := 0; i < 4 && i < len(details); i++ {
 		if i < len(detailsList) && detailsList[i] != "" {
 			net := details[i].debit - details[i].credit
@@ -243,7 +232,6 @@ func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit
 		}
 	}
 
-	// Front 侧：明细5~14（索引4~13）
 	for i := 4; i < len(details); i++ {
 		if i < len(detailsList) && detailsList[i] != "" {
 			net := details[i].debit - details[i].credit
@@ -254,7 +242,6 @@ func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit
 	}
 }
 
-// getDetailPrevYearTotal 从配置余额中提取某明细科目截至上月的本年累计净额。
 func (wb *Workbook) getDetailPrevYearTotal(general, detail string) int64 {
 	accountPath := general + "-" + detail
 	node, ok := wb.Config.Tree[accountPath]

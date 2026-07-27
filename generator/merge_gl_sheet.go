@@ -300,7 +300,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 			{Type: "top", Color: "#808080", Style: 1},
 		},
 	})
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), monthlyStyle)
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row), cellName(dataCol(lay, pageNum, 6), row), monthlyStyle)
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
@@ -319,7 +319,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 		qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), qtStyle)
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row), cellName(dataCol(lay, pageNum, 6), row), qtStyle)
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
@@ -341,7 +341,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 			{Type: "bottom", Color: "#808080", Style: 1},
 		},
 	})
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), cumStyle)
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row), cellName(dataCol(lay, pageNum, 6), row), cumStyle)
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
@@ -365,7 +365,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 			{Type: "bottom", Color: "#000000", Style: 2},
 		},
 	})
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), endStyle)
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row), cellName(dataCol(lay, pageNum, 6), row), endStyle)
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
 
 	return nil

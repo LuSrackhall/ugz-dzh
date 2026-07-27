@@ -72,6 +72,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 
 		lay := mlLayout()
 
+
 		// 本月合计
 		wb.writeMLClosingRow(sheet, row, "本月合计", mtdDebit, mtdCredit, mtdDetails, details, lay)
 

@@ -14,7 +14,6 @@ import (
 const (
 	mlMaxDetails     = 14 // 明细科目上限
 	mlDetailStartCol = 8  // 明细列起始列 H（保留常量用于非 Layout 上下文）
-	mlMonthTailCol   = 1  // 月度尾行标记列（B列，BindingLeftCols 内）
 )
 
 // mlLayout 返回多科目明细账的布局规格（独立于 GL 布局）。
@@ -74,17 +73,12 @@ func mlIsStructuralBreak(row []string, lay layout.MLLayout) bool {
 		strings.TrimSpace(row[balIdx]) == ""
 }
 
-// writeMLMonthTail 在指定行的标记列写入月份标识，标记本月数据到此为止。
-func (wb *Workbook) writeMLMonthTail(sheet string, row int, month string) {
-	wb.File.SetCellValue(sheet, mlCellName(mlMonthTailCol+1, row), month) // +1 因为 mlCellName 是1-based
-}
-
-// mlLastMonthTailRow 从标记列找到最后一个有月份标记的行号（1-based）。
-// 找不到返回 0。
-func (wb *Workbook) mlLastMonthTailRow(sheet string) int {
+// mlLastPeriodEndRow 从 Sheet 中找到最后一个"期末余额"行的行号（1-based）。
+// 期末余额永远是月结的最后一行，用它定位本月数据尾行，无需额外标记列。
+func (wb *Workbook) mlLastPeriodEndRow(sheet string) int {
 	rows, _ := wb.File.GetRows(sheet)
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlMonthTailCol < len(rows[i]) && strings.TrimSpace(rows[i][mlMonthTailCol]) != "" {
+		if len(rows[i]) > 4 && rows[i][4] == periodEndLabel {
 			return i + 1
 		}
 	}
@@ -318,7 +312,7 @@ func (wb *Workbook) mlPageHasBreakRow(sheet string) bool {
 }
 
 // (wb *Workbook) mlNextDataRowAfterBreak 返回月结追加的下一个可用数据行（ML 版）。
-// 优先使用月度尾行标记列定位，无标记时回退到行扫描。
+// 找最后一个"期末余额"行（月结最后一行）作为定位锚点。
 func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -326,8 +320,8 @@ func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 		return lay.DataStartRow + 1, nil
 	}
 
-	// 优先：从标记列找到最后一个月度尾行
-	tailRow := wb.mlLastMonthTailRow(sheet)
+	// 找最后一个期末余额行
+	tailRow := wb.mlLastPeriodEndRow(sheet)
 	if tailRow > 0 {
 		// 检查尾行之后是否有真实过次页（翻页）
 		for i := tailRow; i < len(rows); i++ {

@@ -21,6 +21,7 @@ type Workbook struct {
 	OutputDir    string
 	ConfigPath   string
 	moneyStyleID int
+	moneyStyleThickID int // 金额样式（底边加粗）
 }
 
 // NewWorkbook 创建或加载工作薄。若上月 xlsx 存在则复制之，否则新建。
@@ -72,6 +73,21 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 		return nil, fmt.Errorf("创建金额样式: %w", err)
 	}
 	wb.moneyStyleID = moneyStyle
+
+	// 金额样式（底边加粗，用于每5行）
+	moneyStyleThick, err := wb.File.NewStyle(&excelize.Style{
+		CustomNumFmt: stringPtr("#,##0.00"),
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 2},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建金额加粗样式: %w", err)
+	}
+	wb.moneyStyleThickID = moneyStyleThick
 
 	return wb, nil
 }
@@ -227,4 +243,10 @@ func stringPtr(s string) *string {
 func (wb *Workbook) setMoneyStyle(sheet string, row, col int) {
 	cell, _ := excelize.CoordinatesToCellName(col, row)
 	wb.File.SetCellStyle(sheet, cell, cell, wb.moneyStyleID)
+}
+
+// setMoneyStyleThick 对指定单元格应用金额数字格式 #,##0.00（底边加粗）。
+func (wb *Workbook) setMoneyStyleThick(sheet string, row, col int) {
+	cell, _ := excelize.CoordinatesToCellName(col, row)
+	wb.File.SetCellStyle(sheet, cell, cell, wb.moneyStyleThickID)
 }

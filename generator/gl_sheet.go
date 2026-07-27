@@ -511,28 +511,47 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
-		// 先应用金额样式
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-
-		// 再应用边框样式（每5行底边加粗）— 覆盖金额样式中的边框
+		// 应用金额样式（包含边框，每5行底边加粗）
 		pageStart := wb.pageStartRow(sheet)
 		rowInPage := row - pageStart + 1
-		bottomStyle := 1 // 细线
-		if rowInPage%5 == 0 {
-			bottomStyle = 2 // 中粗
+		isThickRow := rowInPage%5 == 0
+
+		if isThickRow {
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+		} else {
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 		}
-		dataBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
+
+		// 非金额列边框（每5行底边加粗）
+		bottomBorder := 1
+		if isThickRow {
+			bottomBorder = 2
+		}
+		borderStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Border: []excelize.Border{
 				{Type: "top", Color: "#006100", Style: 1},
 				{Type: "right", Color: "#006100", Style: 1},
-				{Type: "bottom", Color: "#006100", Style: bottomStyle},
+				{Type: "bottom", Color: "#006100", Style: bottomBorder},
 				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
-			cellName(dataCol(lay, pageNum, glColCount-1), row), dataBorderStyle)
+			cellName(dataCol(lay, pageNum, glColCount-1), row), borderStyle)
+
+		// 重新应用金额样式（覆盖非金额列边框中的金额列）
+		if isThickRow {
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+		} else {
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+		}
 
 	}
 

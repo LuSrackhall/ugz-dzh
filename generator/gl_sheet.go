@@ -199,24 +199,6 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	he := cellName(lay.FrontStartCol+len(headerCols)+3, lay.SubHeaderRow+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// 年、凭证列右侧红色边框（叠加到已有样式上）
-	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		Border: []excelize.Border{
-			{Type: "top", Color: "#006100", Style: 1},
-			{Type: "right", Color: "CC0000", Style: 1},
-			{Type: "bottom", Color: "#006100", Style: 1},
-			{Type: "left", Color: "#006100", Style: 1},
-		},
-	})
-	// "年"列右侧（列1）
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+1, lay.HeaderRow+1),
-		cellName(lay.FrontStartCol+1, lay.SubHeaderRow+1), redRightStyle)
-	// "凭证"列右侧（列3）
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3, lay.HeaderRow+1),
-		cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), redRightStyle)
-
 	// 表格顶部双线红色边框（仅Row 4的上边框，保留其他边框）
 	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
@@ -231,12 +213,30 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.HeaderRow+1),
 		cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1), topBorderStyle)
 
-	// 借或贷列允许换行（覆盖已应用的表头样式）
+	// 年、凭证列右侧红色边框（在顶部边框之后应用，覆盖右侧边框）
+	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "CC0000", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	// "年"列右侧（列1）- 两行都应用
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+1, lay.HeaderRow+1),
+		cellName(lay.FrontStartCol+1, lay.SubHeaderRow+1), redRightStyle)
+	// "凭证"列右侧（列3）- 两行都应用
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3, lay.HeaderRow+1),
+		cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), redRightStyle)
+
+	// 借或贷列允许换行（保留红色上边框）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 		Border: []excelize.Border{
-			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "top", Color: "CC0000", Style: 6},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -511,7 +511,12 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
-		// 数据行绿色边框（每5行底边加粗）— 先应用边框
+		// 先应用金额样式
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+
+		// 再应用边框样式（每5行底边加粗）— 覆盖金额样式中的边框
 		pageStart := wb.pageStartRow(sheet)
 		rowInPage := row - pageStart + 1
 		bottomStyle := 1 // 细线
@@ -528,11 +533,6 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		})
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), dataBorderStyle)
-
-		// 再应用金额样式（包含边框，不会覆盖）
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
 	}
 
@@ -932,7 +932,21 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	he := cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// 年、凭证列右侧红色边框
+	// 每页表格顶部双线红色边框
+	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "CC0000", Style: 6},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOffset, row),
+		cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row), topBorderStyle)
+
+	// 年、凭证列右侧红色边框（在顶部边框之后应用，覆盖右侧边框）
 	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
@@ -950,26 +964,12 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3+colOffset, row),
 		cellName(lay.FrontStartCol+3+colOffset, row+1), redRightStyle)
 
-	// 每页表格顶部双线红色边框
-	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		Border: []excelize.Border{
-			{Type: "top", Color: "CC0000", Style: 6},
-			{Type: "right", Color: "#006100", Style: 1},
-			{Type: "bottom", Color: "#006100", Style: 1},
-			{Type: "left", Color: "#006100", Style: 1},
-		},
-	})
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOffset, row),
-		cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row), topBorderStyle)
-
-	// 借或贷列允许换行（覆盖已应用的表头样式）
+	// 借或贷列允许换行（保留红色上边框）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 		Border: []excelize.Border{
-			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "top", Color: "CC0000", Style: 6},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},

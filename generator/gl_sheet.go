@@ -194,11 +194,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
+	// 表头样式应用到两行（包括合并单元格覆盖的行）
 	hs := cellName(lay.FrontStartCol, lay.HeaderRow+1)
-	he := cellName(lay.FrontStartCol+len(headerCols)+3, lay.HeaderRow+1)
+	he := cellName(lay.FrontStartCol+len(headerCols)+3, lay.SubHeaderRow+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// 借或贷列允许换行
+	// 借或贷列允许换行（覆盖已应用的表头样式）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
@@ -862,11 +863,12 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
+	// 表头样式应用到两行（包括合并单元格覆盖的行）
 	hs := cellName(lay.FrontStartCol+colOffset, row)
-	he := cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row)
+	he := cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
-	// 借或贷列允许换行
+	// 借或贷列允许换行（覆盖已应用的表头样式）
 	wrapStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},

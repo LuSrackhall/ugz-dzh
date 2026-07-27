@@ -514,6 +514,18 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int) 
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+
+	// 上年结转行绿色边框
+	cfStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+		cellName(dataCol(lay, pageNum, glColCount-1), row), cfStyle)
 	return nil
 }
 
@@ -533,6 +545,18 @@ func (wb *Workbook) insertCarryForwardAtRow(sheet string, amount int64, pageNum 
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+
+	// 上年结转行绿色边框
+	cfStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+		cellName(dataCol(lay, pageNum, glColCount-1), row), cfStyle)
 	return nil
 }
 

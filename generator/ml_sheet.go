@@ -32,23 +32,23 @@ func mlPrintMarkCol() int {
 	return backLast
 }
 
-// mlDetailCol 返回第 i 个明细列的 Excel 列号。
+// mlDetailCol 返回第 i 个明细列的 Excel 列号（1-indexed）。
 // i=0~3 → Back 侧（左半），i=4~13 → Front 侧（右半）。
 func mlDetailCol(lay layout.MLLayout, i int) int {
 	if i < 4 {
-		return lay.BackStartCol + 7 + i
+		return lay.BackStartCol + 10 + i // 1-indexed: BackStartCol(3) + 10 = 13 for i=0
 	}
-	return lay.FrontStartCol + (i - 4)
+	return lay.FrontStartCol + (i - 4) + 2 // 1-indexed: FrontStartCol(15) + 1 = 16 for i=4
 }
 
 // mlDetailRowIdx 返回第 i 个明细列在 GetRows 中的索引。
-// i=0~3 → Back 侧 GetRows 索引 = BindingLeftCols + 7 + i，
+// i=0~3 → Back 侧 GetRows 索引 = BindingLeftCols + 10 + i，
 // i=4~13 → Front 侧 GetRows 索引 = FrontStartCol - 1 + (i - 4)。
 func mlDetailRowIdx(lay layout.MLLayout, i int) int {
 	if i < 4 {
-		return lay.BindingLeftCols + 7 + i
+		return lay.BackStartCol + 10 + i - 1 // 0-indexed: BackStartCol(3) + 10 - 1 = 12
 	}
-	return lay.FrontStartCol - 1 + (i - 4)
+	return lay.FrontStartCol + (i - 4) + 1 // 0-indexed: FrontStartCol(15) + 1 = 16 for i=4
 }
 
 // ── ML 独立辅助函数（与 GL 同名函数功能相同但使用 mlLayout） ──
@@ -356,6 +356,11 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 
 		// 冲突检测：若配置了 detailOrder，逐列比对
 		if len(detailOrder) > 0 {
+			var existNonEmpty []string
+			for _, d := range existingDetails {
+				if d != "" { existNonEmpty = append(existNonEmpty, d) }
+			}
+			fmt.Printf("DEBUG %s: existNonEmpty=%v detailOrder=%v\n", name, existNonEmpty, detailOrder)
 			if err := wb.checkMLDetailOrderConflict(name, existingDetails, detailOrder); err != nil {
 				return "", nil, nil, err
 			}
@@ -459,40 +464,36 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 	return name, detailIdx, newAppended, nil
 }
 
-// checkMLDetailOrderConflict 逐列比对第2行标题与 detailOrder 配置。
+// checkMLDetailOrderConflict 验证现有 Sheet 列标题与 detailOrder 配置的兼容性。
+// 检查现有列标题在配置中是否保持相对顺序，允许配置有额外的未写入列。
 func (wb *Workbook) checkMLDetailOrderConflict(sheet string, existingDetails []string, detailOrder []string) error {
-	configIdx := 0
-	for colIdx := 0; colIdx < mlMaxDetails && configIdx < len(detailOrder); colIdx++ {
-		existing := existingDetails[colIdx]
-		configured := detailOrder[configIdx]
-
-		if configured == "" {
-			if existing != "" {
-				return fmt.Errorf("Sheet %s: detailOrder 与现有列序冲突 — 第 %d 列配置为空但实际为 %q。请使用 -f 从首月重新生成", sheet, colIdx+1, existing)
-			}
-			configIdx++
-			continue
+	if len(detailOrder) == 0 {
+		return nil
+	}
+	// 提取现有非空列
+	var existingNonEmpty []string
+	for _, d := range existingDetails {
+		if d != "" {
+			existingNonEmpty = append(existingNonEmpty, d)
 		}
-
-		if existing == "" {
-			found := false
-			for j := colIdx + 1; j < mlMaxDetails; j++ {
-				if existingDetails[j] == configured {
-					found = true
-					break
-				}
+	}
+	if len(existingNonEmpty) == 0 {
+		return nil
+	}
+	// 检查现有列在 detailOrder 中是否保持相对顺序
+	lastFoundIdx := -1
+	for _, existing := range existingNonEmpty {
+		foundIdx := -1
+		for j := lastFoundIdx + 1; j < len(detailOrder); j++ {
+			if detailOrder[j] == existing {
+				foundIdx = j
+				break
 			}
-			if found {
-				return fmt.Errorf("Sheet %s: detailOrder 与现有列序冲突 — %q 配置在第 %d 列但实际在更右侧。请使用 -f 从首月重新生成", sheet, configured, configIdx+1)
-			}
-			configIdx++
-			continue
 		}
-
-		if existing != configured {
-			return fmt.Errorf("Sheet %s: detailOrder 与现有列序冲突 — 第 %d 列配置为 %q 但实际为 %q。请使用 -f 从首月重新生成", sheet, configIdx+1, configured, existing)
+		if foundIdx < 0 {
+			return fmt.Errorf("Sheet %s: detailOrder 与现有列序冲突 — %q 在现有列中但不在配置中。请使用 -f 从首月重新生成", sheet, existing)
 		}
-		configIdx++
+		lastFoundIdx = foundIdx
 	}
 	return nil
 }
@@ -504,7 +505,7 @@ func cellColLetter(col int) string {
 	return l
 }
 
-// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（数据页列标题行），以匹配当月明细科目集。
+// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（Paper1 Front 第5行），以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	lay := mlLayout()
 	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based
@@ -530,7 +531,6 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取 Sheet %s: %w", sheet, err)
 	}
-
 	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based row number
 	if len(rows) < colHeaderRow {
 		return detailIdx, details, nil
@@ -677,6 +677,21 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 			continue
 		}
 		detailOrder := wb.Config.DetailOrder[general]
+		// 去重：防止历史配置中的重复项导致冲突检查误报
+		if len(detailOrder) > 0 {
+			seen := make(map[string]bool)
+			var deduped []string
+			for _, d := range detailOrder {
+				if d != "" && !seen[d] {
+					seen[d] = true
+					deduped = append(deduped, d)
+				}
+			}
+			if len(deduped) != len(detailOrder) {
+				detailOrder = deduped
+				wb.Config.DetailOrder[general] = deduped
+			}
+		}
 		_, detailIdx, newAppended, err := wb.ensureMLSheet(general, g.details, detailOrder)
 		if err != nil {
 			return err
@@ -718,7 +733,16 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 					merged = append(merged, nd)
 				}
 			}
-			wb.Config.DetailOrder[general] = merged
+			// 去重 merged
+			seen := make(map[string]bool)
+			var dedupedMerged []string
+			for _, d := range merged {
+				if d != "" && !seen[d] {
+					seen[d] = true
+					dedupedMerged = append(dedupedMerged, d)
+				}
+			}
+			wb.Config.DetailOrder[general] = dedupedMerged
 		}
 		if err := wb.appendToMLSheet(general, g.entries, detailIdx, initials[general]); err != nil {
 			return fmt.Errorf("多科目明细账 %s: %w", general, err)
@@ -1036,23 +1060,11 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	// Row +3: 空行
 	row++
 
-	// Row +4: 列标题 — Back 侧（两行表头：年|凭证 合并，子表头 月|日|字|号）
-	year := wb.Month[:4]
+	// Row +4: 列标题 — Back 侧（7基础列 + 明细1~4）
 	if hasBack {
-		// "年" 合并月+日两列
-		yearLeft := mlCellName(lay.BackStartCol, row)
-		yearRight := mlCellName(lay.BackStartCol+1, row)
-		wb.File.MergeCell(sheet, yearLeft, yearRight)
-		wb.File.SetCellValue(sheet, yearLeft, year+"年")
-		// "凭证" 合并字+号两列
-		vouchLeft := mlCellName(lay.BackStartCol+2, row)
-		vouchRight := mlCellName(lay.BackStartCol+3, row)
-		wb.File.MergeCell(sheet, vouchLeft, vouchRight)
-		wb.File.SetCellValue(sheet, vouchLeft, "凭证")
-		// 摘要 ~ 余额 各占单列
-		otherCols := []string{"摘要", "借方金额", "贷方金额", "方向", "余额"}
-		for i, h := range otherCols {
-			cell := mlCellName(lay.BackStartCol+4+i, row)
+		backColNames := []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "方向", "余额"}
+		for i, h := range backColNames {
+			cell := mlCellName(lay.BackStartCol+i, row)
 			wb.File.SetCellValue(sheet, cell, h)
 		}
 		// Back 侧明细1~4 列标题
@@ -1078,44 +1090,28 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 		Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	// Back 侧基础列表头样式（Row +4）
+	// Back 侧基础列表头样式
 	if hasBack {
 		hsBack := mlCellName(lay.BackStartCol, row)
 		heBack := mlCellName(lay.BackStartCol+6, row)
 		wb.File.SetCellStyle(sheet, hsBack, heBack, headerStyle)
+		// Back 侧明细1~4 表头样式
 		for i := 0; i < 4 && i < mlMaxDetails; i++ {
 			cell := mlCellName(mlDetailCol(lay, i), row)
 			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 		}
 	}
-	// Front 侧明细5~14 表头样式（Row +4）
+	// Front 侧明细5~14 表头样式
 	if hasFront {
 		for i := 4; i < mlMaxDetails; i++ {
 			cell := mlCellName(mlDetailCol(lay, i), row)
 			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
 		}
 	}
-	row++
-
-	// Row +5: 子表头 — Back 侧前4列（月/日/字/号）
-	if hasBack {
-		subHeaders := []string{"月", "日", "字", "号"}
-		for i, h := range subHeaders {
-			cell := mlCellName(lay.BackStartCol+i, row)
-			wb.File.SetCellValue(sheet, cell, h)
-		}
-		subStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font: &excelize.Font{Size: 9, Color: darkGreen},
-			Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
-			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		})
-		subLeft := mlCellName(lay.BackStartCol, row)
-		subRight := mlCellName(lay.BackStartCol+3, row)
-		wb.File.SetCellStyle(sheet, subLeft, subRight, subStyle)
-	}
 
 	return nil
+
+
 }
 
 // lastBreakDetailTotals 读取最后一个过次页行的各明细列净额。

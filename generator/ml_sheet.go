@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	mlMaxDetails    = 14 // 明细科目上限
+	mlMaxDetails     = 14 // 明细科目上限
 	mlDetailStartCol = 8  // 明细列起始列 H（保留常量用于非 Layout 上下文）
 )
 
@@ -21,20 +21,34 @@ func mlLayout() layout.MLLayout {
 	return layout.MLComputeLayout(layout.DefaultMLSpec())
 }
 
-// mlPrintMarkCol 返回多科目明细账打印标记列号（Layout 内容区末列）。
+// mlPrintMarkCol 返回多科目明细账打印标记列号（Back 区末列与 Front 区末列取较大值）。
 func mlPrintMarkCol() int {
 	lay := mlLayout()
-	return lay.FrontStartCol + 7 + mlMaxDetails
+	backLast := lay.BackStartCol + lay.BackColCount
+	frontLast := lay.FrontStartCol + lay.FrontColCount
+	if frontLast > backLast {
+		return frontLast
+	}
+	return backLast
 }
 
-// mlDetailExcelCol 返回多科目明细账第 i 个明细列的 Excel 列号（Layout 坐标）。
-func mlDetailExcelCol(lay layout.MLLayout, i int) int {
-	return lay.FrontStartCol + 7 + i
+// mlDetailCol 返回第 i 个明细列的 Excel 列号。
+// i=0~3 → Back 侧（左半），i=4~13 → Front 侧（右半）。
+func mlDetailCol(lay layout.MLLayout, i int) int {
+	if i < 4 {
+		return lay.BackStartCol + 7 + i
+	}
+	return lay.FrontStartCol + (i - 4)
 }
 
-// mlDetailRowIdx 返回多科目明细账第 i 个明细列在 GetRows 中的索引（Layout 坐标）。
+// mlDetailRowIdx 返回第 i 个明细列在 GetRows 中的索引。
+// i=0~3 → Back 侧 GetRows 索引 = BindingLeftCols + 7 + i，
+// i=4~13 → Front 侧 GetRows 索引 = FrontStartCol - 1 + (i - 4)。
 func mlDetailRowIdx(lay layout.MLLayout, i int) int {
-	return lay.BindingLeftCols + 7 + i
+	if i < 4 {
+		return lay.BindingLeftCols + 7 + i
+	}
+	return lay.FrontStartCol - 1 + (i - 4)
 }
 
 // ── ML 独立辅助函数（与 GL 同名函数功能相同但使用 mlLayout） ──
@@ -45,78 +59,177 @@ func mlCellName(col, row int) string {
 	return name
 }
 
-// mlHasPageBreakAt 检查行中是否有"过次页"标记。
+// mlHasPageBreakAt 检查行中是否有"过次页"标记（仅 Back 侧摘要列）。
 func mlHasPageBreakAt(row []string, lay layout.MLLayout) bool {
-	return (len(row) > lay.BindingLeftCols+2 && row[lay.BindingLeftCols+2] == pageBreakLabel) ||
-		(len(row) > lay.BackStartCol+1 && row[lay.BackStartCol+1] == pageBreakLabel)
+	summaryIdx := lay.BindingLeftCols + 2
+	return len(row) > summaryIdx && row[summaryIdx] == pageBreakLabel
+}
+
+// mlIsStructuralBreak 检查过次页行是否为结构预写（余额列为空字符串，无翻页数据）。
+// 注意：借方为 "0" 的过次页可能是真实翻页（收入类科目无借方），用余额列判断更可靠。
+func mlIsStructuralBreak(row []string, lay layout.MLLayout) bool {
+	balIdx := lay.BindingLeftCols + 6
+	return len(row) <= balIdx ||
+		strings.TrimSpace(row[balIdx]) == ""
+}
+
+// mlLastPeriodEndRow 从 Sheet 中找到最后一个"期末余额"行的行号（1-based）。
+// 期末余额永远是月结的最后一行，用它定位本月数据尾行，无需额外标记列。
+func (wb *Workbook) mlLastPeriodEndRow(sheet string) int {
+	rows, _ := wb.File.GetRows(sheet)
+	for i := len(rows) - 1; i >= 0; i-- {
+		if len(rows[i]) > 4 && rows[i][4] == periodEndLabel {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// mlLastContentRow 返回 Sheet 中最后一个有内容的行索引（0-based）。
+// 跳过尾部空行，但不跳过结构过次页（它是模板的一部分）。
+// 找不到返回 -1。
+func mlLastContentRow(rows [][]string) int {
+	for i := len(rows) - 1; i >= 0; i-- {
+		isEmpty := true
+		for k := 0; k < len(rows[i]); k++ {
+			if strings.TrimSpace(rows[i][k]) != "" {
+				isEmpty = false
+				break
+			}
+		}
+		if !isEmpty {
+			return i
+		}
+	}
+	return -1
+}
+
+// mlLastDataBeforeBreak 返回 Sheet 中最后一个数据行索引（0-based）。
+// 只跳过结构过次页（余额为空）和尾部空行。
+// 真实过次页（有余额数据）和月结行都算数据行。
+func mlLastDataBeforeBreak(rows [][]string, lay layout.MLLayout) int {
+	for i := len(rows) - 1; i >= 0; i-- {
+		// 只跳过结构过次页
+		if mlHasPageBreakAt(rows[i], lay) && mlIsStructuralBreak(rows[i], lay) {
+			continue
+		}
+		isEmpty := true
+		for k := 0; k < len(rows[i]); k++ {
+			if strings.TrimSpace(rows[i][k]) != "" {
+				isEmpty = false
+				break
+			}
+		}
+		if isEmpty {
+			continue
+		}
+		return i
+	}
+	return -1
 }
 
 // (wb *Workbook) mlNextDataRow 返回 Sheet 中下一个可用数据行号。
+// 找最后一条数据行（跳过空行和过次页），返回其下一行。
+// 数据自然填满空行，到第21行（过次页位置）时 mlRowIsPageBreak 触发翻页。
 func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
-	if err != nil {
-		return 3, nil
+	if err != nil || len(rows) < 3 {
+		return lay.DataStartRow + 1, nil
 	}
-	if len(rows) < 3 {
-		return 3, nil
+
+	lastDataIdx := mlLastDataBeforeBreak(rows, lay)
+	if lastDataIdx < 0 {
+		return lay.DataStartRow + 1, nil
 	}
-	lastBreak := 0
-	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
-			lastBreak = i + 1
-			break
-		}
+
+	// 如果最后一条数据是真实过次页 → 新页面，承前页在 DataStartRow 后
+	if mlHasPageBreakAt(rows[lastDataIdx], lay) && !mlIsStructuralBreak(rows[lastDataIdx], lay) {
+		return lastDataIdx + 2 + lay.DataStartRow, nil
 	}
-	if lastBreak > 0 && lastBreak == len(rows) {
-		return lastBreak + 1, nil
-	}
-	if lastBreak > 0 && lastBreak+1 == len(rows) {
-		return len(rows) + 1, nil
-	}
-	dataStart := lastBreak + 1
-	if dataStart == 1 {
-		dataStart = 3
-	}
-	usedDataRows := len(rows) - dataStart + 1
-	if usedDataRows >= pageSize {
-		return len(rows) + 1, nil
-	}
-	return len(rows) + 1, nil
+
+	return lastDataIdx + 2, nil // 0-indexed → 1-based, then +1 for next row
 }
 
-// (wb *Workbook) mlLastPageBalance 获取最后一个过次页行的余额。
+// (wb *Workbook) mlLastPageBalance 获取最近一个过次页结束的余额。
+// 有过次页时读最后一个过次页之前最近的期末余额或数据行余额。
+// 无过次页时从最后一行往前找最近的余额（跳过承前页和结构行）。
 func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 0
 	}
+	// 从后往前找最后一个真实过次页
+	lastBreak := -1
 	for i := len(rows) - 1; i >= 0; i-- {
-		if !mlHasPageBreakAt(rows[i], lay) {
-			continue
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+			lastBreak = i
+			break
 		}
-		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
-			if len(rows[i]) >= lay.BindingLeftCols+7 {
-				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+6]); err == nil {
-					return v
-				}
+	}
+	if lastBreak >= 0 {
+		// 找上一个过次页（或页首），确定当前页范围
+		prevBreak := 0
+		for i := lastBreak - 1; i >= 0; i-- {
+			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+				prevBreak = i + 1
+				break
 			}
 		}
-		if len(rows[i]) > lay.BackStartCol+1 && rows[i][lay.BackStartCol+1] == pageBreakLabel {
-			balIdx := lay.BackStartCol + 5
-			if len(rows[i]) > balIdx {
-				if v, err := yuanStrToCents(rows[i][balIdx]); err == nil {
-					return v
-				}
+		// 优先：找最近的非承前页、非月结行的数据行余额（即分录行的 running balance）
+		for i := lastBreak - 1; i >= prevBreak; i-- {
+			r := rows[i]
+			if len(r) <= lay.BindingLeftCols+6 {
+				continue
+			}
+			summary := ""
+			if len(r) > lay.BindingLeftCols+2 {
+				summary = r[lay.BindingLeftCols+2]
+			}
+			// 跳过承前页行、月结行
+			if summary == carryForwardLabel || summary == "上年结转" ||
+				summary == "本月合计" || summary == "本季合计" || summary == "本年累计" || summary == periodEndLabel {
+				continue
+			}
+			balStr := strings.TrimSpace(r[lay.BindingLeftCols+6])
+			if balStr == "" {
+				continue
+			}
+			if v, err := yuanStrToCents(balStr); err == nil {
+				return v
+			}
+		}
+		// 回退到过次页行自身余额
+		if len(rows[lastBreak]) > lay.BindingLeftCols+6 {
+			if v, err := yuanStrToCents(rows[lastBreak][lay.BindingLeftCols+6]); err == nil {
+				return v
 			}
 		}
 		return 0
 	}
+	// 无过次页 → 从后往前找最近的余额（跳过承前页行和结构行）
+	for i := len(rows) - 1; i >= 0; i-- {
+		r := rows[i]
+		if mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
+			continue
+		}
+		if len(r) > lay.BindingLeftCols+2 &&
+			(r[lay.BindingLeftCols+2] == carryForwardLabel || r[lay.BindingLeftCols+2] == "上年结转") {
+			continue
+		}
+		balIdx := lay.BindingLeftCols + 6
+		if len(r) <= balIdx {
+			continue
+		}
+		if v, err := yuanStrToCents(r[balIdx]); err == nil {
+			return v
+		}
+	}
 	return 0
 }
 
-// (wb *Workbook) mlLastBreakTotals 获取最后一个过次页行的页借贷合计。
+// (wb *Workbook) mlLastBreakTotals 获取最后一个过次页行的页借贷合计（仅从 Back 侧读取）。
 func (wb *Workbook) mlLastBreakTotals(sheet string) (debit, credit int64) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -124,29 +237,17 @@ func (wb *Workbook) mlLastBreakTotals(sheet string) (debit, credit int64) {
 		return 0, 0
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if !mlHasPageBreakAt(rows[i], lay) {
+		if !mlHasPageBreakAt(rows[i], lay) || mlIsStructuralBreak(rows[i], lay) {
 			continue
 		}
-		if len(rows[i]) > lay.BindingLeftCols+2 && rows[i][lay.BindingLeftCols+2] == pageBreakLabel {
-			if len(rows[i]) >= lay.BindingLeftCols+5 {
-				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+3]); err == nil {
-					debit = v
-				}
-				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+4]); err == nil {
-					credit = v
-				}
+		debIdx := lay.BindingLeftCols + 3
+		crdIdx := lay.BindingLeftCols + 4
+		if len(rows[i]) > crdIdx {
+			if v, err := yuanStrToCents(rows[i][debIdx]); err == nil {
+				debit = v
 			}
-		}
-		if len(rows[i]) > lay.BackStartCol+1 && rows[i][lay.BackStartCol+1] == pageBreakLabel {
-			debIdx := lay.BackStartCol + 2
-			crdIdx := lay.BackStartCol + 3
-			if len(rows[i]) > crdIdx {
-				if v, err := yuanStrToCents(rows[i][debIdx]); err == nil {
-					debit = v
-				}
-				if v, err := yuanStrToCents(rows[i][crdIdx]); err == nil {
-					credit = v
-				}
+			if v, err := yuanStrToCents(rows[i][crdIdx]); err == nil {
+				credit = v
 			}
 		}
 		return
@@ -162,22 +263,31 @@ func (wb *Workbook) mlLastRowIsOrphanBreak(sheet string) bool {
 		return false
 	}
 	last := rows[len(rows)-1]
-	return mlHasPageBreakAt(last, lay)
+	if !mlHasPageBreakAt(last, lay) {
+		return false
+	}
+	// 预写的结构过次页只有摘要文字，没有借方数据，不视为孤立翻页
+	debIdx := lay.BindingLeftCols + 3
+	if len(last) <= debIdx || strings.TrimSpace(last[debIdx]) == "" {
+		return false
+	}
+	return true
 }
 
 // (wb *Workbook) mlPageStartRow 返回当前页第一个有效数据行的行号。
+// 只找真实过次页（有数据的），跳过结构过次页（模板占位）。
 func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < 3 {
-		return 3
+		return lay.DataStartRow + 1 + lay.DataStartRow
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			return i + 2 + lay.DataStartRow
 		}
 	}
-	return lay.DataStartRow + 1
+	return lay.DataStartRow + 1 + lay.DataStartRow
 }
 
 // (wb *Workbook) mlRowIsPageBreak 检查指定行是否已超出当页容量。
@@ -194,39 +304,36 @@ func (wb *Workbook) mlPageHasBreakRow(sheet string) bool {
 		return false
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			return true
 		}
 	}
 	return false
 }
 
-// (wb *Workbook) mlNextDataRowAfterBreak 返回过次页/月结等非数据行后的下一个可用数据行（ML 版）。
+// (wb *Workbook) mlNextDataRowAfterBreak 返回月结追加的下一个可用数据行。
+// 找最后一个"期末余额"行（月结最后一行），返回其下一行。
+// 如果尾行之后有真实过次页（翻页），返回新页面的承前页之后。
 func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
-	if err != nil {
-		return 3, nil
+	if err != nil || len(rows) < 3 {
+		return lay.DataStartRow + 1, nil
 	}
-	if len(rows) < 3 {
-		return 3, nil
-	}
-	lastBreak := 0
-	for i := len(rows) - 1; i >= 0; i-- {
-		r := rows[i]
-		if mlHasPageBreakAt(r, lay) || (len(r) > lay.BindingLeftCols+2 &&
-			(r[lay.BindingLeftCols+2] == "本月合计" || r[lay.BindingLeftCols+2] == periodEndLabel)) {
-			lastBreak = i + 1
-			break
+
+	tailRow := wb.mlLastPeriodEndRow(sheet)
+	if tailRow > 0 {
+		// 检查尾行之后是否有真实过次页
+		for i := tailRow; i < len(rows); i++ {
+			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+				return i + 2 + lay.DataStartRow, nil
+			}
 		}
+		return tailRow + 1, nil
 	}
-	if lastBreak > 0 && lastBreak == len(rows) {
-		return lastBreak + 1, nil
-	}
-	if lastBreak > 0 && lastBreak+1 == len(rows) {
-		return len(rows) + 1, nil
-	}
-	return len(rows) + 1, nil
+
+	// 无期末余额 → 回退到 mlNextDataRow
+	return wb.mlNextDataRow(sheet)
 }
 
 // mlDetailTotals 明细科目合计。
@@ -261,12 +368,17 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		}
 		_ = finalDetails
 
-		// 更新标题行（仅更新新增的列）
+		// 更新标题行（仅更新新增的列，Paper1 Front 表头在第5行）
 			lay := mlLayout()
 			for _, nd := range newAppended {
-				col := mlDetailExcelCol(lay, finalIdx[nd])
-				cell := mlCellName(col, 2)
+				col := mlDetailCol(lay, finalIdx[nd])
+				cell := mlCellName(col, 5)
 				wb.File.SetCellValue(name, cell, nd)
+		}
+			// 更新列宽（Front 侧明细列）
+			for i := 0; i < mlMaxDetails; i++ {
+				colLetter := cellColLetter(mlDetailCol(lay, i))
+				wb.File.SetColWidth(name, colLetter, colLetter, 14)
 		}
 
 		return name, finalIdx, newAppended, nil
@@ -314,8 +426,26 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		return "", nil, nil, fmt.Errorf("总账科目 %q 明细科目数 %d 超过上限 %d", general, len(initDetails), mlMaxDetails)
 	}
 
-	if err := wb.writeMLTitle(name, general, initDetails); err != nil {
+	// Paper1 Front 占位页：Front 侧，页码=1，不写 Back 侧
+	lay := mlLayout()
+	if err := wb.writeMLPageHeader(name, 1, 0, 0, general, false, true); err != nil {
 		return "", nil, nil, err
+	}
+	// Paper1 Front 表头行写入实际明细科目名（数据页列标题行）
+	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based
+	for i := 0; i < mlMaxDetails; i++ {
+		col := mlDetailCol(lay, i)
+		cell := mlCellName(col, colHeaderRow)
+		label := ""
+		if i < len(initDetails) {
+			label = initDetails[i]
+		}
+		wb.File.SetCellValue(name, cell, label)
+	}
+	// 列宽（Front 侧明细列）
+	for i := 0; i < mlMaxDetails; i++ {
+		colLetter := cellColLetter(mlDetailCol(lay, i))
+		wb.File.SetColWidth(name, colLetter, colLetter, 14)
 	}
 
 	detailIdx := make(map[string]int)
@@ -366,69 +496,6 @@ func (wb *Workbook) checkMLDetailOrderConflict(sheet string, existingDetails []s
 	return nil
 }
 
-// writeMLTitle 写入多科目明细账标题行和列标题，固定 7 基础列 + 14 明细列。
-// 标题和列标题使用 Layout 坐标（基础列在 FrontStartCol+0~6，明细列在 FrontStartCol+7~20）。
-func (wb *Workbook) writeMLTitle(sheet, general string, details []string) error {
-	lay := mlLayout()
-	nCols := 7 + mlMaxDetails                      // 总列数 = 基础列 + 明细列
-	lastCol := lay.FrontStartCol + nCols                     // 最后数据列（不含打印标记）
-	titleStart := mlCellName(lay.FrontStartCol, 1)
-	titleEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 1)
-
-	title := "多科目明细账 — " + general
-	wb.File.SetCellValue(sheet, titleStart, title)
-	wb.File.MergeCell(sheet, titleStart, titleEndCell)
-
-	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 14},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	wb.File.SetCellStyle(sheet, titleStart, titleEndCell, titleStyle)
-	wb.File.SetRowHeight(sheet, 1, 22)
-
-	// 基础列标题 FrontStartCol+0~6（日期/凭证号/摘要/借方/贷方/方向/余额）
-	for i, h := range glHeaders {
-		cell := mlCellName(lay.FrontStartCol+i, 2)
-		wb.File.SetCellValue(sheet, cell, h)
-	}
-	// 明细列标题 FrontStartCol+7~20（H-U 对应）
-	for i := 0; i < mlMaxDetails; i++ {
-		col := mlDetailExcelCol(lay, i)
-		cell := mlCellName(col, 2)
-		label := ""
-		if i < len(details) {
-			label = details[i]
-		}
-		wb.File.SetCellValue(sheet, cell, label)
-	}
-
-	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#808080", Style: 1},
-		},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	headerEndCell, _ := excelize.CoordinatesToCellName(lastCol-1, 2)
-	wb.File.SetCellStyle(sheet, titleStart, headerEndCell, headerStyle)
-
-	// 基础列宽
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+0), cellColLetter(lay.FrontStartCol+0), 12)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+1), cellColLetter(lay.FrontStartCol+1), 8)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+2), cellColLetter(lay.FrontStartCol+2), 35)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+3), cellColLetter(lay.FrontStartCol+3), 14)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+4), cellColLetter(lay.FrontStartCol+4), 14)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+5), cellColLetter(lay.FrontStartCol+5), 6)
-	wb.File.SetColWidth(sheet, cellColLetter(lay.FrontStartCol+6), cellColLetter(lay.FrontStartCol+6), 16)
-	// 明细列宽
-	for i := 0; i < mlMaxDetails; i++ {
-		colLetter := cellColLetter(mlDetailExcelCol(lay, i))
-		wb.File.SetColWidth(sheet, colLetter, colLetter, 14)
-	}
-
-	return nil
-}
 
 // cellColLetter 返回列号的字母表示。
 func cellColLetter(col int) string {
@@ -436,12 +503,13 @@ func cellColLetter(col int) string {
 	return l
 }
 
-// updateMLDetailHeaders 更新已有 Sheet 的明细列标题，以匹配当月明细科目集。
+// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（数据页列标题行），以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	lay := mlLayout()
+	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based
 	for i := 0; i < mlMaxDetails; i++ {
-		col := mlDetailExcelCol(lay, i)
-		cell := mlCellName(col, 2)
+		col := mlDetailCol(lay, i)
+		cell := mlCellName(col, colHeaderRow)
 		label := ""
 		if i < len(details) {
 			label = details[i]
@@ -450,8 +518,8 @@ func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	}
 }
 
-// readMLDetailHeaders 从 Sheet 第2行读取现有明细列标题，构建 detailName → colIndex 映射。
-// 返回的 details 按列顺序排列（空列对应空字符串）。
+// readMLDetailHeaders 从 Sheet 的数据页列标题行读取现有明细列标题。
+// 使用 Layout 的 HeaderRow + DataStartRow 定位列标题行。
 func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int, details []string, err error) {
 	lay := mlLayout()
 	detailIdx = make(map[string]int)
@@ -461,16 +529,20 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取 Sheet %s: %w", sheet, err)
 	}
-	if len(rows) < 2 {
+
+	// 数据页列标题行：DataStartRow 是相对于页起始的偏移，页起始=6（Paper1 Front）
+	// 列标题在 6 + lay.DataStartRow - 1 = 6 + 6 - 1 = 11 (1-based) = index 10
+	colHeaderRow := 6 + lay.DataStartRow - 1 // 1-based row number
+	if len(rows) < colHeaderRow {
 		return detailIdx, details, nil
 	}
 
-	row2 := rows[1]
+	rowData := rows[colHeaderRow-1]
 	for i := 0; i < mlMaxDetails; i++ {
-		colIdx := mlDetailRowIdx(lay, i) // GetRows 索引 = BindingLeftCols + 7 + i
+		colIdx := mlDetailRowIdx(lay, i)
 		label := ""
-		if colIdx < len(row2) {
-			label = strings.TrimSpace(row2[colIdx])
+		if colIdx < len(rowData) {
+			label = strings.TrimSpace(rowData[colIdx])
 		}
 		details[i] = label
 		if label != "" {
@@ -658,32 +730,30 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 }
 
 // appendToMLSheet 追加分录到指定总账科目的多科目明细账 Sheet。
+// 逻辑页号：数据块两侧页码相同
+// Paper1 Front 占位页已经由 ensureMLSheet 写入第1-5行。
+// 数据页标题从第6行开始。
 func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, detailIdx map[string]int, initial int64) error {
 	sheet := sheetNameML(general)
 	lay := mlLayout()
-
 	numDetails := mlMaxDetails
 
 	rows, _ := wb.File.GetRows(sheet)
-	isNew := len(rows) <= 2
+	isNew := len(rows) <= 5
 
-	if isNew && initial != 0 {
-		wb.writeMLCarryForwardRow(sheet, 3, initial, 0, 0, make([]mlDetailTotals, numDetails), "上年结转")
-	}
-
-	// 计算页码：已有过次页数 + 1
-	pageNum := 1
+	// ── 计算逻辑页号──
+	// logicalPageNum = 已有真实过次页数 + 1（跳过结构预写）
+	logicalPageNum := 1
 	for _, r := range rows {
 		if len(r) > lay.BindingLeftCols+2 && r[lay.BindingLeftCols+2] == pageBreakLabel {
-			pageNum++
+			debIdx := lay.BindingLeftCols + 3
+			if len(r) > debIdx && strings.TrimSpace(r[debIdx]) != "" {
+				logicalPageNum++
+			}
 		}
 	}
 
-	row, err := wb.mlNextDataRow(sheet)
-	if err != nil {
-		return err
-	}
-
+	// ── 排序 ──
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].Date != entries[j].Date {
 			return entries[i].Date < entries[j].Date
@@ -694,12 +764,31 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	balance := initial
 	var pageDebit, pageCredit int64
 	pageDetails := make([]mlDetailTotals, numDetails)
+	var row int
 
-	if !isNew {
-		balance = wb.mlLastPageBalance(sheet)
-		if !wb.mlPageHasBreakRow(sheet) {
-			wb.markExistingMLPageForPrint(sheet)
+	if isNew {
+		// Paper1 Front 已在 rows 1-5（ensureMLSheet 写入）
+		// 写入第一个数据页标题：两侧同一逻辑页号
+		wb.writeMLPageHeader(sheet, 6, logicalPageNum, logicalPageNum, general, true, true)
+
+		// 结转行在第11行（6 + DataStartRow = 6 + 5）
+		row = 6 + lay.DataStartRow // = 11
+		cfLabel := carryForwardLabel
+		if initial != 0 {
+			cfLabel = "上年结转"
 		}
+		wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
+		row++ // = 12：第一条分录
+		// preWrite removed — 由 break handler 负责
+	} else {
+		// 已有数据 — 找到下一个可用数据行
+		var err error
+		row, err = wb.mlNextDataRow(sheet)
+		if err != nil {
+			return err
+		}
+		balance = wb.mlLastPageBalance(sheet)
+		// 打印标记延迟到 FinalizeMLPages 统一添加
 	}
 
 	for _, e := range entries {
@@ -707,12 +796,12 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		if wb.mlLastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.mlLastBreakTotals(sheet)
 			pbDetails := wb.lastBreakDetailTotals(sheet)
-			pageNum++
-			wb.writeMLPageHeader(sheet, row, pageNum, general)
+			logicalPageNum++
+			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
 			row++
-			pageDebit = 0
+				pageDebit = 0
 			pageCredit = 0
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
@@ -721,12 +810,12 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		if wb.mlRowIsPageBreak(sheet, row) {
 			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails)
 			row++
-			pageNum++
-			wb.writeMLPageHeader(sheet, row, pageNum, general)
+			logicalPageNum++
+			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel)
 			row++
-			pageDebit = 0
+				pageDebit = 0
 			pageCredit = 0
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
@@ -737,22 +826,22 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 		dir, dispBal := directionFor(balance, 0)
 
-		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+0, row), e.Date)
-		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+1, row), e.VoucherNum)
-		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+2, row), e.Summary)
-		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+3, row), centsToYuan(e.DebitCents))
-		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+4, row), centsToYuan(e.CreditCents))
-		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+5, row), dir)
-		wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), e.Date)
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), e.VoucherNum)
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), e.Summary)
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, row), centsToYuan(e.DebitCents))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), centsToYuan(e.CreditCents))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(dispBal))
 
-		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
-		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
-		wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
+		wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
+		wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
+		wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
 
 		if e.DetailAccount != "" {
 			if idx, ok := detailIdx[e.DetailAccount]; ok {
 				net := e.DebitCents - e.CreditCents
-				col := mlDetailStartCol + idx
+				col := mlDetailCol(lay, idx)
 				wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 				wb.setMoneyStyle(sheet, row, col)
 				pageDetails[idx].debit += e.DebitCents
@@ -760,144 +849,273 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			}
 		}
 
-		wb.markMLRowForPrint(sheet, row)
+		// 打印标记延迟到 FinalizeMLPages 统一添加
 		row++
 	}
 
 	return nil
 }
 
-// writeMLPageBreakRow 写多科目明细账的"过次页"行，A-G 总计 + H-U 各明细本页净额。
+// writeMLPageBreakRow 写多科目明细账的"过次页"行，双面写入：
+// Back 侧：基础列（日期=空、凭证号=空、摘要=过次页、借方/贷方合计数、方向、余额）+ 明细1~4净额
+// Front 侧：明细5~14净额
 func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals) {
 	lay := mlLayout()
 	dir, dispBal := directionFor(balance, 0)
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+0, row), "")
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+1, row), "")
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+2, row), pageBreakLabel)
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+3, row), centsToYuan(pageDebit))
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+4, row), centsToYuan(pageCredit))
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+5, row), dir)
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
 
-	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
-	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
-	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
+	// Back 侧：基础列合计
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), pageBreakLabel)
+	// 过次页标签红色加粗
+	redStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+	})
+	wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol+2, row), mlCellName(lay.BackStartCol+2, row), redStyle)
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), centsToYuan(pageCredit))
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(dispBal))
 
-	for i, pd := range pageDetails {
-		net := pd.debit - pd.credit
-		col := mlDetailExcelCol(lay, i)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+
+	// Back 侧：明细1~4 净额
+	for i := 0; i < 4 && i < len(pageDetails); i++ {
+		net := pageDetails[i].debit - pageDetails[i].credit
+		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
 	}
-}
 
-// writeMLCarryForwardRow 写多科目明细账的"承前页"行，与过次页数据相同。
+	// Front 侧：明细5~14 净额
+	for i := 4; i < len(pageDetails); i++ {
+		net := pageDetails[i].debit - pageDetails[i].credit
+		col := mlDetailCol(lay, i)
+		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
+		wb.setMoneyStyle(sheet, row, col)
+	}
+
+}
+// writeMLCarryForwardRow 写多科目明细账的"承前页"行，双面写入（结构与过次页相同，标签可定制）。
+
+// 翻页触发时 writeMLPageBreakRow 会覆盖为完整数据。
 func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals, label string) {
 	lay := mlLayout()
 	dir, dispBal := directionFor(balance, 0)
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+0, row), "")
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+1, row), "")
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+2, row), label)
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+3, row), centsToYuan(pageDebit))
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+4, row), centsToYuan(pageCredit))
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+5, row), dir)
-	wb.File.SetCellValue(sheet, mlCellName(lay.FrontStartCol+6, row), centsToYuan(dispBal))
 
-	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+3)
-	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+4)
-	wb.setMoneyStyle(sheet, row, lay.FrontStartCol+6)
+	// Back 侧：基础列合计
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+0, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+1, row), "")
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, row), label)
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+3, row), centsToYuan(pageDebit))
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+4, row), centsToYuan(pageCredit))
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+5, row), dir)
+	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+6, row), centsToYuan(dispBal))
 
-	for i, pd := range pageDetails {
-		net := pd.debit - pd.credit
-		col := mlDetailExcelCol(lay, i)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+3)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+4)
+	wb.setMoneyStyle(sheet, row, lay.BackStartCol+6)
+
+	// Back 侧：明细1~4 净额
+	for i := 0; i < 4 && i < len(pageDetails); i++ {
+		net := pageDetails[i].debit - pageDetails[i].credit
+		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
 	}
+
+	// Front 侧：明细5~14 净额
+	for i := 4; i < len(pageDetails); i++ {
+		net := pageDetails[i].debit - pageDetails[i].credit
+		col := mlDetailCol(lay, i)
+		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
+		wb.setMoneyStyle(sheet, row, col)
+	}
+
+// 翻页触发时 writeMLPageBreakRow 覆盖为完整数据；不触发时红色文字作为模板结构保留。
 }
 
 
-// writeMLPageHeader 写入多科目明细账后续页标题行（过次页之后、承前页之前调用），
-// 包含页码、科目名称、多科目明细账标题、列标题。
-// 行结构（5 行，与 writePageHeader 一致）：
-//   Row N+0: 分第 n 页（右侧，绿色+数字红色）
-//   Row N+1: 多科目明细账 — 科目名（居中，绿色+双下划线）| 科目名称（右侧）
-//   Row N+2: 科目名称（右侧，印章红）
-//   Row N+3: [空行]
-//   Row N+4: 日期│凭证号│摘要│借方金额│贷方金额│方向│余额
-func (wb *Workbook) writeMLPageHeader(sheet string, row int, pageNum int, general string) error {
+// writeMLPageHeader 写入多科目明细账后续页双面标题行（过次页之后、承前页之前调用）。
+// 写入 Back 和/或 Front 两侧的标题、页码、科目名、列标题。
+// hasBack/hasFront 控制是否写对应侧；backPageNum/frontPageNum 分别是两侧的"分第N页"。
+// 行结构（5 行）：
+//   Row +0: 分第 n 页 — Back 侧标题区 + Front 侧标题区
+//   Row +1: 多科目明细账 — XXX（Back 侧标题区）| 科目名（Front 侧标题区，印章红）
+//   Row +2: 科目名 — Back 侧 + Front 侧科目区（印章红）
+//   Row +3: [空行]
+//   Row +4: 列标题 — Back 侧（年|凭证|摘要|借方|贷方|方向|余额 + 明细1~4）| Front 侧（明细5~14）
+//   Row +5: 子表头 — Back 侧（月|日|字|号，仅前4列有内容）
+func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontPageNum int, general string, hasBack, hasFront bool) error {
 	lay := mlLayout()
-
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
-	// Row N+0: 分第 n 页（右侧，绿色，数字印章红）
-	pnLeft := mlCellName(lay.AccountColLeft, row)
-	pnRight := mlCellName(lay.AccountColRight, row)
-	wb.File.MergeCell(sheet, pnLeft, pnRight)
-	wb.File.SetCellRichText(sheet, pnLeft, []excelize.RichTextRun{
-		{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-		{Text: fmt.Sprintf("%d", pageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
-		{Text: " 页", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-	})
+	// Row +0: "分第N页(左)" — Back 侧（backPageNum>0 时显示）
+	if hasBack && backPageNum > 0 {
+		pnBack := mlCellName(lay.BackTitleColLeft, row)
+		pnBackEnd := mlCellName(lay.BackTitleColRight, row)
+		wb.File.MergeCell(sheet, pnBack, pnBackEnd)
+		wb.File.SetCellRichText(sheet, pnBack, []excelize.RichTextRun{
+			{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+			{Text: fmt.Sprintf("%d", backPageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
+			{Text: " 页(左)", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+		})
+	}
+
+	// Row +0: "分第N页(右)" — Front 侧（frontPageNum>0 时显示）
+	if hasFront && frontPageNum > 0 {
+		pnFront := mlCellName(lay.FrontTitleColLeft, row)
+		pnFrontEnd := mlCellName(lay.FrontTitleColRight, row)
+		wb.File.MergeCell(sheet, pnFront, pnFrontEnd)
+		wb.File.SetCellRichText(sheet, pnFront, []excelize.RichTextRun{
+			{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+			{Text: fmt.Sprintf("%d", frontPageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
+			{Text: " 页(右)", Font: &excelize.Font{Color: darkGreen, Size: 10}},
+		})
+	}
 	wb.File.SetRowHeight(sheet, row, 18)
 	row++
 
-	// Row N+1: 多科目明细账 — 科目名（居中）+ 科目名称（右侧）
-	tl := mlCellName(lay.TitleColLeft, row)
-	tr := mlCellName(lay.TitleColRight, row)
-	wb.File.MergeCell(sheet, tl, tr)
-	wb.File.SetCellValue(sheet, tl, "多科目明细账 — "+general)
-	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	wb.File.SetCellStyle(sheet, tl, tr, titleStyle)
+	// Row +1: 标题 — Back 侧（"多科目明细账 — XXX"）
+	if hasBack {
+		tlBack := mlCellName(lay.BackTitleColLeft, row)
+		trBack := mlCellName(lay.BackTitleColRight, row)
+		wb.File.MergeCell(sheet, tlBack, trBack)
+		wb.File.SetCellValue(sheet, tlBack, "多科目明细账 — "+general)
+		titleStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		})
+		wb.File.SetCellStyle(sheet, tlBack, trBack, titleStyle)
+	}
 
-	al := mlCellName(lay.AccountColLeft, row)
-	ar := mlCellName(lay.AccountColRight, row)
-	wb.File.MergeCell(sheet, al, ar)
-	wb.File.SetCellValue(sheet, al, general)
-	accStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Color: sealRed, Size: 10},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	wb.File.SetCellStyle(sheet, al, ar, accStyle)
+	// Row +1: Front 侧标题（多科目明细账 — XXX），跨整个 Front 区
+	if hasFront {
+		tlFront := mlCellName(lay.FrontStartCol, row)
+		trFront := mlCellName(lay.FrontStartCol+lay.FrontColCount-1, row)
+		wb.File.MergeCell(sheet, tlFront, trFront)
+		wb.File.SetCellValue(sheet, tlFront, "多科目明细账 — "+general)
+		frontTitleStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Bold: true, Size: 14, Color: "006100", Underline: "double"},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		})
+		wb.File.SetCellStyle(sheet, tlFront, trFront, frontTitleStyle)
+	}
 	wb.File.SetRowHeight(sheet, row, 28)
 	row++
 
-	// Row N+2: 科目名称（右侧，印章红）
-	acLeft := mlCellName(lay.AccountColLeft, row)
-	acRight := mlCellName(lay.AccountColRight, row)
-	wb.File.MergeCell(sheet, acLeft, acRight)
-	wb.File.SetCellValue(sheet, acLeft, general)
-	acRowStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Color: sealRed, Size: 10},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	wb.File.SetCellStyle(sheet, acLeft, acRight, acRowStyle)
+	// Row +2: 科目名 — Back 侧
+	if hasBack {
+		acBack := mlCellName(lay.BackAccountColLeft, row)
+		acBackEnd := mlCellName(lay.BackAccountColRight, row)
+		wb.File.MergeCell(sheet, acBack, acBackEnd)
+		wb.File.SetCellValue(sheet, acBack, general)
+		acRowStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Color: sealRed, Size: 10},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		})
+		wb.File.SetCellStyle(sheet, acBack, acBackEnd, acRowStyle)
+	}
+
+	// Row +2: 科目名 — Front 侧
+	if hasFront {
+		acFront := mlCellName(lay.FrontAccountColLeft, row)
+		acFrontEnd := mlCellName(lay.FrontAccountColRight, row)
+		wb.File.MergeCell(sheet, acFront, acFrontEnd)
+		wb.File.SetCellValue(sheet, acFront, general)
+		acRowStyle2, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Color: sealRed, Size: 10},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		})
+		wb.File.SetCellStyle(sheet, acFront, acFrontEnd, acRowStyle2)
+	}
 	wb.File.SetRowHeight(sheet, row, 18)
 	row++
 
-	// Row N+3: [空行]
+	// Row +3: 空行
 	row++
 
-	// Row N+4: 列标题
-	colNames := []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "方向", "余额"}
-	for i, h := range colNames {
-		cell := mlCellName(lay.FrontStartCol+i, row)
-		wb.File.SetCellValue(sheet, cell, h)
+	// Row +4: 列标题 — Back 侧（两行表头：年|凭证 合并，子表头 月|日|字|号）
+	year := wb.Month[:4]
+	if hasBack {
+		// "年" 合并月+日两列
+		yearLeft := mlCellName(lay.BackStartCol, row)
+		yearRight := mlCellName(lay.BackStartCol+1, row)
+		wb.File.MergeCell(sheet, yearLeft, yearRight)
+		wb.File.SetCellValue(sheet, yearLeft, year+"年")
+		// "凭证" 合并字+号两列
+		vouchLeft := mlCellName(lay.BackStartCol+2, row)
+		vouchRight := mlCellName(lay.BackStartCol+3, row)
+		wb.File.MergeCell(sheet, vouchLeft, vouchRight)
+		wb.File.SetCellValue(sheet, vouchLeft, "凭证")
+		// 摘要 ~ 余额 各占单列
+		otherCols := []string{"摘要", "借方金额", "贷方金额", "方向", "余额"}
+		for i, h := range otherCols {
+			cell := mlCellName(lay.BackStartCol+4+i, row)
+			wb.File.SetCellValue(sheet, cell, h)
+		}
+		// Back 侧明细1~4 列标题
+		for i := 0; i < 4 && i < mlMaxDetails; i++ {
+			col := mlDetailCol(lay, i)
+			cell := mlCellName(col, row)
+			wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
+		}
 	}
+
+	// Row +4: 列标题 — Front 侧（明细5~14）
+	if hasFront {
+		for i := 4; i < mlMaxDetails; i++ {
+			col := mlDetailCol(lay, i)
+			cell := mlCellName(col, row)
+			wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
+		}
+	}
+
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10},
+		Font: &excelize.Font{Bold: true, Size: 10, Color: darkGreen},
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#808080", Style: 1},
-		},
+		Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	hs := mlCellName(lay.FrontStartCol, row)
-	he := mlCellName(lay.FrontStartCol+len(colNames)-1, row)
-	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
+	// Back 侧基础列表头样式（Row +4）
+	if hasBack {
+		hsBack := mlCellName(lay.BackStartCol, row)
+		heBack := mlCellName(lay.BackStartCol+6, row)
+		wb.File.SetCellStyle(sheet, hsBack, heBack, headerStyle)
+		for i := 0; i < 4 && i < mlMaxDetails; i++ {
+			cell := mlCellName(mlDetailCol(lay, i), row)
+			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
+		}
+	}
+	// Front 侧明细5~14 表头样式（Row +4）
+	if hasFront {
+		for i := 4; i < mlMaxDetails; i++ {
+			cell := mlCellName(mlDetailCol(lay, i), row)
+			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
+		}
+	}
+	row++
+
+	// Row +5: 子表头 — Back 侧前4列（月/日/字/号）
+	if hasBack {
+		subHeaders := []string{"月", "日", "字", "号"}
+		for i, h := range subHeaders {
+			cell := mlCellName(lay.BackStartCol+i, row)
+			wb.File.SetCellValue(sheet, cell, h)
+		}
+		subStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Size: 9, Color: darkGreen},
+			Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
+			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		})
+		subLeft := mlCellName(lay.BackStartCol, row)
+		subRight := mlCellName(lay.BackStartCol+3, row)
+		wb.File.SetCellStyle(sheet, subLeft, subRight, subStyle)
+	}
 
 	return nil
 }
@@ -910,10 +1128,10 @@ func (wb *Workbook) lastBreakDetailTotals(sheet string) []mlDetailTotals {
 		return make([]mlDetailTotals, mlMaxDetails)
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			result := make([]mlDetailTotals, mlMaxDetails)
 			for j := 0; j < mlMaxDetails; j++ {
-				colIdx := mlDetailRowIdx(lay, j) // GetRows 索引 = BindingLeftCols + 7 + j
+				colIdx := mlDetailRowIdx(lay, j) // GetRows 索引：j<4→BindingLeftCols+7+j(Back侧), j>=4→FrontStartCol-1+(j-4)(Front侧)
 				if colIdx < len(rows[i]) {
 					if v, err := yuanStrToCents(rows[i][colIdx]); err == nil {
 						if v >= 0 {

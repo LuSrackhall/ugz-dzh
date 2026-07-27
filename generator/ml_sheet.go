@@ -698,6 +698,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	if !isNew {
 		balance = wb.mlLastPageBalance(sheet)
 		if !wb.mlPageHasBreakRow(sheet) {
+			wb.markExistingMLPageForPrint(sheet)
 		}
 	}
 
@@ -759,6 +760,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			}
 		}
 
+		wb.markMLRowForPrint(sheet, row)
 		row++
 	}
 

@@ -227,45 +227,47 @@ func hasPageBreakAt(row []string, lay layout.GLLayout) bool {
 }
 
 // nextDataRow 返回 Sheet 中下一个可用数据行号（Excel 行号，1-indexed）。
-// 从 GetRows 末尾反向扫描，跳过空行和模板标签，找到最后一个实际数据行。
+// 从下往上扫，找最后一条有实际内容的行，只跳过结构过次页（红字标签无金额）。
+// 期末余额、分录行、月结行等都被视为实际内容。
 func (wb *Workbook) nextDataRow(sheet string) (int, error) {
 	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
-	if err != nil {
+	if err != nil || len(rows) <= 2 {
 		return lay.DataStartRow + 1, nil
 	}
-
-	// 从后向前扫描 GetRows
 	for i := len(rows) - 1; i >= 0; i-- {
 		if len(rows[i]) == 0 {
-			continue // 空行跳过
-		}
-
-		// 真断页（完整过次页：标签 + 余额）
-		if hasPageBreakAt(rows[i], lay) {
-			// 过次页在 GetRows[i]，Excel 行号 = i+1
-			// 返回过次页后一行供承前页/新页处理
-			return i + 2, nil
-		}
-
-		// 模板标签（仅红色"过次页"文字，无余额）→ 跳过
-		isTemplate := false
-		if len(rows[i]) > lay.BindingLeftCols+4 && rows[i][lay.BindingLeftCols+4] == pageBreakLabel {
-			if len(rows[i]) <= lay.BindingLeftCols+8 || rows[i][lay.BindingLeftCols+8] == "" {
-				isTemplate = true
-			}
-		}
-		if isTemplate {
 			continue
 		}
-
-		// 真实数据行 → 返回下一行
-		// GetRows[i] = Excel 行号 i+1，下一行 = i+2
-		return i + 2, nil
+		if isTemplateBreak(rows[i], lay) {
+			continue
+		}
+		return i + 2, nil // 当前行的下一行
 	}
-
-	// 完全无数据 → 从表头后开始
 	return lay.DataStartRow + 1, nil
+}
+
+// isTemplateBreak 判断是否为结构过次页（仅有红字标签，无金额数据）。
+func isTemplateBreak(row []string, lay layout.GLLayout) bool {
+	// Front 区
+	if len(row) > lay.BindingLeftCols+4 && row[lay.BindingLeftCols+4] == pageBreakLabel {
+		if len(row) <= lay.BindingLeftCols+8 || row[lay.BindingLeftCols+8] == "" {
+			return true
+		}
+	}
+	// Back 区
+	if len(row) > lay.BackStartCol+3 && row[lay.BackStartCol+3] == pageBreakLabel {
+		if len(row) <= lay.BackStartCol+7 || row[lay.BackStartCol+7] == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// isPeriodEnd 检查行中是否有「期末余额」标签（Front 或 Back 区）。
+func isPeriodEnd(row []string, lay layout.GLLayout) bool {
+	return (len(row) > lay.BindingLeftCols+4 && row[lay.BindingLeftCols+4] == periodEndLabel) ||
+		(len(row) > lay.BackStartCol+3 && row[lay.BackStartCol+3] == periodEndLabel)
 }
 
 // AppendEntries 追加当月分录到对应的总分类账 Sheet。
@@ -306,17 +308,13 @@ func (wb *Workbook) AppendEntries(entries []voucher.Entry, initials map[string]i
 	return nil
 }
 
-// appendToGLSheet 将分录追加到指定科目的总分类账 Sheet。
-// getPageNum 从 Sheet 中过次页标签总数计算当前页码（含模板和真断页）。
+// getPageNum 从 Sheet 中真断页数计算当前页码（不计算模板标签）。
 func (wb *Workbook) getPageNum(sheet string) int {
 	lay := glLayout()
 	rows, _ := wb.File.GetRows(sheet)
 	pn := 1
 	for _, r := range rows {
-		if len(r) > lay.BindingLeftCols+4 && r[lay.BindingLeftCols+4] == pageBreakLabel {
-			pn++
-		}
-		if len(r) > lay.BackStartCol+3 && r[lay.BackStartCol+3] == pageBreakLabel {
+		if hasPageBreakAt(r, lay) {
 			pn++
 		}
 	}
@@ -371,11 +369,13 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		}
 
 		if wb.rowIsPageBreak(sheet, row) {
+
 			wb.writePageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
 			pageNum = wb.getPageNum(sheet)
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
+
 			wb.writeCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
 			pageDebit = 0
@@ -539,7 +539,7 @@ func (wb *Workbook) pageStartRow(sheet string) int {
 		if hasPageBreakAt(rows[i], lay) {
 			// i = GetRows index ≈ Excel row - 1（GetRows 包含空行）
 			// 过次页后一行为空，再后 DataStartRow 行为新页页头
-			return i + 3 + lay.DataStartRow
+			return i + 2 + lay.DataStartRow
 		}
 	}
 	return lay.DataStartRow + 1

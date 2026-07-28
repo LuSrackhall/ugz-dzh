@@ -1130,25 +1130,40 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 		})
 		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, row),
 			cellName(lay.FrontStartCol+glColCount-1+colOff, row), rowBorderStyle)
-		// 年/凭证列红色右边框（增量添加，不影响已有样式）
-		wb.setRedRightBorder(sheet, lay.FrontStartCol+1+colOff, row) // 列1（日）
-		wb.setRedRightBorder(sheet, lay.FrontStartCol+3+colOff, row) // 列3（号）
-	}
-	// 过次页行也应用红色右边框
-	if startRow <= endRow {
-		wb.setRedRightBorder(sheet, lay.FrontStartCol+1+colOff, endRow)
-		wb.setRedRightBorder(sheet, lay.FrontStartCol+3+colOff, endRow)
 	}
 
 	return nil
 }
 
 func (wb *Workbook) finalizeAllGLSheets() error {
+	lay := glLayout()
 	for _, sheet := range wb.File.GetSheetList() {
-		if strings.HasPrefix(sheet, sheetPrefixGL) {
-			if err := wb.finalizeGLSheet(sheet); err != nil {
-				return err
+		if !strings.HasPrefix(sheet, sheetPrefixGL) {
+			continue
+		}
+		if err := wb.finalizeGLSheet(sheet); err != nil {
+			return err
+		}
+		// 一次性给整 sheet 的年/凭证列（列1和列3）添加红色右边框
+		rows, err := wb.File.GetRows(sheet)
+		if err != nil || len(rows) <= 2 {
+			continue
+		}
+		// 从表头第一行到最后一行，逐行应用
+		for row := 1; row <= len(rows); row++ {
+			// 跳过空行（有单元格被 SetCellStyle 影响但无内容）
+			hasData := false
+			for _, v := range rows[row-1] {
+				if v != "" { hasData = true; break }
 			}
+			if !hasData {
+				continue
+			}
+			wb.setRedRightBorder(sheet, lay.FrontStartCol+1, row) // 列1（日）
+			wb.setRedRightBorder(sheet, lay.FrontStartCol+3, row) // 列3（号）
+			// Back 区也需要
+			wb.setRedRightBorder(sheet, lay.BackStartCol+1, row) // Back 列1
+			wb.setRedRightBorder(sheet, lay.BackStartCol+3, row) // Back 列3
 		}
 	}
 	return nil

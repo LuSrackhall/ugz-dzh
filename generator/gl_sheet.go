@@ -475,7 +475,6 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		if wb.lastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.lastBreakTotals(sheet)
 			pageNum = wb.getPageNum(sheet)
-			row += 3 // 下边距
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
 			wb.writeCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pageNum)
@@ -486,8 +485,6 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 
 			wb.writePageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
-			// 下边距 3 行
-			row += 3
 			pageNum = wb.getPageNum(sheet)
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
@@ -825,12 +822,6 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 
 	darkGreen := "006100"
 	sealRed := "CC0000"
-
-		// 上边距 3 行
-		for i := 0; i < 3; i++ {
-			wb.File.SetRowHeight(sheet, row+i, 3)
-		}
-		row += 3
 
 		// Row N+0: 总    分    类    账（居中）| 分第 n 页（"分第"/"页"绿色，数字红色+绿色虚线下划线）
 	tl := cellName(lay.TitleColLeft+colOffset, row)

@@ -1181,8 +1181,8 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			wb.setThickBottomBorder(sheet, dataColStart, headerBottomRow)
 			wb.setThickBottomBorder(sheet, dataColStart+glColCount-1, headerBottomRow)
 
-			// 借方/贷方/余额列左右红色双线
-			for _, colOff := range []int{glColDebit, glColCredit, glColBalance} {
+			// 借方/贷方/余额/借或贷列左右红色双线
+			for _, colOff := range []int{glColDebit, glColCredit, glColBalance, glColDir} {
 				for d := pageStart; d <= row && d <= len(rows); d++ {
 					wb.setRedDoubleBorder(sheet, dataColStart+colOff, d)
 				}

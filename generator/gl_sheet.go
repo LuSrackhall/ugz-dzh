@@ -1178,8 +1178,9 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 
 			// 表头下边框加粗
 			headerBottomRow := pageStart + 1
-			wb.setThickBottomBorder(sheet, dataColStart, headerBottomRow)
-			wb.setThickBottomBorder(sheet, dataColStart+glColCount-1, headerBottomRow)
+			for c := 0; c < glColCount; c++ {
+				wb.setThickBottomBorder(sheet, dataColStart+c, headerBottomRow)
+			}
 
 			// 借方/贷方/余额/借或贷列左右红色双线
 			for _, colOff := range []int{glColDebit, glColCredit, glColBalance, glColDir} {
@@ -1203,8 +1204,9 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			wb.setRedRightBorder(sheet, dataColStart+3, d)
 		}
 		headerBottomRow := pageStart + 1
-		wb.setThickBottomBorder(sheet, dataColStart, headerBottomRow)
-		wb.setThickBottomBorder(sheet, dataColStart+glColCount-1, headerBottomRow)
+		for c := 0; c < glColCount; c++ {
+			wb.setThickBottomBorder(sheet, dataColStart+c, headerBottomRow)
+		}
 		for _, colOff := range []int{glColDebit, glColCredit, glColBalance, glColDir} {
 			for d := pageStart; d <= len(rows); d++ {
 				wb.setRedDoubleBorder(sheet, dataColStart+colOff, d)

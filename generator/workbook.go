@@ -89,15 +89,14 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 	}
 	wb.moneyStyleThickID = moneyStyleThick
 
-	// 设置默认 Sheet 页面布局为 A4 横向，页边距 0
-	if idx, err := wb.File.GetSheetIndex("Sheet1"); err == nil && idx >= 0 {
-		paperSize := 9
-		layoutOpt := &excelize.PageLayoutOptions{
+	// 设置所有 Sheet 页面布局为 A4 横向，页边距 0
+	paperSize := 9
+	for _, sheet := range wb.File.GetSheetList() {
+		wb.File.SetPageLayout(sheet, &excelize.PageLayoutOptions{
 			Orientation: stringPtr("landscape"),
 			Size:        &paperSize,
-		}
-		wb.File.SetPageLayout("Sheet1", layoutOpt)
-		wb.File.SetPageMargins("Sheet1", &excelize.PageLayoutMarginsOptions{
+		})
+		wb.File.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
 			Top:    float64Ptr(0),
 			Bottom: float64Ptr(0),
 			Left:   float64Ptr(0),

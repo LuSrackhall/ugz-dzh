@@ -1108,7 +1108,20 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 	// 每5行底边加粗
 	startRow := pageStart
 	endRow := breakRow
+	// 年/凭证列右侧红色边框样式（覆盖整列到底）
+	colRedRightStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "right", Color: "CC0000", Style: 1},
+		},
+	})
 	for row := startRow; row <= endRow; row++ {
+		// 年列右侧（列1）红色边框
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+1+colOff, row),
+			cellName(lay.FrontStartCol+1+colOff, row), colRedRightStyle)
+		// 凭证列右侧（列3）红色边框
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+3+colOff, row),
+			cellName(lay.FrontStartCol+3+colOff, row), colRedRightStyle)
+
 		// 计算当前行是页内第几行（从1开始）
 		rowInPage := row - startRow + 1
 		// 每5行底边加粗

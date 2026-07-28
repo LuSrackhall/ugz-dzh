@@ -75,7 +75,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		// 如果当前位置到达过次页位置，先翻页再写月结
 		// 用当前页起始 + 20 计算，不依赖 mlPageStartRow（后者可能找到后续真实过次页）
 		bRows, _ := wb.File.GetRows(sheet)
-		curPageStart := mlFirstDataPageStart() + 1 + lay.DataStartRow
+		curPageStart := mlFirstDataPageStart() + lay.DataStartRow
 		for i := len(bRows) - 1; i >= 0; i-- {
 			if mlHasPageBreakAt(bRows[i], lay) {
 				curPageStart = i + 2 + lay.DataStartRow
@@ -87,7 +87,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			bal := wb.mlLastPageBalance(sheet)
 			pageNum := 1
 			for _, br := range bRows {
-				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
+				if mlHasPageBreakAt(br, lay) {
 					pageNum++
 				}
 			}
@@ -103,7 +103,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		// 用当前页起始 + 20 计算过次页位置
 		findPageBreakRow := func() int {
 			bRows, _ := wb.File.GetRows(sheet)
-			ps := mlFirstDataPageStart() + 1 + lay.DataStartRow
+			ps := mlFirstDataPageStart() + lay.DataStartRow
 			for i := len(bRows) - 1; i >= 0; i-- {
 				if mlHasPageBreakAt(bRows[i], lay) {
 					ps = i + 2 + lay.DataStartRow
@@ -122,7 +122,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			pageNum := 1
 			bRows, _ := wb.File.GetRows(sheet)
 			for _, br := range bRows {
-				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
+				if mlHasPageBreakAt(br, lay) {
 					pageNum++
 				}
 			}
@@ -247,7 +247,27 @@ func (wb *Workbook) WriteMLMonthClosings(
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
 		wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffBalance)
+
+		// 月末补齐当前页结构过次页（计算方式和 padMLPage 一致，避免重复写入）
+		ps := mlFirstDataPageStart() + lay.DataStartRow
+		bRowsFinal, _ := wb.File.GetRows(sheet)
+		for i := len(bRowsFinal) - 1; i >= 0; i-- {
+			if mlHasPageBreakAt(bRowsFinal[i], lay) {
+				ps = i + 2 + lay.DataStartRow
+				break
+			}
 		}
+		brRow := ps + pageSize
+		brCell := mlCellName(lay.BackStartCol+mlOffSummary, brRow)
+		brVal, _ := wb.File.GetCellValue(sheet, brCell)
+		if brVal == "" {
+			wb.File.SetCellValue(sheet, brCell, pageBreakLabel)
+			redBr, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+			})
+			wb.File.SetCellStyle(sheet, brCell, brCell, redBr)
+		}
+	}
 
 		return nil
 }
@@ -271,9 +291,9 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 	lay := mlLayout()
 	rows, _ := wb.File.GetRows(sheet)
 
-	pageStart := mlFirstDataPageStart() + 1 + lay.DataStartRow
+	pageStart := mlFirstDataPageStart() + lay.DataStartRow
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) {
 			pageStart = i + 2 + lay.DataStartRow
 			break
 		}

@@ -153,7 +153,7 @@ func mlLastDataBeforeBreak(rows [][]string, lay layout.MLLayout) int {
 
 // (wb *Workbook) mlNextDataRow 返回 Sheet 中下一个可用数据行号。
 // 找最后一条数据行（跳过空行和过次页），返回其下一行。
-// 若下一行是结构过次页（page boundary），则跳到翻页后下一页的数据起始行。
+// 数据自然填满空行，到第21行（过次页位置）时 mlRowIsPageBreak 触发翻页。
 func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -171,12 +171,7 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 		return lastDataIdx + 2 + lay.DataStartRow, nil
 	}
 
-	nextRow := lastDataIdx + 2 // 1-based: 0-indexed + 1 → next row, then +1
-	// 如果下一行是结构过次页（页面边界），跳到下一页
-	if nextRow <= len(rows) && mlHasPageBreakAt(rows[nextRow-1], lay) && mlIsStructuralBreak(rows[nextRow-1], lay) {
-		return nextRow + 1 + lay.DataStartRow, nil // 结构过次页后 header + DataStartRow
-	}
-	return nextRow, nil
+	return lastDataIdx + 2, nil // 0-indexed → 1-based, then +1 for next row
 }
 
 // (wb *Workbook) mlLastPageBalance 获取最近一个过次页结束的余额。
@@ -303,7 +298,7 @@ func (wb *Workbook) mlLastRowIsOrphanBreak(sheet string) bool {
 }
 
 // (wb *Workbook) mlPageStartRow 返回当前页第一个有效数据行的行号。
-// 结构过次页和真实过次页都作为页边界。
+// 只找真实过次页（有余额数据），跳过结构过次页（模板占位）。
 func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
@@ -311,7 +306,7 @@ func (wb *Workbook) mlPageStartRow(sheet string) int {
 		return mlFirstDataPageStart() + lay.DataStartRow
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			return i + 2 + lay.DataStartRow
 		}
 	}
@@ -891,10 +886,11 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
 
-		// 页满 → 过次页 + 标题 + 承前页
+		// 页满 → 过次页 + 标题 + 承前页（写在 pageStart+pageSize 位置，非当前 row）
 		if wb.mlRowIsPageBreak(sheet, row) {
-			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails)
-			row++
+			pbRow := wb.mlPageStartRow(sheet) + pageSize
+			wb.writeMLPageBreakRow(sheet, pbRow, balance, pageDebit, pageCredit, pageDetails)
+			row = pbRow + 1
 			logicalPageNum++
 			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
 			row += lay.DataStartRow

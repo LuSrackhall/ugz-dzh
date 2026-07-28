@@ -77,7 +77,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		bRows, _ := wb.File.GetRows(sheet)
 		curPageStart := mlFirstDataPageStart() + lay.DataStartRow
 		for i := len(bRows) - 1; i >= 0; i-- {
-			if mlHasPageBreakAt(bRows[i], lay) {
+			if mlHasPageBreakAt(bRows[i], lay) && !mlIsStructuralBreak(bRows[i], lay) {
 				curPageStart = i + 2 + lay.DataStartRow
 				break
 			}
@@ -87,7 +87,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			bal := wb.mlLastPageBalance(sheet)
 			pageNum := 1
 			for _, br := range bRows {
-				if mlHasPageBreakAt(br, lay) {
+				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
 					pageNum++
 				}
 			}
@@ -105,7 +105,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			bRows, _ := wb.File.GetRows(sheet)
 			ps := mlFirstDataPageStart() + lay.DataStartRow
 			for i := len(bRows) - 1; i >= 0; i-- {
-				if mlHasPageBreakAt(bRows[i], lay) {
+				if mlHasPageBreakAt(bRows[i], lay) && !mlIsStructuralBreak(bRows[i], lay) {
 					ps = i + 2 + lay.DataStartRow
 					break
 				}
@@ -122,7 +122,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			pageNum := 1
 			bRows, _ := wb.File.GetRows(sheet)
 			for _, br := range bRows {
-				if mlHasPageBreakAt(br, lay) {
+				if mlHasPageBreakAt(br, lay) && !mlIsStructuralBreak(br, lay) {
 					pageNum++
 				}
 			}
@@ -252,7 +252,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		ps := mlFirstDataPageStart() + lay.DataStartRow
 		bRowsFinal, _ := wb.File.GetRows(sheet)
 		for i := len(bRowsFinal) - 1; i >= 0; i-- {
-			if mlHasPageBreakAt(bRowsFinal[i], lay) {
+			if mlHasPageBreakAt(bRowsFinal[i], lay) && !mlIsStructuralBreak(bRowsFinal[i], lay) {
 				ps = i + 2 + lay.DataStartRow
 				break
 			}
@@ -293,7 +293,7 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 
 	pageStart := mlFirstDataPageStart() + lay.DataStartRow
 	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) {
+		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			pageStart = i + 2 + lay.DataStartRow
 			break
 		}

@@ -10,9 +10,9 @@
 
 ## 2. A4 列宽换算与页面设置
 
-- [ ] 2.1 在 `generator/layout/gl_layout.go` 中将 `GLMMToExcelColWidth` 的 `pxPerColUnit` 从 3.5 改为 7.0
-- [ ] 2.2 在 `generator/workbook.go` 中添加 `SetPageLayout`（A4 横向、PaperSize=9）
-- [ ] 2.3 在 `generator/workbook.go` 中添加 `SetPageMargins`（上/下/左/右均为 0）
+- [x] 2.1 在 `generator/layout/gl_layout.go` 中将 `GLMMToExcelColWidth` 的 `pxPerColUnit` 从 3.5 改为 7.0
+- [x] 2.2 在 `generator/workbook.go` 中添加 `SetPageLayout`（A4 横向、PaperSize=9）
+- [x] 2.3 在 `generator/workbook.go` 中添加 `SetPageMargins`（上/下/左/右均为 0）
 
 ## 3. 外侧边缘红色双线
 

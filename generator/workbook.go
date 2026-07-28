@@ -89,6 +89,22 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 	}
 	wb.moneyStyleThickID = moneyStyleThick
 
+	// 设置默认 Sheet 页面布局为 A4 横向，页边距 0
+	if idx, err := wb.File.GetSheetIndex("Sheet1"); err == nil && idx >= 0 {
+		paperSize := 9
+		layoutOpt := &excelize.PageLayoutOptions{
+			Orientation: stringPtr("landscape"),
+			Size:        &paperSize,
+		}
+		wb.File.SetPageLayout("Sheet1", layoutOpt)
+		wb.File.SetPageMargins("Sheet1", &excelize.PageLayoutMarginsOptions{
+			Top:    float64Ptr(0),
+			Bottom: float64Ptr(0),
+			Left:   float64Ptr(0),
+			Right:  float64Ptr(0),
+		})
+	}
+
 	return wb, nil
 }
 
@@ -237,6 +253,10 @@ func entryMonth(e voucher.Entry) string {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
 }
 
 // setMoneyStyle 对指定单元格应用金额数字格式 #,##0.00。

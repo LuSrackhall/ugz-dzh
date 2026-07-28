@@ -1205,14 +1205,14 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			if pageNum%2 == 1 {
 				// 正面页（奇数）：左侧红色双线，右侧无边框
 				for d := outerTop; d <= outerBottom; d++ {
-					wb.setRedDoubleBorder(sheet, dataColStart+0, d)
+					wb.setRedDoubleLeft(sheet, dataColStart+0, d)
 					wb.setNoBorder(sheet, dataColStart+glColCount-1, d)
 				}
 			} else {
 				// 背面页（偶数）：右侧红色双线，左侧无边框
 				for d := outerTop; d <= outerBottom; d++ {
 					wb.setNoBorder(sheet, dataColStart+0, d)
-					wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d)
+					wb.setRedDoubleRight(sheet, dataColStart+glColCount-1, d)
 				}
 			}
 

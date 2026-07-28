@@ -1144,47 +1144,56 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		if err := wb.finalizeGLSheet(sheet); err != nil {
 			return err
 		}
+
 		rows, err := wb.File.GetRows(sheet)
 		if err != nil || len(rows) <= 2 {
 			continue
 		}
 
-		// 扫描所有页面边界，逐页添加红色右边框
-		pageStart := lay.DataStartRow + 1
-		for row := lay.DataStartRow + 1; row <= len(rows); row++ {
-			r := rows[row-1]
-			// 检测是否为过次页行（页面边界）
-			if len(r) > 0 {
-				// 检查是否含有过次页标签（Front区摘要列）
-				isBreakRow := (len(r) > lay.BindingLeftCols+4 && r[lay.BindingLeftCols+4] == pageBreakLabel) ||
-					(len(r) > lay.BackStartCol+3 && r[lay.BackStartCol+3] == pageBreakLabel)
-				if isBreakRow {
-					// 当前页面范围：pageStart ~ row，应用红色右边框
-					for d := pageStart; d <= row; d++ {
-						wb.setRedRightBorder(sheet, lay.FrontStartCol+1, d)
-						wb.setRedRightBorder(sheet, lay.FrontStartCol+3, d)
-						wb.setRedRightBorder(sheet, lay.BackStartCol+1, d)
-						wb.setRedRightBorder(sheet, lay.BackStartCol+3, d)
-					}
-					// 下一页从过次页行之后开始（但要跳过页眉区域）
-					// 过次页+空行+5行页眉+承前页+数据 = 大约8行
-					pageStart = row + 8
-					continue
-				}
+		// 逐页扫描：找过次页行作为页面边界
+		// 首页表头在 Row 4-5，后续页表头在过次页后 5 行
+		pageNum := 1
+		pageStart := lay.DataStartRow - 1 // 首页表头行
+
+		for i, r := range rows {
+			row := i + 1
+			// 检测过次页标签
+			hasBreak := (len(r) > lay.BindingLeftCols+4 && r[lay.BindingLeftCols+4] == pageBreakLabel) ||
+				(len(r) > lay.BackStartCol+3 && r[lay.BackStartCol+3] == pageBreakLabel)
+			if !hasBreak {
+				continue
 			}
+
+			// 确定此页数据列区域（奇→Front，偶→Back）
+			dataColStart := lay.FrontStartCol
+			if pageNum%2 == 0 {
+				dataColStart = lay.BackStartCol
+			}
+
+			// 从 pageStart 到此过次页行，应用红色右边框
+			for d := pageStart; d <= row && d <= len(rows); d++ {
+				wb.setRedRightBorder(sheet, dataColStart+1, d)
+				wb.setRedRightBorder(sheet, dataColStart+3, d)
+			}
+
+			// 下一页：跳过页眉区域到数据区开始
+			pageNum++
+			pageStart = row + 1 // 过次页下一行
 		}
-		// 最后一页（无过次页的行范围）
-		if pageStart <= len(rows) {
-			for d := pageStart; d <= len(rows); d++ {
-				wb.setRedRightBorder(sheet, lay.FrontStartCol+1, d)
-				wb.setRedRightBorder(sheet, lay.FrontStartCol+3, d)
-				wb.setRedRightBorder(sheet, lay.BackStartCol+1, d)
-				wb.setRedRightBorder(sheet, lay.BackStartCol+3, d)
-			}
+
+		// 最后一页（无过次页标记）：从 pageStart 到 sheet 末尾
+		dataColStart := lay.FrontStartCol
+		if pageNum%2 == 0 {
+			dataColStart = lay.BackStartCol
+		}
+		for d := pageStart; d <= len(rows); d++ {
+			wb.setRedRightBorder(sheet, dataColStart+1, d)
+			wb.setRedRightBorder(sheet, dataColStart+3, d)
 		}
 	}
 	return nil
 }
+
 
 // setRedRightBorder 为指定单元格添加红色右边框，不影响已有样式属性。
 func (wb *Workbook) setRedRightBorder(sheet string, col, row int) {

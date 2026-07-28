@@ -13,6 +13,10 @@ import (
 // GL headers
 var glHeaders = []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "借或贷", "余额"}
 
+// 页面边距行数（上/下各 3 空行，用于模拟 A4 纸边距）
+const TopMarginRows = 3
+const BottomMarginRows = 3
+
 // GL 数据区列偏移（相对于 FrontStartCol/BackStartCol）
 const (
 	glColMonth    = 0 // 月

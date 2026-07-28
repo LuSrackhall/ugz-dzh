@@ -1189,6 +1189,16 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 				}
 			}
 
+			// 页面左/右侧边界红色双线边框
+			// 正面页(奇)→左侧，背面页(偶)→右侧
+			for d := pageStart; d <= row && d <= len(rows); d++ {
+				if pageNum%2 == 1 {
+					wb.setRedDoubleBorder(sheet, dataColStart, d) // 正面页左边界
+				} else {
+					wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d) // 背面页右边界
+				}
+			}
+
 			// 下一页：跳过过次页、标题、会计科目、空行（共4行），直接到列标题行
 			pageNum++
 			pageStart = row + 4 // 过次页行+4 = 列标题行
@@ -1211,6 +1221,15 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		for _, colOff := range []int{glColDebit, glColCredit, glColBalance, glColDir} {
 			for d := pageStart; d <= len(rows); d++ {
 				wb.setRedDoubleBorder(sheet, dataColStart+colOff, d)
+			}
+		}
+		if pageNum%2 == 1 {
+			for d := pageStart; d <= len(rows); d++ {
+				wb.setRedDoubleBorder(sheet, dataColStart, d)
+			}
+		} else {
+			for d := pageStart; d <= len(rows); d++ {
+				wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d)
 			}
 		}
 	}

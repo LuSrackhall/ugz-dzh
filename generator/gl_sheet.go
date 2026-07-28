@@ -1202,6 +1202,14 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			wb.setRedRightBorder(sheet, dataColStart+1, d)
 			wb.setRedRightBorder(sheet, dataColStart+3, d)
 		}
+		headerBottomRow := pageStart + 1
+		wb.setThickBottomBorder(sheet, dataColStart, headerBottomRow)
+		wb.setThickBottomBorder(sheet, dataColStart+glColCount-1, headerBottomRow)
+		for _, colOff := range []int{glColDebit, glColCredit, glColBalance, glColDir} {
+			for d := pageStart; d <= len(rows); d++ {
+				wb.setRedDoubleBorder(sheet, dataColStart+colOff, d)
+			}
+		}
 	}
 	return nil
 }

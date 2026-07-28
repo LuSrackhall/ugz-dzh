@@ -1144,18 +1144,43 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		if err := wb.finalizeGLSheet(sheet); err != nil {
 			return err
 		}
-		// 一次性给整 sheet 的年/凭证列（列1和列3）添加红色右边框
 		rows, err := wb.File.GetRows(sheet)
 		if err != nil || len(rows) <= 2 {
 			continue
 		}
-		// 只给数据行区域添加红色右边框（表头已由 writeGLTitle/writePageHeader 处理）
+
+		// 扫描所有页面边界，逐页添加红色右边框
+		pageStart := lay.DataStartRow + 1
 		for row := lay.DataStartRow + 1; row <= len(rows); row++ {
-			wb.setRedRightBorder(sheet, lay.FrontStartCol+1, row) // 列1（日）
-			wb.setRedRightBorder(sheet, lay.FrontStartCol+3, row) // 列3（号）
-			// Back 区也需要
-			wb.setRedRightBorder(sheet, lay.BackStartCol+1, row) // Back 列1
-			wb.setRedRightBorder(sheet, lay.BackStartCol+3, row) // Back 列3
+			r := rows[row-1]
+			// 检测是否为过次页行（页面边界）
+			if len(r) > 0 {
+				// 检查是否含有过次页标签（Front区摘要列）
+				isBreakRow := (len(r) > lay.BindingLeftCols+4 && r[lay.BindingLeftCols+4] == pageBreakLabel) ||
+					(len(r) > lay.BackStartCol+3 && r[lay.BackStartCol+3] == pageBreakLabel)
+				if isBreakRow {
+					// 当前页面范围：pageStart ~ row，应用红色右边框
+					for d := pageStart; d <= row; d++ {
+						wb.setRedRightBorder(sheet, lay.FrontStartCol+1, d)
+						wb.setRedRightBorder(sheet, lay.FrontStartCol+3, d)
+						wb.setRedRightBorder(sheet, lay.BackStartCol+1, d)
+						wb.setRedRightBorder(sheet, lay.BackStartCol+3, d)
+					}
+					// 下一页从过次页行之后开始（但要跳过页眉区域）
+					// 过次页+空行+5行页眉+承前页+数据 = 大约8行
+					pageStart = row + 8
+					continue
+				}
+			}
+		}
+		// 最后一页（无过次页的行范围）
+		if pageStart <= len(rows) {
+			for d := pageStart; d <= len(rows); d++ {
+				wb.setRedRightBorder(sheet, lay.FrontStartCol+1, d)
+				wb.setRedRightBorder(sheet, lay.FrontStartCol+3, d)
+				wb.setRedRightBorder(sheet, lay.BackStartCol+1, d)
+				wb.setRedRightBorder(sheet, lay.BackStartCol+3, d)
+			}
 		}
 	}
 	return nil

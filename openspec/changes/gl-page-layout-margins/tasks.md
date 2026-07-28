@@ -23,8 +23,8 @@
 
 ## 4. 验证
 
-- [ ] 4.1 `go build ./...` 无编译错误
-- [ ] 4.2 `go test ./... -count=1` 全部通过
-- [ ] 4.3 `bash scripts/test-e2e.sh --skip-test` 生成成功
+- [x] 4.1 `go build ./...` 无编译错误
+- [x] 4.2 `go test ./... -count=1` 全部通过
+- [x] 4.3 `bash scripts/test-e2e.sh --skip-test` 生成成功
 - [ ] 4.4 目测验证正/背面页外边缘边框正确
 - [ ] 4.5 目测验证打印预览符合 A4 横向

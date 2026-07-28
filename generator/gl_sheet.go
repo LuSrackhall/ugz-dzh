@@ -1130,6 +1130,14 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 		})
 		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, row),
 			cellName(lay.FrontStartCol+glColCount-1+colOff, row), rowBorderStyle)
+		// 年/凭证列红色右边框（增量添加，不影响已有样式）
+		wb.setRedRightBorder(sheet, lay.FrontStartCol+1+colOff, row) // 列1（日）
+		wb.setRedRightBorder(sheet, lay.FrontStartCol+3+colOff, row) // 列3（号）
+	}
+	// 过次页行也应用红色右边框
+	if startRow <= endRow {
+		wb.setRedRightBorder(sheet, lay.FrontStartCol+1+colOff, endRow)
+		wb.setRedRightBorder(sheet, lay.FrontStartCol+3+colOff, endRow)
 	}
 
 	return nil
@@ -1144,6 +1152,25 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		}
 	}
 	return nil
+}
+
+// setRedRightBorder 为指定单元格添加红色右边框，不影响已有样式属性。
+func (wb *Workbook) setRedRightBorder(sheet string, col, row int) {
+	cell := cellName(col, row)
+	styleID, err := wb.File.GetCellStyle(sheet, cell)
+	if err != nil || styleID == 0 {
+		return
+	}
+	style, err := wb.File.GetStyle(styleID)
+	if err != nil {
+		return
+	}
+	// 追加红色右边框
+	style.Border = append(style.Border, excelize.Border{
+		Type: "right", Color: "CC0000", Style: 1,
+	})
+	newStyleID, _ := wb.File.NewStyle(style)
+	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
 }
 
 func cellName(col, row int) string {

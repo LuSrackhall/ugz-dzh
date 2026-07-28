@@ -901,7 +901,12 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	yearLeft := cellName(lay.FrontStartCol+colOffset, row)
 	yearRight := cellName(lay.FrontStartCol+1+colOffset, row)
 	wb.File.MergeCell(sheet, yearLeft, yearRight)
-	wb.File.SetCellValue(sheet, yearLeft, year+"年")
+	// 年份用富文本：数字红色，"年"字绿色
+	yearRichText := []excelize.RichTextRun{
+		{Text: year, Font: &excelize.Font{Bold: true, Size: 10, Color: "CC0000"}},
+		{Text: "年", Font: &excelize.Font{Bold: true, Size: 10, Color: "006100"}},
+	}
+	wb.File.SetCellRichText(sheet, yearLeft, yearRichText)
 	// "凭证" 合并字+号两列
 	vouchLeft := cellName(lay.FrontStartCol+2+colOffset, row)
 	vouchRight := cellName(lay.FrontStartCol+3+colOffset, row)

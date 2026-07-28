@@ -247,50 +247,9 @@ func (wb *Workbook) WriteMLMonthClosings(
 		})
 		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, row), mlCellName(mlDetailCol(lay, mlMaxDetails-1), row), endStyle)
 		wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffBalance)
-
-		// 月结结束后补齐过次页：在当前页的固定第21行位置写红字占位
-		// 用数据行的最后位置计算，而非 mlPageStartRow（后者可能找不到结构过次页）
-		sumIdx := lay.BindingLeftCols + mlOffSummary
-		bRows2, _ := wb.File.GetRows(sheet)
-		lastData := 0
-		for i := len(bRows2) - 1; i >= 0; i-- {
-			if len(bRows2[i]) > sumIdx && bRows2[i][sumIdx] == "过次页" {
-				break // 已有过次页，不需要补齐
-			}
-			isEmpty := true
-			for _, c := range bRows2[i] {
-				if c != "" { isEmpty = false; break }
-			}
-			if !isEmpty {
-				lastData = i + 1
-				break
-			}
 		}
-		if lastData > 0 {
-			// 计算当前页起始
-			pStart := mlFirstDataPageStart() + 1 + lay.DataStartRow
-			for i := lastData - 1; i >= 0; i-- {
-				if len(bRows2[i]) > sumIdx && bRows2[i][sumIdx] == "过次页" {
-					pStart = i + 2 + lay.DataStartRow
-					break
-				}
-			}
-			padPos := pStart + pageSize
-			if padPos > len(bRows) {
-				padCell := mlCellName(lay.BackStartCol+mlOffSummary, padPos)
-				padVal, _ := wb.File.GetCellValue(sheet, padCell)
-				if padVal == "" {
-					wb.File.SetCellValue(sheet, padCell, pageBreakLabel)
-					redStyle, _ := wb.File.NewStyle(&excelize.Style{
-						Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-					})
-					wb.File.SetCellStyle(sheet, padCell, padCell, redStyle)
-				}
-			}
-		}
-	}
 
-	return nil
+		return nil
 }
 
 // FinalizeMLPages 补齐所有多科目明细账 Sheet 的最后一页。
@@ -325,20 +284,22 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 	if lastDataIdx >= 0 {
 		usedRows = lastDataIdx + 1 - pageStart + 1
 	}
-	if usedRows < 0 || usedRows >= pageSize {
-		return
+	if usedRows < 0 {
+		return // 无数据，跳过
 	}
 
-	// 只写结构过次页的值（红字"过次页"），不碰空行
+	// 页未满时才写入结构过次页（页满时月结翻页逻辑已写入）
 	structRow := pageStart + pageSize
-	structCell := mlCellName(lay.BackStartCol+mlOffSummary, structRow)
-	structVal, _ := wb.File.GetCellValue(sheet, structCell)
-	if structVal == "" {
-		wb.File.SetCellValue(sheet, structCell, pageBreakLabel)
-		redStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-		})
-		wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
+	if usedRows >= 0 && usedRows < pageSize {
+		structCell := mlCellName(lay.BackStartCol+mlOffSummary, structRow)
+		structVal, _ := wb.File.GetCellValue(sheet, structCell)
+		if structVal == "" {
+			wb.File.SetCellValue(sheet, structCell, pageBreakLabel)
+			redStyle, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+			})
+			wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
+		}
 	}
 
 	// PaperN Back 尾部占位：反面空白占位表（Back 侧标题，无页码）

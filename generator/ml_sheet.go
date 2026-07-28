@@ -57,7 +57,7 @@ func mlPrintMarkCol() int {
 // i=0~3 → Back 侧（左半），i=4~13 → Front 侧（右半）。
 func mlDetailCol(lay layout.MLLayout, i int) int {
 	if i < 4 {
-		return lay.BackStartCol + 10 + i // 1-indexed: BackStartCol(3) + 10 = 13 for i=0
+		return lay.BackStartCol + 9 + i // 9个基本列后直接接明细
 	}
 	return lay.FrontStartCol + (i - 4) + 2 // 1-indexed: FrontStartCol(15) + 1 = 16 for i=4
 }
@@ -67,7 +67,7 @@ func mlDetailCol(lay layout.MLLayout, i int) int {
 // i=4~13 → Front 侧 GetRows 索引 = FrontStartCol - 1 + (i - 4)。
 func mlDetailRowIdx(lay layout.MLLayout, i int) int {
 	if i < 4 {
-		return lay.BackStartCol + 10 + i - 1 // 0-indexed: BackStartCol(3) + 10 - 1 = 12
+		return lay.BindingLeftCols + 9 + i // 0-indexed: BindingLeftCols(2) + 9 + 0 = 11 (col L)
 	}
 	return lay.FrontStartCol + (i - 4) + 1 // 0-indexed: FrontStartCol(15) + 1 = 16 for i=4
 }

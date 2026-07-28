@@ -1248,13 +1248,13 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		outerBottom := len(rows)
 		if pageNum%2 == 1 {
 			for d := outerTop; d <= outerBottom; d++ {
-				wb.setRedDoubleBorder(sheet, dataColStart+0, d)
+				wb.setRedDoubleLeft(sheet, dataColStart+0, d)
 				wb.setNoBorder(sheet, dataColStart+glColCount-1, d)
 			}
 		} else {
 			for d := outerTop; d <= outerBottom; d++ {
 				wb.setNoBorder(sheet, dataColStart+0, d)
-				wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d)
+				wb.setRedDoubleRight(sheet, dataColStart+glColCount-1, d)
 			}
 		}
 	}
@@ -1325,11 +1325,44 @@ func (wb *Workbook) setRedDoubleBorder(sheet string, col, row int) {
 	} else {
 		style = &excelize.Style{}
 	}
-	// 左右红色双线
 	style.Border = append(style.Border,
 		excelize.Border{Type: "left", Color: "CC0000", Style: 6},
 		excelize.Border{Type: "right", Color: "CC0000", Style: 6},
 	)
+	newStyleID, _ := wb.File.NewStyle(style)
+	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
+}
+
+// setRedDoubleLeft 为指定单元格添加左侧红色双线边框（仅单侧）。
+func (wb *Workbook) setRedDoubleLeft(sheet string, col, row int) {
+	cell := cellName(col, row)
+	styleID, err := wb.File.GetCellStyle(sheet, cell)
+	if err != nil { return }
+	var style *excelize.Style
+	if styleID != 0 {
+		style, err = wb.File.GetStyle(styleID)
+		if err != nil { return }
+	} else {
+		style = &excelize.Style{}
+	}
+	style.Border = append(style.Border, excelize.Border{Type: "left", Color: "CC0000", Style: 6})
+	newStyleID, _ := wb.File.NewStyle(style)
+	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
+}
+
+// setRedDoubleRight 为指定单元格添加右侧红色双线边框（仅单侧）。
+func (wb *Workbook) setRedDoubleRight(sheet string, col, row int) {
+	cell := cellName(col, row)
+	styleID, err := wb.File.GetCellStyle(sheet, cell)
+	if err != nil { return }
+	var style *excelize.Style
+	if styleID != 0 {
+		style, err = wb.File.GetStyle(styleID)
+		if err != nil { return }
+	} else {
+		style = &excelize.Style{}
+	}
+	style.Border = append(style.Border, excelize.Border{Type: "right", Color: "CC0000", Style: 6})
 	newStyleID, _ := wb.File.NewStyle(style)
 	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
 }

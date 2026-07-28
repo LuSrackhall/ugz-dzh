@@ -64,6 +64,11 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	account := sheet[len(sheetPrefixGL):]
 	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 
+	// ── 上边距空行 ──
+	for i := 1; i <= 3; i++ {
+		wb.File.SetRowHeight(sheet, i, 6)
+	}
+
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
@@ -814,6 +819,12 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 //   Row N+4: 月│日
 func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account string) error {
 	lay := glLayout()
+
+	// ── 上边距空行 ──
+	for i := 0; i < 3; i++ {
+		wb.File.SetRowHeight(sheet, row+i, 6)
+	}
+	row += 3
 
 	colOffset := 0
 	if pageNum%2 == 0 {

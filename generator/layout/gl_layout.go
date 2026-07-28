@@ -9,15 +9,16 @@ package layout
 // GLSpec 定义总分类账页面的物理约束和内容结构。
 // 不包含任何 Renderer 逻辑。
 type GLSpec struct {
-	PaperWidthMM  float64
-	PaperHeightMM float64
-	LeftMarginMM  float64
-	RightMarginMM float64
-	PageGapMM     float64
-	TitleRowCount     int
-	TitleSplitRatio   float64
-	ColHeaderRowCount int
-	DataRowsPerPage   int
+	PaperWidthMM      float64
+	PaperHeightMM     float64
+	LeftMarginMM      float64
+	RightMarginMM     float64
+	PageGapMM         float64
+	TitleRowCount         int
+	TitleSplitRatio       float64
+	ColHeaderRowCount     int
+	DataRowsPerPage       int
+	MarginRowCount        int // 每页上下边距空行数
 	ColProportions []GLColProportion
 }
 
@@ -81,6 +82,7 @@ func DefaultGLSpec() GLSpec {
 		TitleSplitRatio:   0.5,
 		ColHeaderRowCount: 2,
 		DataRowsPerPage:   20,
+		MarginRowCount:    3,
 		ColProportions: []GLColProportion{
 			{Name: "月", Ratio: 2},
 			{Name: "日", Ratio: 2},
@@ -165,11 +167,11 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 	}
 }
 
-// GLMMToExcelColWidth 将 mm 宽度近似转换为 Excel 列宽单位。
+// GLMMToExcelColWidth 将 mm 宽度转换为 Excel 列宽单位（Calibri 11pt）。
 func GLMMToExcelColWidth(mm float64) float64 {
 	const pxPerMM = 96.0 / 25.4
-	const pxPerColUnit = 3.5
-	return mm * pxPerMM / pxPerColUnit
+	const maxDigitWidth = 7.0 // ECMA-376: Calibri 11pt 下 "0" 字符宽度 ≈ 7px
+	return mm * pxPerMM / maxDigitWidth
 }
 
 // GLMMToExcelRowHeight 将 mm 高度转换为 Excel 行高（磅）。

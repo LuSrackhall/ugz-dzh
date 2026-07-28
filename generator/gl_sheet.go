@@ -1191,14 +1191,11 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 
 			// 页面左/右侧边界红色双线边框（贯穿整页）
 			// 正面页(奇)→左侧，背面页(偶)→右侧
-			// 内侧边缘（正面右侧/背面左侧）清除边框
 			for d := pageFirstRow; d <= row && d <= len(rows); d++ {
 				if pageNum%2 == 1 {
 					wb.setRedDoubleBorder(sheet, dataColStart, d) // 正面页左边界
-					wb.setNoBorder(sheet, dataColStart+glColCount-1, d) // 正面页右侧→无边框
 				} else {
 					wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d) // 背面页右边界
-					wb.setNoBorder(sheet, dataColStart, d) // 背面页左侧→无边框
 				}
 			}
 
@@ -1230,37 +1227,16 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		if pageNum%2 == 1 {
 			for d := pageFirstRow; d <= len(rows); d++ {
 				wb.setRedDoubleBorder(sheet, dataColStart, d)
-				wb.setNoBorder(sheet, dataColStart+glColCount-1, d)
 			}
 		} else {
 			for d := pageFirstRow; d <= len(rows); d++ {
 				wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d)
-				wb.setNoBorder(sheet, dataColStart, d)
 			}
 		}
 	}
 	return nil
 }
 
-
-// setNoBorder 清除指定单元格的边框。
-func (wb *Workbook) setNoBorder(sheet string, col, row int) {
-	cell := cellName(col, row)
-	styleID, err := wb.File.GetCellStyle(sheet, cell)
-	if err != nil {
-		return
-	}
-	var style *excelize.Style
-	if styleID != 0 {
-		style, err = wb.File.GetStyle(styleID)
-		if err != nil {
-			return
-		}
-		style.Border = nil // 清除所有边框
-		newStyleID, _ := wb.File.NewStyle(style)
-		wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
-	}
-}
 
 // setRedRightBorder 为指定单元格添加红色右边框，不影响已有样式属性。
 func (wb *Workbook) setRedRightBorder(sheet string, col, row int) {

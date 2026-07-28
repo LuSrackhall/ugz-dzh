@@ -1219,6 +1219,54 @@ func (wb *Workbook) setRedRightBorder(sheet string, col, row int) {
 	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
 }
 
+// setThickBottomBorder 为指定单元格添加加粗底边框。
+func (wb *Workbook) setThickBottomBorder(sheet string, col, row int) {
+	cell := cellName(col, row)
+	styleID, err := wb.File.GetCellStyle(sheet, cell)
+	if err != nil {
+		return
+	}
+	var style *excelize.Style
+	if styleID != 0 {
+		style, err = wb.File.GetStyle(styleID)
+		if err != nil {
+			return
+		}
+	} else {
+		style = &excelize.Style{}
+	}
+	style.Border = append(style.Border, excelize.Border{
+		Type: "bottom", Color: "#006100", Style: 2,
+	})
+	newStyleID, _ := wb.File.NewStyle(style)
+	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
+}
+
+// setRedDoubleBorder 为指定单元格添加左右红色双线边框。
+func (wb *Workbook) setRedDoubleBorder(sheet string, col, row int) {
+	cell := cellName(col, row)
+	styleID, err := wb.File.GetCellStyle(sheet, cell)
+	if err != nil {
+		return
+	}
+	var style *excelize.Style
+	if styleID != 0 {
+		style, err = wb.File.GetStyle(styleID)
+		if err != nil {
+			return
+		}
+	} else {
+		style = &excelize.Style{}
+	}
+	// 左右红色双线
+	style.Border = append(style.Border,
+		excelize.Border{Type: "left", Color: "CC0000", Style: 6},
+		excelize.Border{Type: "right", Color: "CC0000", Style: 6},
+	)
+	newStyleID, _ := wb.File.NewStyle(style)
+	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
+}
+
 func cellName(col, row int) string {
 	name, _ := excelize.CoordinatesToCellName(col, row)
 	return name

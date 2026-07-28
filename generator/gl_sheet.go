@@ -1151,14 +1151,6 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		}
 		// 从表头第一行到最后一行，逐行应用
 		for row := 1; row <= len(rows); row++ {
-			// 跳过空行（有单元格被 SetCellStyle 影响但无内容）
-			hasData := false
-			for _, v := range rows[row-1] {
-				if v != "" { hasData = true; break }
-			}
-			if !hasData {
-				continue
-			}
 			wb.setRedRightBorder(sheet, lay.FrontStartCol+1, row) // 列1（日）
 			wb.setRedRightBorder(sheet, lay.FrontStartCol+3, row) // 列3（号）
 			// Back 区也需要
@@ -1173,12 +1165,17 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 func (wb *Workbook) setRedRightBorder(sheet string, col, row int) {
 	cell := cellName(col, row)
 	styleID, err := wb.File.GetCellStyle(sheet, cell)
-	if err != nil || styleID == 0 {
-		return
-	}
-	style, err := wb.File.GetStyle(styleID)
 	if err != nil {
 		return
+	}
+	var style *excelize.Style
+	if styleID != 0 {
+		style, err = wb.File.GetStyle(styleID)
+		if err != nil {
+			return
+		}
+	} else {
+		style = &excelize.Style{}
 	}
 	// 追加红色右边框
 	style.Border = append(style.Border, excelize.Border{

@@ -322,9 +322,7 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 		}
 	}
 
-	// PaperN Back 尾部占位：反面空白占位表（Back 侧标题，无页码）
-	wb.writeMLPageHeader(sheet, structRow+1, 0, 0, general, true, false)
-	// 占位页底部结构过次页
+	// PaperN Back 尾部占位：底部结构过次页
 	pnRow := structRow + 1 + lay.DataStartRow + pageSize
 	pnCell := mlCellName(lay.BackStartCol+mlOffSummary, pnRow)
 	pnVal, _ := wb.File.GetCellValue(sheet, pnCell)

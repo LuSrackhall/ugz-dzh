@@ -816,7 +816,6 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 //   Row N+2: [空行]
 //   Row N+3: 年（合并两列）│凭证号│摘要│借方金额│贷方金额│方向│余额
 //   Row N+4: 月│日
-	// 写作目录函数，包含上边距，后续使用相同偏移
 	// Row N+0 ~ N+2: 上边距（3 行）
 func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account string) error {
 	lay := glLayout()
@@ -826,11 +825,6 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 		colOffset = lay.BackStartCol - lay.FrontStartCol
 	}
 
-	// 上边距 3 行
-	for i := 0; i < TopMarginRows; i++ {
-		wb.File.SetRowHeight(sheet, row+i, 15)
-	}
-	row += TopMarginRows
 
 	darkGreen := "006100"
 	sealRed := "CC0000"

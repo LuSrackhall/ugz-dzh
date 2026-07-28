@@ -1176,6 +1176,18 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 				wb.setRedRightBorder(sheet, dataColStart+3, d)
 			}
 
+			// 表头下边框加粗
+			headerBottomRow := pageStart + 1
+			wb.setThickBottomBorder(sheet, dataColStart, headerBottomRow)
+			wb.setThickBottomBorder(sheet, dataColStart+glColCount-1, headerBottomRow)
+
+			// 借方/贷方/余额列左右红色双线
+			for _, colOff := range []int{glColDebit, glColCredit, glColBalance} {
+				for d := pageStart; d <= row && d <= len(rows); d++ {
+					wb.setRedDoubleBorder(sheet, dataColStart+colOff, d)
+				}
+			}
+
 			// 下一页：跳过过次页、标题、会计科目、空行（共4行），直接到列标题行
 			pageNum++
 			pageStart = row + 4 // 过次页行+4 = 列标题行

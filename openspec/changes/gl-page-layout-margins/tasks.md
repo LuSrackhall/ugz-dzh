@@ -16,10 +16,10 @@
 
 ## 3. 外侧边缘红色双线
 
-- [ ] 3.1 在 `generator/gl_sheet.go` 中新增 `setNoBorder` 辅助函数
-- [ ] 3.2 更新 `finalizeAllGLSheets`：遍历每页时判断奇偶，正面页左侧/背面页右侧应用 `setRedDoubleBorder`
-- [ ] 3.3 更新 `finalizeAllGLSheets`：对面侧（正面页右侧/背面页左侧）应用 `setNoBorder` 清理残留边框
-- [ ] 3.4 确保红色双线纵向覆盖从上边距第 1 行到底边距最后 1 行
+- [x] 3.1 在 `generator/gl_sheet.go` 中新增 `setNoBorder` 辅助函数
+- [x] 3.2 更新 `finalizeAllGLSheets`：遍历每页时判断奇偶，正面页左侧/背面页右侧应用 `setRedDoubleBorder`
+- [x] 3.3 更新 `finalizeAllGLSheets`：对面侧（正面页右侧/背面页左侧）应用 `setNoBorder` 清理残留边框
+- [x] 3.4 确保红色双线纵向覆盖从上边距第 1 行到底边距最后 1 行
 
 ## 4. 验证
 

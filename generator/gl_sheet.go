@@ -1193,6 +1193,29 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 				}
 			}
 
+			// 外侧边缘红色双线
+			outerTop := pageStart - TopMarginRows
+			if outerTop < 1 {
+				outerTop = 1
+			}
+			outerBottom := row + BottomMarginRows
+			if outerBottom > len(rows) {
+				outerBottom = len(rows)
+			}
+			if pageNum%2 == 1 {
+				// 正面页（奇数）：左侧红色双线，右侧无边框
+				for d := outerTop; d <= outerBottom; d++ {
+					wb.setRedDoubleBorder(sheet, dataColStart+0, d)
+					wb.setNoBorder(sheet, dataColStart+glColCount-1, d)
+				}
+			} else {
+				// 背面页（偶数）：右侧红色双线，左侧无边框
+				for d := outerTop; d <= outerBottom; d++ {
+					wb.setNoBorder(sheet, dataColStart+0, d)
+					wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d)
+				}
+			}
+
 			// 下一页：跳过过次页、标题、会计科目、空行（共4行），直接到列标题行
 			pageNum++
 			pageStart = row + 4 // 过次页行+4 = 列标题行
@@ -1215,6 +1238,23 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		for _, colOff := range []int{glColDebit, glColCredit, glColBalance, glColDir} {
 			for d := pageStart; d <= len(rows); d++ {
 				wb.setRedDoubleBorder(sheet, dataColStart+colOff, d)
+			}
+		}
+		// 外侧边缘红色双线（最后一页）
+		outerTop := pageStart - TopMarginRows
+		if outerTop < 1 {
+			outerTop = 1
+		}
+		outerBottom := len(rows)
+		if pageNum%2 == 1 {
+			for d := outerTop; d <= outerBottom; d++ {
+				wb.setRedDoubleBorder(sheet, dataColStart+0, d)
+				wb.setNoBorder(sheet, dataColStart+glColCount-1, d)
+			}
+		} else {
+			for d := outerTop; d <= outerBottom; d++ {
+				wb.setNoBorder(sheet, dataColStart+0, d)
+				wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d)
 			}
 		}
 	}
@@ -1290,6 +1330,28 @@ func (wb *Workbook) setRedDoubleBorder(sheet string, col, row int) {
 		excelize.Border{Type: "left", Color: "CC0000", Style: 6},
 		excelize.Border{Type: "right", Color: "CC0000", Style: 6},
 	)
+	newStyleID, _ := wb.File.NewStyle(style)
+	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
+}
+
+// setNoBorder 清除指定单元格的左右边框。
+func (wb *Workbook) setNoBorder(sheet string, col, row int) {
+	cell := cellName(col, row)
+	styleID, err := wb.File.GetCellStyle(sheet, cell)
+	if err != nil || styleID == 0 {
+		return
+	}
+	style, err := wb.File.GetStyle(styleID)
+	if err != nil {
+		return
+	}
+	filtered := make([]excelize.Border, 0)
+	for _, b := range style.Border {
+		if b.Type != "left" && b.Type != "right" {
+			filtered = append(filtered, b)
+		}
+	}
+	style.Border = filtered
 	newStyleID, _ := wb.File.NewStyle(style)
 	wb.File.SetCellStyle(sheet, cell, cell, newStyleID)
 }

@@ -29,6 +29,14 @@ const (
 	mlOffBalance  = 8 // 余额
 )
 
+// mlFirstDataPageStart 返回第一个数据页 header 的起始行号。
+// Paper1 Front 占位页占 rows 1 ~ (DataStartRow + pageSize + 1)，即 rows 1-27。
+// 数据页 header 从下一行开始。
+func mlFirstDataPageStart() int {
+	lay := mlLayout()
+	return lay.DataStartRow + pageSize + 2 // = 6 + 20 + 2 = 28
+}
+
 // mlLayout 返回多科目明细账的布局规格（独立于 GL 布局）。
 func mlLayout() layout.MLLayout {
 	return layout.MLComputeLayout(layout.DefaultMLSpec())
@@ -150,12 +158,12 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < 3 {
-		return lay.DataStartRow + 1, nil
+		return mlFirstDataPageStart() + lay.DataStartRow + 1, nil
 	}
 
 	lastDataIdx := mlLastDataBeforeBreak(rows, lay)
 	if lastDataIdx < 0 {
-		return lay.DataStartRow + 1, nil
+		return mlFirstDataPageStart() + lay.DataStartRow + 1, nil
 	}
 
 	// 如果最后一条数据是真实过次页 → 新页面，承前页在 DataStartRow 后
@@ -295,14 +303,14 @@ func (wb *Workbook) mlPageStartRow(sheet string) int {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < 3 {
-		return lay.DataStartRow + 1 + lay.DataStartRow
+		return mlFirstDataPageStart() + 1 + lay.DataStartRow
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			return i + 2 + lay.DataStartRow
 		}
 	}
-	return lay.DataStartRow + 1 + lay.DataStartRow
+	return mlFirstDataPageStart() + 1 + lay.DataStartRow
 }
 
 // (wb *Workbook) mlRowIsPageBreak 检查指定行是否已超出当页容量。
@@ -333,7 +341,7 @@ func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < 3 {
-		return lay.DataStartRow + 1, nil
+		return mlFirstDataPageStart() + lay.DataStartRow + 1, nil
 	}
 
 	tailRow := wb.mlLastPeriodEndRow(sheet)
@@ -390,7 +398,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 
 		// 更新标题行（仅更新新增的列，数据页列标题行）
 			lay := mlLayout()
-			colHeaderRow := 6 + 4 // Row+4 of first data page header (列标题行)
+			colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header
 			for _, nd := range newAppended {
 				col := mlDetailCol(lay, finalIdx[nd])
 				cell := mlCellName(col, colHeaderRow)
@@ -447,13 +455,22 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		return "", nil, nil, fmt.Errorf("总账科目 %q 明细科目数 %d 超过上限 %d", general, len(initDetails), mlMaxDetails)
 	}
 
-	// Paper1 Front 占位页：Front 侧，页码=1，不写 Back 侧
+	// Paper1 Front 占位页：完整空页模板（Front 侧，页码=0，不写 Back 侧）
 	lay := mlLayout()
 	if err := wb.writeMLPageHeader(name, 1, 0, 0, general, false, true); err != nil {
 		return "", nil, nil, err
 	}
+	// 占位页底部结构过次页（行 = 1 + DataStartRow + pageSize = 27）
+	p1BreakRow := 1 + lay.DataStartRow + pageSize
+	p1Cell := mlCellName(lay.BackStartCol+mlOffSummary, p1BreakRow)
+	wb.File.SetCellValue(name, p1Cell, pageBreakLabel)
+	redS, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+	})
+	wb.File.SetCellStyle(name, p1Cell, p1Cell, redS)
+
 	// 数据页列标题行写入实际明细科目名
-	colHeaderRow := 6 + 4 // Row+4 of first data page header (列标题行)
+	colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, colHeaderRow)
@@ -523,7 +540,7 @@ func cellColLetter(col int) string {
 // updateMLDetailHeaders 更新已有 Sheet 的明细列标题（Paper1 Front 第5行），以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	lay := mlLayout()
-	colHeaderRow := 6 + 4 // Row+4 of first data page header (列标题行) // 1-based
+	colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header // 1-based
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, colHeaderRow)
@@ -546,7 +563,7 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取 Sheet %s: %w", sheet, err)
 	}
-	colHeaderRow := 6 + 4 // Row+4 of first data page header (列标题行) // 1-based row number
+	colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header // 1-based row number
 	if len(rows) < colHeaderRow {
 		return detailIdx, details, nil
 	}
@@ -570,7 +587,7 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 // 用于 writeMLPageHeader 覆盖通用标签后恢复实际名称。
 func (wb *Workbook) rewriteMLDetailNames(sheet string, details []string) {
 	lay := mlLayout()
-	colHeaderRow := 6 + 4 // Row+4 of first data page header
+	colHeaderRow := mlFirstDataPageStart() + 4
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, colHeaderRow)
@@ -793,9 +810,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	numDetails := mlMaxDetails
 
 	rows, _ := wb.File.GetRows(sheet)
-	// isNew 判断：第一页数据页 header（row 6）是否已写入。
-	// 不能用 len(rows)<=5，因为 ensureMLSheet 已在 row 10 写明细名导致行数>5。
-	isNew := len(rows) < 6 || len(rows[5]) == 0
+	fdp := mlFirstDataPageStart()
+	isNew := len(rows) < fdp || len(rows[fdp-1]) == 0
 
 	// ── 计算逻辑页号──
 	// logicalPageNum = 已有真实过次页数 + 1（跳过结构预写）
@@ -825,7 +841,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	if isNew {
 		// Paper1 Front 已在 rows 1-5（ensureMLSheet 写入）
 		// 写入第一个数据页标题：两侧同一逻辑页号
-		wb.writeMLPageHeader(sheet, 6, logicalPageNum, logicalPageNum, general, true, true)
+		wb.writeMLPageHeader(sheet, mlFirstDataPageStart(), logicalPageNum, logicalPageNum, general, true, true)
 
 		// writeMLPageHeader 会在 Row+4 写通用"明细1~14"标签，覆盖 ensureMLSheet 写的实际科目名。
 		// 在 header 写完后用 detailIdx 重建实际明细科目名。
@@ -835,8 +851,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		}
 		wb.rewriteMLDetailNames(sheet, reDetails)
 
-		// 结转行在第12行（6 + DataStartRow = 6 + 6）
-		row = 6 + lay.DataStartRow // = 12: 6行标题 + 6行子表头后的第一条数据行
+		// 结转行在第34行（mlFirstDataPageStart + DataStartRow = 28 + 6）
+		row = mlFirstDataPageStart() + lay.DataStartRow // = 34: 数据页header后承前页行
 		cfLabel := carryForwardLabel
 		if initial != 0 {
 			cfLabel = "上年结转"

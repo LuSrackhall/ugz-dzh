@@ -75,7 +75,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		// 如果当前位置到达过次页位置，先翻页再写月结
 		// 用当前页起始 + 20 计算，不依赖 mlPageStartRow（后者可能找到后续真实过次页）
 		bRows, _ := wb.File.GetRows(sheet)
-		curPageStart := lay.DataStartRow + 1 + lay.DataStartRow
+		curPageStart := mlFirstDataPageStart() + 1 + lay.DataStartRow
 		for i := len(bRows) - 1; i >= 0; i-- {
 			if mlHasPageBreakAt(bRows[i], lay) {
 				curPageStart = i + 2 + lay.DataStartRow
@@ -103,7 +103,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		// 用当前页起始 + 20 计算过次页位置
 		findPageBreakRow := func() int {
 			bRows, _ := wb.File.GetRows(sheet)
-			ps := lay.DataStartRow + 1 + lay.DataStartRow
+			ps := mlFirstDataPageStart() + 1 + lay.DataStartRow
 			for i := len(bRows) - 1; i >= 0; i-- {
 				if mlHasPageBreakAt(bRows[i], lay) {
 					ps = i + 2 + lay.DataStartRow
@@ -268,7 +268,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		}
 		if lastData > 0 {
 			// 计算当前页起始
-			pStart := lay.DataStartRow + 1 + lay.DataStartRow
+			pStart := mlFirstDataPageStart() + 1 + lay.DataStartRow
 			for i := lastData - 1; i >= 0; i-- {
 				if len(bRows2[i]) > sumIdx && bRows2[i][sumIdx] == "过次页" {
 					pStart = i + 2 + lay.DataStartRow
@@ -312,7 +312,7 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 	lay := mlLayout()
 	rows, _ := wb.File.GetRows(sheet)
 
-	pageStart := lay.DataStartRow + 1 + lay.DataStartRow
+	pageStart := mlFirstDataPageStart() + 1 + lay.DataStartRow
 	for i := len(rows) - 1; i >= 0; i-- {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			pageStart = i + 2 + lay.DataStartRow

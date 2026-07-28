@@ -168,7 +168,7 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 // GLMMToExcelColWidth 将 mm 宽度近似转换为 Excel 列宽单位。
 func GLMMToExcelColWidth(mm float64) float64 {
 	const pxPerMM = 96.0 / 25.4
-	const pxPerColUnit = 3.5
+	const pxPerColUnit = 7.0
 	return mm * pxPerMM / pxPerColUnit
 }
 

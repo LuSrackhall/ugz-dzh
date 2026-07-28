@@ -1176,9 +1176,9 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 				wb.setRedRightBorder(sheet, dataColStart+3, d)
 			}
 
-			// 下一页：跳过页眉区域到数据区开始
+			// 下一页：跳过过次页、标题、会计科目、空行（共4行），直接到列标题行
 			pageNum++
-			pageStart = row + 1 // 过次页下一行
+			pageStart = row + 4 // 过次页行+4 = 列标题行
 		}
 
 		// 最后一页（无过次页标记）：从 pageStart 到 sheet 末尾

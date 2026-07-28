@@ -1154,7 +1154,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		// 首页表头在 Row 4-5，后续页表头在过次页后 5 行
 		pageNum := 1
 		pageStart := lay.DataStartRow - 1 // 首页表头行
-		pageFirstRow := 1 // 首页从 Row 1 开始
+
 		for i, r := range rows {
 			row := i + 1
 			// 检测过次页标签
@@ -1189,20 +1189,9 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 				}
 			}
 
-			// 页面左/右侧边界红色双线边框（贯穿整页）
-			// 正面页(奇)→左侧，背面页(偶)→右侧
-			for d := pageFirstRow; d <= row && d <= len(rows); d++ {
-				if pageNum%2 == 1 {
-					wb.setRedDoubleBorder(sheet, dataColStart, d) // 正面页左边界
-				} else {
-					wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d) // 背面页右边界
-				}
-			}
-
 			// 下一页：跳过过次页、标题、会计科目、空行（共4行），直接到列标题行
 			pageNum++
-			pageStart = row + 4
-			pageFirstRow = row + 2 // 下一页标题行
+			pageStart = row + 4 // 过次页行+4 = 列标题行
 		}
 
 		// 最后一页（无过次页标记）：从 pageStart 到 sheet 末尾
@@ -1222,15 +1211,6 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		for _, colOff := range []int{glColDebit, glColCredit, glColBalance, glColDir} {
 			for d := pageStart; d <= len(rows); d++ {
 				wb.setRedDoubleBorder(sheet, dataColStart+colOff, d)
-			}
-		}
-		if pageNum%2 == 1 {
-			for d := pageFirstRow; d <= len(rows); d++ {
-				wb.setRedDoubleBorder(sheet, dataColStart, d)
-			}
-		} else {
-			for d := pageFirstRow; d <= len(rows); d++ {
-				wb.setRedDoubleBorder(sheet, dataColStart+glColCount-1, d)
 			}
 		}
 	}

@@ -321,17 +321,6 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 			wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
 		}
 	}
-
-	// PaperN Back 尾部占位：反面空白占位表（Back 侧标题，无页码）
-	wb.writeMLPageHeader(sheet, structRow+1, 0, 0, general, true, false)
-	// 占位页底部结构过次页
-	pnStructRow := structRow + 1 + lay.DataStartRow + pageSize
-	pnCell := mlCellName(lay.BackStartCol+mlOffSummary, pnStructRow)
-	wb.File.SetCellValue(sheet, pnCell, pageBreakLabel)
-	redS, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
-	})
-	wb.File.SetCellStyle(sheet, pnCell, pnCell, redS)
 }
 
 // writeMLClosingRow 将月结行写入双面：Back 侧（基础列+明细1~4），Front 侧（明细5~14）。

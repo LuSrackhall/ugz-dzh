@@ -132,7 +132,6 @@ func mlLastContentRow(rows [][]string) int {
 // 真实过次页（有余额数据）和月结行都算数据行。
 func mlLastDataBeforeBreak(rows [][]string, lay layout.MLLayout) int {
 	for i := len(rows) - 1; i >= 0; i-- {
-		// 只跳过结构过次页
 		if mlHasPageBreakAt(rows[i], lay) && mlIsStructuralBreak(rows[i], lay) {
 			continue
 		}
@@ -886,11 +885,10 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
 
-		// 页满 → 过次页 + 标题 + 承前页（写在 pageStart+pageSize 位置，非当前 row）
+		// 页满 → 过次页 + 标题 + 承前页
 		if wb.mlRowIsPageBreak(sheet, row) {
-			pbRow := wb.mlPageStartRow(sheet) + pageSize
-			wb.writeMLPageBreakRow(sheet, pbRow, balance, pageDebit, pageCredit, pageDetails)
-			row = pbRow + 1
+			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails)
+			row++
 			logicalPageNum++
 			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
 			row += lay.DataStartRow

@@ -1149,8 +1149,8 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		if err != nil || len(rows) <= 2 {
 			continue
 		}
-		// 从表头第一行到最后一行，逐行应用
-		for row := 1; row <= len(rows); row++ {
+		// 只给数据行区域添加红色右边框（表头已由 writeGLTitle/writePageHeader 处理）
+		for row := lay.DataStartRow + 1; row <= len(rows); row++ {
 			wb.setRedRightBorder(sheet, lay.FrontStartCol+1, row) // 列1（日）
 			wb.setRedRightBorder(sheet, lay.FrontStartCol+3, row) // 列3（号）
 			// Back 区也需要

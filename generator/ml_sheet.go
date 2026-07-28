@@ -1071,30 +1071,34 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	wb.File.SetRowHeight(sheet, row, 18)
 	row++
 
-	// Row +1: 标题 — Back 侧（"多科目明细账 — XXX"）
+	// Row +1: 标题 — Back 侧（右对齐，明细3~4列下双线边框，无文字）
 	if hasBack {
-		tlBack := mlCellName(lay.BackTitleColLeft, row)
-		trBack := mlCellName(lay.BackTitleColRight, row)
-		wb.File.MergeCell(sheet, tlBack, trBack)
-		wb.File.SetCellValue(sheet, tlBack, "多科目明细账 — "+general)
-		titleStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		dbStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:    &excelize.Font{Bold: true, Size: 14, Color: darkGreen},
+			Border:  []excelize.Border{{Type: "bottom", Color: darkGreen, Style: 6}},
+			Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
 		})
-		wb.File.SetCellStyle(sheet, tlBack, trBack, titleStyle)
+		// 明细3~4列逐列设双线边框
+		for i := 2; i < 4; i++ {
+			cell := mlCellName(mlDetailCol(lay, i), row)
+			wb.File.SetCellStyle(sheet, cell, cell, dbStyle)
+		}
 	}
 
-	// Row +1: Front 侧标题（多科目明细账 — XXX），跨整个 Front 区
+	// Row +1: Front 侧标题 — "明      细      帐"，下双线边框到明细5~7列
 	if hasFront {
-		tlFront := mlCellName(lay.FrontStartCol, row)
-		trFront := mlCellName(lay.FrontStartCol+lay.FrontColCount-1, row)
-		wb.File.MergeCell(sheet, tlFront, trFront)
-		wb.File.SetCellValue(sheet, tlFront, "多科目明细账 — "+general)
+		fcell := mlCellName(mlDetailCol(lay, 4), row)
+		wb.File.SetCellValue(sheet, fcell, "明      细      帐")
 		frontTitleStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Bold: true, Size: 14, Color: "006100", Underline: "double"},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+			Font:    &excelize.Font{Bold: true, Size: 14, Color: "006100"},
+			Border:  []excelize.Border{{Type: "bottom", Color: "006100", Style: 6}},
+			Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "bottom"},
 		})
-		wb.File.SetCellStyle(sheet, tlFront, trFront, frontTitleStyle)
+		// 明细5~7列逐列设双线边框
+		for i := 4; i <= 6; i++ {
+			cell := mlCellName(mlDetailCol(lay, i), row)
+			wb.File.SetCellStyle(sheet, cell, cell, frontTitleStyle)
+		}
 	}
 	wb.File.SetRowHeight(sheet, row, 28)
 	row++

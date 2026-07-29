@@ -152,7 +152,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
 	// 写列标题：摘要 | 借                         方 | ✓ | 贷                         方 | ✓ | 借或贷 | 余                         额 | ✓
-	headerCols := []string{"摘要", "借                         方", "✓", "贷                         方", "✓", "借或贷", "余                         额", "✓"}
+		headerCols := []string{"摘要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i, lay.HeaderRow+1)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -199,6 +199,20 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	he := cellName(lay.FrontStartCol+len(headerCols)+3, lay.SubHeaderRow+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
 
+	// 摘要列字体放大
+	summaryStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 12, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	summaryCell := cellName(lay.FrontStartCol+4, lay.HeaderRow+1)
+	summaryCell2 := cellName(lay.FrontStartCol+4, lay.SubHeaderRow+1)
+	wb.File.SetCellStyle(sheet, summaryCell, summaryCell2, summaryStyle)
 	// 表格顶部双线红色边框（仅Row 4的上边框，保留其他边框）
 	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 10, Color: "006100"},
@@ -926,7 +940,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
 	// 写列标题：摘要 | 借方金额 | ✓ | 贷方金额 | ✓ | 借或贷 | 余额 | ✓
-	headerCols := []string{"摘要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
+		headerCols := []string{"摘要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i+colOffset, row)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -972,6 +986,21 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	hs := cellName(lay.FrontStartCol+colOffset, row)
 	he := cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row+1)
 	wb.File.SetCellStyle(sheet, hs, he, headerStyle)
+
+	// 摘要列字体放大
+	summaryStyle2, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 12, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	summaryCell := cellName(lay.FrontStartCol+4+colOffset, row)
+	summaryCell2 := cellName(lay.FrontStartCol+4+colOffset, row+1)
+	wb.File.SetCellStyle(sheet, summaryCell, summaryCell2, summaryStyle2)
 
 	// 每页表格顶部双线红色边框
 	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{

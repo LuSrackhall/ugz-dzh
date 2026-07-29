@@ -126,6 +126,7 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 		// 补承前页
 		if wb.lastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.lastBreakTotals(sheet)
+			row += lay.TopMarginRows
 			wb.writeCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pageNum)
 			row++
 			pageDebit = 0
@@ -136,6 +137,7 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 		if wb.rowIsPageBreak(sheet, row) {
 			wb.writePageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
+			row += lay.BottomMarginRows + lay.TopMarginRows
 			wb.writeCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
 			pageDebit = 0

@@ -59,41 +59,41 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 		t.Fatalf("GetRows: %v", err)
 	}
 
-	// Layout: title(R1), account(R2), blank(R3), year-header(R4), sub-header(R5:月|日), data(R6+)
-	if len(rows) < 7 {
-		t.Fatalf("expected at least 7 rows, got %d", len(rows))
+	// Layout: margin(R1空), title(R2), account(R3), blank(R4), year-header(R5), sub-header(R6), data(R7+)
+	if len(rows) < 8 {
+		t.Fatalf("expected at least 8 rows, got %d", len(rows))
 	}
-	// Title at GetRows[0], col C
-	if len(rows[0]) < 3 || !strings.Contains(rows[0][2], "总    分    类    账") {
-		t.Errorf("row 0 title = %v", rows[0])
+	// Title at GetRows[1], col C (FrontStartCol=3 → GetRows index 2)
+	if len(rows[1]) < 3 || !strings.Contains(rows[1][2], "总    分    类    账") {
+		t.Errorf("row 1 title = %v", rows[1])
 	}
-	// Top header at GetRows[3]: 摘要 at col F (FrontStartCol+3=col6, GetRows index 5)
-	if len(rows[6]) < 7 || rows[3][6] != "摘要" {
-		t.Errorf("row 3 headers col 7 = %q, want 摘要", getRowCol(rows, 3, 6))
+	// Top header at GetRows[4]: 摘要 at col F (FrontStartCol+3=6, GetRows index 5)
+	if len(rows[4]) < 7 || rows[4][6] != "摘要" {
+		t.Errorf("row 4 headers col 7 = %q, want 摘要", getRowCol(rows, 4, 6))
 	}
-	// Data row 1 at GetRows[5]: month=01, summary=[电脑]购电脑
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+4); got != "[电脑] 购电脑" {
-		t.Errorf("row 8 summary = %q, want [电脑] 购电脑", got)
+	// Data row 1 at GetRows[6]: month=01, summary=[电脑]购电脑
+	if got := getRowCol(rows, 6, lay.BindingLeftCols+4); got != "[电脑] 购电脑" {
+		t.Errorf("data row 1 summary = %q, want [电脑] 购电脑", got)
 	}
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+0); got != "01" {
-		t.Errorf("row 8 month = %q, want 01", got)
+	if got := getRowCol(rows, 6, lay.BindingLeftCols+0); got != "01" {
+		t.Errorf("data row 1 month = %q, want 01", got)
 	}
-	// Data row 2 at GetRows[6]: summary=[打印机]购打印机
-	if got := getRowCol(rows, 6, lay.BindingLeftCols+4); got != "[打印机] 购打印机" {
-		t.Errorf("row 9 summary = %q, want [打印机] 购打印机", got)
+	// Data row 2 at GetRows[7]: summary=[打印机]购打印机
+	if got := getRowCol(rows, 7, lay.BindingLeftCols+4); got != "[打印机] 购打印机" {
+		t.Errorf("data row 2 summary = %q, want [打印机] 购打印机", got)
 	}
 	// Money columns
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+glColDebit); got == "" || got == "0" {
-		t.Errorf("row 5 debit empty, got %q", got)
-	}
 	if got := getRowCol(rows, 6, lay.BindingLeftCols+glColDebit); got == "" || got == "0" {
-		t.Errorf("row 6 debit empty, got %q", got)
+		t.Errorf("data row 1 debit empty, got %q", got)
 	}
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+glColBalance); got == "" || got == "0" {
-		t.Errorf("row 5 balance empty, got %q", got)
+	if got := getRowCol(rows, 7, lay.BindingLeftCols+glColDebit); got == "" || got == "0" {
+		t.Errorf("data row 2 debit empty, got %q", got)
 	}
 	if got := getRowCol(rows, 6, lay.BindingLeftCols+glColBalance); got == "" || got == "0" {
-		t.Errorf("row 6 balance empty, got %q", got)
+		t.Errorf("data row 1 balance empty, got %q", got)
+	}
+	if got := getRowCol(rows, 7, lay.BindingLeftCols+glColBalance); got == "" || got == "0" {
+		t.Errorf("data row 2 balance empty, got %q", got)
 	}
 }
 
@@ -115,13 +115,13 @@ func TestAppendMergeEntries_SummaryFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRows: %v", err)
 	}
-	// Data row 1: no detail prefix
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+4); got != "购买设备" {
-		t.Errorf("row 8 summary = %q, want 购买设备", got)
+	// Data row 1 at GetRows[6]: no detail prefix
+	if got := getRowCol(rows, 6, lay.BindingLeftCols+4); got != "购买设备" {
+		t.Errorf("data row 1 summary = %q, want 购买设备", got)
 	}
-	// Data row 2: with detail prefix
-	if got := getRowCol(rows, 6, lay.BindingLeftCols+4); got != "[办公费] 购买设备" {
-		t.Errorf("row 9 summary = %q, want [办公费] 购买设备", got)
+	// Data row 2 at GetRows[7]: with detail prefix
+	if got := getRowCol(rows, 7, lay.BindingLeftCols+4); got != "[办公费] 购买设备" {
+		t.Errorf("data row 2 summary = %q, want [办公费] 购买设备", got)
 	}
 }
 
@@ -144,16 +144,16 @@ func TestAppendMergeEntries_MultipleDetails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRows: %v", err)
 	}
-	if len(rows) < 8 {
-		t.Fatalf("expected at least 8 rows, got %d", len(rows))
+	if len(rows) < 9 {
+		t.Fatalf("expected at least 9 rows, got %d", len(rows))
 	}
-	// Data row 1 month
-	if got := getRowCol(rows, 5, lay.BindingLeftCols+0); got != "01" {
-		t.Errorf("row 8 month = %q, want 01", got)
-	}
-	// Data row 2 month
+	// Data row 1 at GetRows[6]
 	if got := getRowCol(rows, 6, lay.BindingLeftCols+0); got != "01" {
-		t.Errorf("row 9 month = %q, want 01", got)
+		t.Errorf("data row 1 month = %q, want 01", got)
+	}
+	// Data row 2 at GetRows[7]
+	if got := getRowCol(rows, 7, lay.BindingLeftCols+0); got != "01" {
+		t.Errorf("data row 2 month = %q, want 01", got)
 	}
 }
 

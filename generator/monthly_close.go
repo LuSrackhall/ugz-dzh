@@ -31,6 +31,7 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				wb.writePageBreakRow(sheet, row, balance, closingDebit, closingCredit, pageNum)
 				row++
 				pageNum = wb.getPageNum(sheet)
+				row += lay.BottomMarginRows + lay.TopMarginRows
 				wb.writePageHeader(sheet, row, pageNum, account)
 				row += lay.DataStartRow
 				wb.writeCarryForwardRow(sheet, row, balance, closingDebit, closingCredit, pageNum)
@@ -204,7 +205,7 @@ func (wb *Workbook) nextDataRowAfterBreak(sheet string) (int, error) {
 	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) <= 2 {
-		return lay.DataStartRow + 1, nil
+		return lay.DataStartRow + 1 + lay.TopMarginRows, nil
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if len(rows[i]) == 0 {

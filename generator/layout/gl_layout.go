@@ -9,16 +9,18 @@ package layout
 // GLSpec 定义总分类账页面的物理约束和内容结构。
 // 不包含任何 Renderer 逻辑。
 type GLSpec struct {
-	PaperWidthMM  float64
-	PaperHeightMM float64
-	LeftMarginMM  float64
-	RightMarginMM float64
-	PageGapMM     float64
+	PaperWidthMM      float64
+	PaperHeightMM     float64
+	LeftMarginMM      float64
+	RightMarginMM     float64
+	PageGapMM         float64
 	TitleRowCount     int
 	TitleSplitRatio   float64
 	ColHeaderRowCount int
 	DataRowsPerPage   int
-	ColProportions []GLColProportion
+	TopMarginRows     int
+	BottomMarginRows  int
+	ColProportions    []GLColProportion
 }
 
 // GLColProportion 定义总分类账一列在内容区中的宽度占比。
@@ -29,31 +31,33 @@ type GLColProportion struct {
 
 // GLLayout 是 GLComputeLayout 的输出结果，包含所有坐标信息。
 type GLLayout struct {
-	FrontLeftMM  float64
-	FrontWidthMM float64
-	PageGapLeftMM  float64
-	PageGapWidthMM float64
-	BackLeftMM  float64
-	BackWidthMM float64
-	Columns []GLColumnPos
-	BindingLeftCols  int
-	FrontStartCol    int
-	PageGapStartCol  int
-	BackStartCol     int
-	BindingRightCols int
-	TotalCols        int
-	ExcelColumns []GLExcelCol
-	TitleRow     int
-	PageNumRow   int
-	HeaderRow    int
-	SubHeaderRow int
-	DataStartRow int
-	TitleColLeft     int
-	TitleColRight    int
-	AccountColLeft   int
-	AccountColRight  int
-	TitleColSpan     int
-	AccountColSpan   int
+	FrontLeftMM       float64
+	FrontWidthMM      float64
+	PageGapLeftMM     float64
+	PageGapWidthMM    float64
+	BackLeftMM        float64
+	BackWidthMM       float64
+	Columns           []GLColumnPos
+	BindingLeftCols   int
+	FrontStartCol     int
+	PageGapStartCol   int
+	BackStartCol      int
+	BindingRightCols  int
+	TotalCols         int
+	ExcelColumns      []GLExcelCol
+	TopMarginRows     int
+	BottomMarginRows  int
+	TitleRow          int
+	PageNumRow        int
+	HeaderRow         int
+	SubHeaderRow      int
+	DataStartRow      int
+	TitleColLeft      int
+	TitleColRight     int
+	AccountColLeft    int
+	AccountColRight   int
+	TitleColSpan      int
+	AccountColSpan    int
 }
 
 // GLColumnPos 列在一侧内容区中的位置（mm）
@@ -81,6 +85,8 @@ func DefaultGLSpec() GLSpec {
 		TitleSplitRatio:   0.5,
 		ColHeaderRowCount: 2,
 		DataRowsPerPage:   20,
+		TopMarginRows:     1,
+		BottomMarginRows:  1,
 		ColProportions: []GLColProportion{
 			{Name: "月", Ratio: 2},
 			{Name: "日", Ratio: 2},
@@ -151,10 +157,12 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 		BindingRightCols:  bindingRightCols,
 		TotalCols:         total,
 		ExcelColumns:      exc,
-		TitleRow:          0,
-		PageNumRow:        1,
-		HeaderRow:         3,
-		SubHeaderRow:      4,
+		TopMarginRows:     spec.TopMarginRows,
+		BottomMarginRows:  spec.BottomMarginRows,
+		TitleRow:          spec.TopMarginRows,
+		PageNumRow:        spec.TopMarginRows + 1,
+		HeaderRow:         3 + spec.TopMarginRows,
+		SubHeaderRow:      4 + spec.TopMarginRows,
 		DataStartRow:      5,
 		TitleColLeft:      frontStart,
 		TitleColRight:     frontStart + titleCols - 1,

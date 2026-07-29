@@ -13,10 +13,6 @@ import (
 // GL headers
 var glHeaders = []string{"日期", "凭证号", "摘要", "借方金额", "贷方金额", "借或贷", "余额"}
 
-// 页面边距行数（上/下各 3 空行，用于模拟 A4 纸边距）
-const TopMarginRows = 3
-const BottomMarginRows = 3
-
 // GL 数据区列偏移（相对于 FrontStartCol/BackStartCol）
 const (
 	glColMonth    = 0 // 月
@@ -267,10 +263,15 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.SubHeaderRow+1), cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), subHStyle)
 
 	// ── 行高 ──
-	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)  // Row 4: 表头行1
-	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 30)  // Row 5: 表头行2
-	// 数据区默认行高 27（Row 6+）
-	for row := lay.DataStartRow + 1; row <= lay.DataStartRow+pageSize+1; row++ {
+	// 上边距空行
+	for i := 1; i <= lay.TopMarginRows; i++ {
+		wb.File.SetRowHeight(sheet, i, 10)
+	}
+	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)  // 表头行1
+	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 30)  // 表头行2
+	// 数据区默认行高 27
+	dataStart := lay.DataStartRow + 1 + lay.TopMarginRows
+	for row := dataStart; row <= dataStart+pageSize; row++ {
 		wb.File.SetRowHeight(sheet, row, 27)
 	}
 
@@ -351,7 +352,7 @@ func (wb *Workbook) nextDataRow(sheet string) (int, error) {
 	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) <= 2 {
-		return lay.DataStartRow + 1, nil
+		return lay.DataStartRow + 1 + lay.TopMarginRows, nil
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if len(rows[i]) == 0 {
@@ -362,7 +363,7 @@ func (wb *Workbook) nextDataRow(sheet string) (int, error) {
 		}
 		return i + 2, nil // 当前行的下一行
 	}
-	return lay.DataStartRow + 1, nil
+	return lay.DataStartRow + 1 + lay.TopMarginRows, nil
 }
 
 // isTemplateBreak 判断是否为结构过次页（仅有红字标签，无金额数据）。
@@ -491,6 +492,7 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			wb.writePageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
 			pageNum = wb.getPageNum(sheet)
+			row += lay.BottomMarginRows + lay.TopMarginRows
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
 
@@ -698,21 +700,21 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 }
 
 // pageStartRow 返回当前页第一个有效数据行的行号。
-// 过次页后新页：承前页为第一行。首页：DataStartRow+1（列标题之后的首行）。
+// 过次页后新页：承前页为第一行。首页：DataStartRow+lay.TopMarginRows+1（列标题+边距之后的首行）。
 func (wb *Workbook) pageStartRow(sheet string) int {
 	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil || len(rows) < lay.DataStartRow {
-		return lay.DataStartRow + 1
+		return lay.DataStartRow + 1 + lay.TopMarginRows
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if hasPageBreakAt(rows[i], lay) {
-			// i = GetRows index ≈ Excel row - 1（GetRows 包含空行）
-			// 过次页后一行为空，再后 DataStartRow 行为新页页头
-			return i + 2 + lay.DataStartRow
+			// i = GetRows index ≈ Excel row - 1
+			// breakRow+1(row++) + bottomMargin + topMargin + DataStartRow(header)
+			return i + 2 + lay.BottomMarginRows + lay.TopMarginRows + lay.DataStartRow
 		}
 	}
-	return lay.DataStartRow + 1
+	return lay.DataStartRow + 1 + lay.TopMarginRows
 }
 
 // rowIsPageBreak 检查指定行是否已超出当页容量（pageSize 行数据后需过次页）。
@@ -1197,11 +1199,11 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 
 			// 外侧边缘红色双线
-			outerTop := pageStart - TopMarginRows
+			outerTop := pageStart - lay.TopMarginRows
 			if outerTop < 1 {
 				outerTop = 1
 			}
-			outerBottom := row + BottomMarginRows
+			outerBottom := row + lay.BottomMarginRows
 			if outerBottom > len(rows) {
 				outerBottom = len(rows)
 			}
@@ -1244,7 +1246,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 		}
 		// 外侧边缘红色双线（最后一页）
-		outerTop := pageStart - TopMarginRows
+		outerTop := pageStart - lay.TopMarginRows
 		if outerTop < 1 {
 			outerTop = 1
 		}

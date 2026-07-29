@@ -1000,9 +1000,6 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 			{Type: "left", Color: "#006100", Style: 1},
 		},
 	})
-	summaryCell := cellName(lay.FrontStartCol+4+colOffset, row)
-	summaryCell2 := cellName(lay.FrontStartCol+4+colOffset, row+1)
-	wb.File.SetCellStyle(sheet, summaryCell, summaryCell2, summaryStyle2)
 
 	// 每页表格顶部双线红色边框
 	topBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -1017,6 +1014,11 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOffset, row),
 		cellName(lay.FrontStartCol+len(headerCols)+3+colOffset, row), topBorderStyle)
+
+	// 摘要单独再设一次字体（覆盖topBorderStyle的10pt）
+	summaryCell := cellName(lay.FrontStartCol+4+colOffset, row)
+	summaryCell2 := cellName(lay.FrontStartCol+4+colOffset, row+1)
+	wb.File.SetCellStyle(sheet, summaryCell, summaryCell2, summaryStyle2)
 
 	// 年、凭证列右侧红色边框（保留顶部红色边框）
 	redRightStyle, _ := wb.File.NewStyle(&excelize.Style{

@@ -303,12 +303,17 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		}
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
+	// 摘要列分出16宽度给装订列
+	summaryCol := lay.ExcelColumns[4].Col
+	cl, _ := excelize.ColumnNumberToName(summaryCol)
+	summaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 4
+	wb.File.SetColWidth(sheet, cl, cl, summaryW)
 	// 装订列
 	// 左侧装订列（正面页左边距 = 5倍间隙）
 	for _, offset := range []int{1, 2} {
 		if offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 5)
+			wb.File.SetColWidth(sheet, cl, cl, 7)
 		}
 	}
 	// 页间隙列（正面页右边距/背面页左边距 = 1倍）
@@ -329,11 +334,17 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		}
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
-	// 右侧装订列（背面页右边距 = 5倍间隙）
+	// 反面摘要列同样分出16
+		backSummaryCol := lay.BackStartCol + 4
+		cl2, _ := excelize.ColumnNumberToName(backSummaryCol)
+		backSummaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 4
+		wb.File.SetColWidth(sheet, cl2, cl2, backSummaryW)
+
+		// 右侧装订列（背面页右边距 = 5倍间隙）
 	for _, offset := range []int{lay.TotalCols, lay.TotalCols - 1} {
 		if offset > 0 && offset > lay.BackStartCol && offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 5)
+			wb.File.SetColWidth(sheet, cl, cl, 7)
 		}
 	}
 
@@ -942,7 +953,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
 	// 写列标题：摘要 | 借方金额 | ✓ | 贷方金额 | ✓ | 借或贷 | 余额 | ✓
-		headerCols := []string{"摘要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
+		headerCols := []string{"摘                                        要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i+colOffset, row)
 		wb.File.SetCellValue(sheet, cell, h)

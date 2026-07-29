@@ -287,13 +287,14 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
 	// 装订列
+	// 左侧装订列（正面页左边距 = 5倍间隙）
 	for _, offset := range []int{1, 2} {
 		if offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 2)
+			wb.File.SetColWidth(sheet, cl, cl, 5)
 		}
 	}
-	// 页间隙列
+	// 页间隙列（正面页右边距/背面页左边距 = 1倍）
 	if lay.PageGapStartCol <= lay.TotalCols {
 		cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
 		wb.File.SetColWidth(sheet, cl, cl, 2)
@@ -311,11 +312,11 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		}
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
-	// 右侧装订列
+	// 右侧装订列（背面页右边距 = 5倍间隙）
 	for _, offset := range []int{lay.TotalCols, lay.TotalCols - 1} {
 		if offset > 0 && offset > lay.BackStartCol && offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 2)
+			wb.File.SetColWidth(sheet, cl, cl, 5)
 		}
 	}
 

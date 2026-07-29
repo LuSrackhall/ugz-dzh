@@ -123,7 +123,7 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 	frontStart := bindingLeftCols + 1
 	pageGapStart := frontStart + nCol
 	backStart := pageGapStart + 1
-	total := backStart + nCol + bindingRightCols
+	total := backStart + nCol - 1 + bindingRightCols
 
 	var exc []GLExcelCol
 	for i := range cols {

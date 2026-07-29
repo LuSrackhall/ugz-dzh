@@ -926,7 +926,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
 	// 写列标题：摘要 | 借方金额 | ✓ | 贷方金额 | ✓ | 借或贷 | 余额 | ✓
-	headerCols := []string{"摘要", "借方金额", "✓", "贷方金额", "✓", "借或贷", "余额", "✓"}
+	headerCols := []string{"摘要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i+colOffset, row)
 		wb.File.SetCellValue(sheet, cell, h)

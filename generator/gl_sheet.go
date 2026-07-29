@@ -265,14 +265,14 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	// ── 行高 ──
 	// 上边距空行
 	for i := 1; i <= lay.TopMarginRows; i++ {
-		wb.File.SetRowHeight(sheet, i, 10)
+		wb.File.SetRowHeight(sheet, i, 25)
 	}
 	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)  // 表头行1
-	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 30)  // 表头行2
+	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 26)  // 表头行2
 	// 数据区默认行高 27
 	dataStart := lay.DataStartRow + 1 + lay.TopMarginRows
 	for row := dataStart; row <= dataStart+pageSize; row++ {
-		wb.File.SetRowHeight(sheet, row, 27)
+			wb.File.SetRowHeight(sheet, row, 25)
 	}
 
 	// ── 列宽（按比例分配） ──
@@ -1036,7 +1036,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 
 	// 数据区行高 23（Row N+5 起，共 pageSize 行）
 	for i := 1; i <= pageSize+1; i++ {
-		wb.File.SetRowHeight(sheet, row+i, 27)
+			wb.File.SetRowHeight(sheet, row+i, 25)
 	}
 
 	return nil
@@ -1162,7 +1162,8 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		// 逐页扫描：找过次页行作为页面边界
 		// 首页表头在 Row 4-5，后续页表头在过次页后 5 行
 		pageNum := 1
-		pageStart := lay.DataStartRow - 1 // 首页表头行
+			pageStart := lay.DataStartRow - 1 + lay.TopMarginRows // 首页表头行+上边距
+			pageTop := 1                     // 首页顶部行（上边距首行）
 
 		for i, r := range rows {
 			row := i + 1
@@ -1199,14 +1200,14 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 
 			// 外侧边缘红色双线
-			outerTop := pageStart - lay.TopMarginRows
+			outerTop := pageTop
 			if outerTop < 1 {
 				outerTop = 1
 			}
 			outerBottom := row + lay.BottomMarginRows
-			if outerBottom > len(rows) {
-				outerBottom = len(rows)
-			}
+				for d := len(rows) + 1; d <= outerBottom; d++ {
+					wb.File.SetRowHeight(sheet, d, 25)
+				}
 			if pageNum%2 == 1 {
 				// 正面页（奇数）：左侧红色双线，右侧无边框
 				for d := outerTop; d <= outerBottom; d++ {
@@ -1223,7 +1224,8 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 
 			// 下一页：跳过过次页、标题、会计科目、空行（共4行），直接到列标题行
 			pageNum++
-			pageStart = row + 4 // 过次页行+4 = 列标题行
+				pageStart = row + 4 + lay.TopMarginRows + lay.BottomMarginRows // 过次页行+边距 = 列标题行
+				pageTop = row + 1 + lay.BottomMarginRows // 过次页下一行 = 下页上边距
 		}
 
 		// 最后一页（无过次页标记）：从 pageStart 到 sheet 末尾
@@ -1246,11 +1248,15 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 		}
 		// 外侧边缘红色双线（最后一页）
-		outerTop := pageStart - lay.TopMarginRows
+		outerTop := pageTop
 		if outerTop < 1 {
 			outerTop = 1
 		}
 		outerBottom := len(rows)
+			for d := len(rows) + 1; d <= len(rows)+lay.BottomMarginRows; d++ {
+				wb.File.SetRowHeight(sheet, d, 25)
+				outerBottom = d
+			}
 		if pageNum%2 == 1 {
 			for d := outerTop; d <= outerBottom; d++ {
 				wb.setRedDoubleLeft(sheet, dataColStart+0, d)

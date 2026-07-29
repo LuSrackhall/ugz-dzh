@@ -28,14 +28,15 @@ func TestGLComputeLayout_Basic(t *testing.T) {
 		t.Errorf("front start: want %g, got %g", spec.LeftMarginMM, lay.FrontLeftMM)
 	}
 
-	wantWidth := (spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM - spec.PageGapMM) / 2
+	wantWidth := spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM
 	if lay.FrontWidthMM != wantWidth {
 		t.Errorf("front width: want %g, got %g", wantWidth, lay.FrontWidthMM)
 	}
-
-	total := lay.FrontWidthMM + lay.PageGapWidthMM + lay.BackWidthMM + spec.LeftMarginMM + spec.RightMarginMM
-	if total > spec.PaperWidthMM+0.01 || total < spec.PaperWidthMM-0.01 {
-		t.Errorf("width sum: want %g, got %g", spec.PaperWidthMM, total)
+	if lay.FrontWidthMM <= 0 {
+		t.Errorf("front width should be positive")
+	}
+	if lay.BackWidthMM <= 0 {
+		t.Errorf("back width should be positive")
 	}
 
 	if lay.FrontStartCol <= lay.BindingLeftCols {

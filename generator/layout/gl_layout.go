@@ -100,7 +100,7 @@ func DefaultGLSpec() GLSpec {
 
 // GLComputeLayout 从 GLSpec 计算所有坐标。纯函数。
 func GLComputeLayout(spec GLSpec) GLLayout {
-	contentWidth := (spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM - spec.PageGapMM) / 2
+	contentWidth := spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM
 	frontLeft := spec.LeftMarginMM
 	pageGapLeft := frontLeft + contentWidth
 	backLeft := pageGapLeft + spec.PageGapMM

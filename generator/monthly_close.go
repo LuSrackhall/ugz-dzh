@@ -32,6 +32,10 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				row++
 				pageNum = wb.getPageNum(sheet)
 				row += lay.BottomMarginRows + lay.TopMarginRows
+				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
+				for d := marginStart; d < row; d++ {
+					wb.File.SetRowHeight(sheet, d, 25)
+				}
 				wb.writePageHeader(sheet, row, pageNum, account)
 				row += lay.DataStartRow
 				wb.writeCarryForwardRow(sheet, row, balance, closingDebit, closingCredit, pageNum)

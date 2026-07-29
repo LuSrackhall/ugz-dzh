@@ -89,18 +89,26 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 	}
 	wb.moneyStyleThickID = moneyStyleThick
 
-	// 设置所有 Sheet 页面布局为 A4 横向，页边距 0
+	// 设置所有 Sheet 页面布局为 A4 横向，页边距 0，自动缩放适配宽度
 	paperSize := 9
+	fw := 1
+	fh := 0
+	fp := true
 	for _, sheet := range wb.File.GetSheetList() {
 		wb.File.SetPageLayout(sheet, &excelize.PageLayoutOptions{
 			Orientation: stringPtr("landscape"),
 			Size:        &paperSize,
+			FitToWidth:  &fw,
+			FitToHeight: &fh,
 		})
 		wb.File.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
 			Top:    float64Ptr(0),
 			Bottom: float64Ptr(0),
 			Left:   float64Ptr(0),
 			Right:  float64Ptr(0),
+		})
+		wb.File.SetSheetProps(sheet, &excelize.SheetPropsOptions{
+			FitToPage: &fp,
 		})
 	}
 

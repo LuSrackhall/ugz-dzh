@@ -1261,9 +1261,10 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 		}
 	}
+	// 为所有Sheet应用页面布局（新创建的Sheet在NewWorkbook时未配置）
+	setAllSheetPageLayout(wb.File)
 	return nil
 }
-
 
 // setRedRightBorder 为指定单元格添加红色右边框，不影响已有样式属性。
 func (wb *Workbook) setRedRightBorder(sheet string, col, row int) {

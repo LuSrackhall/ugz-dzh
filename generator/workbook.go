@@ -89,30 +89,36 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 	}
 	wb.moneyStyleThickID = moneyStyleThick
 
-	// 设置所有 Sheet 页面布局为 A4 横向，页边距 0，自动缩放适配宽度
+	// 设置页面布局（所有现有Sheet）
+	setAllSheetPageLayout(wb.File)
+	// 金额样式创建后再设置页面布局（不影响已有Sheet布局）
+
+	return wb, nil
+}
+
+// setAllSheetPageLayout 为所有 Sheet 设置 A4 横向、页边距 0、FitToWidth=1
+func setAllSheetPageLayout(f *excelize.File) {
 	paperSize := 9
 	fw := 1
 	fh := 0
 	fp := true
-	for _, sheet := range wb.File.GetSheetList() {
-		wb.File.SetPageLayout(sheet, &excelize.PageLayoutOptions{
+	for _, sheet := range f.GetSheetList() {
+		f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
 			Orientation: stringPtr("landscape"),
 			Size:        &paperSize,
 			FitToWidth:  &fw,
 			FitToHeight: &fh,
 		})
-		wb.File.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
+		f.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
 			Top:    float64Ptr(0),
 			Bottom: float64Ptr(0),
 			Left:   float64Ptr(0),
 			Right:  float64Ptr(0),
 		})
-		wb.File.SetSheetProps(sheet, &excelize.SheetPropsOptions{
+		f.SetSheetProps(sheet, &excelize.SheetPropsOptions{
 			FitToPage: &fp,
 		})
 	}
-
-	return wb, nil
 }
 
 // prevMonthPath 返回上月 xlsx 路径。

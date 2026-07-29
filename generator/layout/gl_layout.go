@@ -74,8 +74,8 @@ func DefaultGLSpec() GLSpec {
 	return GLSpec{
 		PaperWidthMM:      297,
 		PaperHeightMM:     210,
-		LeftMarginMM:      15,
-		RightMarginMM:     15,
+		LeftMarginMM:      25, // 装订侧边距（5/6 of total margin）
+		RightMarginMM:     5,  // 书口侧边距（1/6 of total margin，比例5:1）
 		PageGapMM:         8,
 		TitleRowCount:     3,
 		TitleSplitRatio:   0.5,

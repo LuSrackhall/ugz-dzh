@@ -493,6 +493,10 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			row++
 			pageNum = wb.getPageNum(sheet)
 			row += lay.BottomMarginRows + lay.TopMarginRows
+				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
+				for d := marginStart; d < row; d++ {
+					wb.File.SetRowHeight(sheet, d, 25)
+				}
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
 

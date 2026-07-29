@@ -165,11 +165,16 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 	}
 }
 
-// GLMMToExcelColWidth 将 mm 宽度近似转换为 Excel 列宽单位。
+// GLMMToExcelColWidth 将 mm 精确转换为 Excel 列宽单位。
+// ECMA-376 标准：列宽单位 = (像素宽度 - 5px 内边距) / MaxDigitWidth(7px)
 func GLMMToExcelColWidth(mm float64) float64 {
-	const pxPerMM = 96.0 / 25.4
-	const pxPerColUnit = 7.0
-	return mm * pxPerMM / pxPerColUnit
+	const dpi = 96.0
+	const maxDigitWidth = 7.0
+	pixelWidth := mm * dpi / 25.4
+	if pixelWidth <= 5 {
+		return 0
+	}
+	return (pixelWidth - 5) / maxDigitWidth
 }
 
 // GLMMToExcelRowHeight 将 mm 高度转换为 Excel 行高（磅）。

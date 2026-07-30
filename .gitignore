@@ -6,6 +6,33 @@
 
 # Node
 node_modules/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Build output
+dist/
+build/
+
+# Worktrees
+.worktrees/
+
+# Logs
+*.log
+logs/
+
+test/e2e/test_data/*
 
 # Project
 test/e2e/output/*

@@ -178,6 +178,20 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+
+		// 摘要列自动换行 + 9号加粗
+		summaryCell := cellName(dataCol(lay, pageNum, 4), row)
+		summaryStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Size: 9, Bold: true},
+			Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
+			Border: []excelize.Border{
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "left", Color: "#006100", Style: 1},
+			},
+		})
+		wb.File.SetCellStyle(sheet, summaryCell, summaryCell, summaryStyle)
 		row++
 	}
 

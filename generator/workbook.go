@@ -21,7 +21,8 @@ type Workbook struct {
 	OutputDir    string
 	ConfigPath   string
 	moneyStyleID int
-	MLSheetBalances map[string]int64 // sheet名 → 最近期末余额
+MLSheetBalances map[string]int64 // sheet名 → 最近期末余额
+	moneyStyleThickID int // 金额样式（底边加粗）
 }
 
 // NewWorkbook 创建或加载工作薄。若上月 xlsx 存在则复制之，否则新建。
@@ -62,13 +63,63 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 
 	moneyStyle, err := wb.File.NewStyle(&excelize.Style{
 		CustomNumFmt: stringPtr("#,##0.00"),
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建金额样式: %w", err)
 	}
 	wb.moneyStyleID = moneyStyle
 
+	// 金额样式（底边加粗，用于每5行）
+	moneyStyleThick, err := wb.File.NewStyle(&excelize.Style{
+		CustomNumFmt: stringPtr("#,##0.00"),
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 2},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建金额加粗样式: %w", err)
+	}
+	wb.moneyStyleThickID = moneyStyleThick
+
+	// 设置页面布局（所有现有Sheet）
+	setAllSheetPageLayout(wb.File)
+	// 金额样式创建后再设置页面布局（不影响已有Sheet布局）
+
 	return wb, nil
+}
+
+// setAllSheetPageLayout 为所有 Sheet 设置 A4 横向、页边距 0、FitToWidth=1
+func setAllSheetPageLayout(f *excelize.File) {
+	paperSize := 9
+	fw := 1
+	fh := 0
+	fp := true
+	for _, sheet := range f.GetSheetList() {
+		f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
+			Orientation: stringPtr("landscape"),
+			Size:        &paperSize,
+			FitToWidth:  &fw,
+			FitToHeight: &fh,
+		})
+		f.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
+			Top:    float64Ptr(0),
+			Bottom: float64Ptr(0),
+			Left:   float64Ptr(0),
+			Right:  float64Ptr(0),
+		})
+		f.SetSheetProps(sheet, &excelize.SheetPropsOptions{
+			FitToPage: &fp,
+		})
+	}
 }
 
 // prevMonthPath 返回上月 xlsx 路径。
@@ -137,7 +188,7 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 const (
 	sheetPrefixGL = "总分类账-"
 	sheetPrefixML = "多科目明细账-"
-	pageBreakLabel = "过次页"
+	pageBreakLabel = "过    次    页"
 	periodEndLabel = "期末余额"
 )
 
@@ -219,8 +270,18 @@ func stringPtr(s string) *string {
 	return &s
 }
 
+func float64Ptr(f float64) *float64 {
+	return &f
+}
+
 // setMoneyStyle 对指定单元格应用金额数字格式 #,##0.00。
 func (wb *Workbook) setMoneyStyle(sheet string, row, col int) {
 	cell, _ := excelize.CoordinatesToCellName(col, row)
 	wb.File.SetCellStyle(sheet, cell, cell, wb.moneyStyleID)
+}
+
+// setMoneyStyleThick 对指定单元格应用金额数字格式 #,##0.00（底边加粗）。
+func (wb *Workbook) setMoneyStyleThick(sheet string, row, col int) {
+	cell, _ := excelize.CoordinatesToCellName(col, row)
+	wb.File.SetCellStyle(sheet, cell, cell, wb.moneyStyleThickID)
 }

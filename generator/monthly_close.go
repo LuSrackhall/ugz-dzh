@@ -15,39 +15,96 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			continue
 		}
 
-		// 计算当前 Sheet 的最后一页页码
-		rows, _ := wb.File.GetRows(sheet)
-		pageNum := 1
-		for _, r := range rows {
-			if hasPageBreakAt(r, lay) {
-				pageNum++
-			}
-		}
+		pageNum := wb.getPageNum(sheet)
 		row, err := wb.nextDataRowAfterBreak(sheet)
 		if err != nil {
 			return err
 		}
 
+		balance := initials[account] + act.Debit - act.Credit
+		var closingDebit, closingCredit int64
+
+		// 检查页容量，满了就翻页
+		checkBreak := func() {
+			pageStart := wb.pageStartRow(sheet)
+			if row-pageStart >= pageSize {
+				wb.writePageBreakRow(sheet, row, balance, closingDebit, closingCredit, pageNum)
+				row++
+				pageNum = wb.getPageNum(sheet)
+				row += lay.BottomMarginRows + lay.TopMarginRows
+				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
+				for d := marginStart; d < row; d++ {
+					wb.File.SetRowHeight(sheet, d, 25)
+				}
+				wb.writePageHeader(sheet, row, pageNum, account)
+				row += lay.DataStartRow
+				wb.writeCarryForwardRow(sheet, row, balance, closingDebit, closingCredit, pageNum)
+				row++
+				closingDebit = 0
+				closingCredit = 0
+			}
+		}
+
 		// "本月合计" 行
+		checkBreak()
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "本月合计")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), centsToYuan(act.Debit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(act.Credit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本月合计")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(act.Debit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(act.Credit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
+		closingDebit += act.Debit
+		closingCredit += act.Credit
 
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
-				{Type: "top", Color: "#808080", Style: 1},
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), monthlyStyle)
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+			cellName(dataCol(lay, pageNum, glColCount-1), row), monthlyStyle)
 
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
+		// 应用每5行底边加粗样式
+		pageStart := wb.pageStartRow(sheet)
+		rowInPage := row - pageStart + 1
+		isThickRow := rowInPage%5 == 0
+
+		if isThickRow {
+			monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Bold: true, Size: 10},
+				Border: []excelize.Border{
+					{Type: "top", Color: "#006100", Style: 1},
+					{Type: "right", Color: "#006100", Style: 1},
+					{Type: "bottom", Color: "#006100", Style: 2},
+					{Type: "left", Color: "#006100", Style: 1},
+				},
+			})
+			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+				cellName(dataCol(lay, pageNum, glColCount-1), row), monthlyStyle)
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+		} else {
+			monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Bold: true, Size: 10},
+				Border: []excelize.Border{
+					{Type: "top", Color: "#006100", Style: 1},
+					{Type: "right", Color: "#006100", Style: 1},
+					{Type: "bottom", Color: "#006100", Style: 1},
+					{Type: "left", Color: "#006100", Style: 1},
+				},
+			})
+			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+				cellName(dataCol(lay, pageNum, glColCount-1), row), monthlyStyle)
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+		}
 
 		row++
 
@@ -56,22 +113,30 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			qtDebit := (qtdDebit[account]) + act.Debit
 			qtCredit := (qtdCredit[account]) + act.Credit
 
+			checkBreak()
 			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "本季合计")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), centsToYuan(qtDebit))
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(qtCredit))
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), "")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), "")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本季合计")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(qtDebit))
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(qtCredit))
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
+			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
+				Border: []excelize.Border{
+					{Type: "top", Color: "#006100", Style: 1},
+					{Type: "right", Color: "#006100", Style: 1},
+					{Type: "bottom", Color: "#006100", Style: 1},
+					{Type: "left", Color: "#006100", Style: 1},
+				},
 			})
-			wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), qtStyle)
+			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+				cellName(dataCol(lay, pageNum, glColCount-1), row), qtStyle)
 
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
 			row++
 		}
@@ -80,66 +145,82 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		cumDebit := (ytdDebit[account]) + act.Debit
 		cumCredit := (ytdCredit[account]) + act.Credit
 
+		checkBreak()
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "本年累计")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), centsToYuan(cumDebit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(cumCredit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本年累计")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(cumDebit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(cumCredit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
-				{Type: "bottom", Color: "#808080", Style: 1},
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), cumStyle)
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+			cellName(dataCol(lay, pageNum, glColCount-1), row), cumStyle)
 
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 3))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
 		row++
 
 		// "期末余额" 行 — 期初 + 本月借 - 本月贷
+		checkBreak()
 		endBalance := initials[account] + act.Debit - act.Credit
 		endDir, endDisp := directionFor(endBalance, 0)
 
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), periodEndLabel)
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), periodEndLabel)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 5), row), endDir)
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 6), row), centsToYuan(endDisp))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), endDir)
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(endDisp))
 
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
-				{Type: "bottom", Color: "#000000", Style: 2},
+				{Type: "top", Color: "#006100", Style: 1},
+				{Type: "right", Color: "#006100", Style: 1},
+				{Type: "bottom", Color: "#006100", Style: 1},
+				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, 6), row), endStyle)
+		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+			cellName(dataCol(lay, pageNum, glColCount-1), row), endStyle)
 
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 6))
-		}
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	}
 
 	return nil
 }
 
-// nextDataRowAfterBreak 返回 Sheet 中最后一行之后的下一行。
-// 若最后一行为孤立过次页（无承前页跟随），则返回过次页所在行（关账行直接覆盖过次页）。
+// nextDataRowAfterBreak 定位月末结账行的写入起点。
+// 从下往上找最后一条有实际内容的行（跳过空行和结构过次页），返回其下一行。
 func (wb *Workbook) nextDataRowAfterBreak(sheet string) (int, error) {
+	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
-	if err != nil {
-		return 3, nil
+	if err != nil || len(rows) <= 2 {
+		return lay.DataStartRow + 1 + lay.TopMarginRows, nil
 	}
-	// 孤立过次页：最后一行为过次页 → 覆盖之（过次页不上承前页，关账行替代）
-	if wb.lastRowIsOrphanBreak(sheet) {
-		return len(rows), nil
+	for i := len(rows) - 1; i >= 0; i-- {
+		if len(rows[i]) == 0 {
+			continue
+		}
+		if isTemplateBreak(rows[i], lay) {
+			continue
+		}
+		return i + 2, nil
 	}
-	return len(rows) + 1, nil
+	return lay.DataStartRow + 1, nil
 }
 
 // Activity 某一科目在当月的借/贷合计。

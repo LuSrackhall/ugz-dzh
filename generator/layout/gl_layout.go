@@ -9,16 +9,18 @@ package layout
 // GLSpec 定义总分类账页面的物理约束和内容结构。
 // 不包含任何 Renderer 逻辑。
 type GLSpec struct {
-	PaperWidthMM  float64
-	PaperHeightMM float64
-	LeftMarginMM  float64
-	RightMarginMM float64
-	PageGapMM     float64
+	PaperWidthMM      float64
+	PaperHeightMM     float64
+	LeftMarginMM      float64
+	RightMarginMM     float64
+	PageGapMM         float64
 	TitleRowCount     int
 	TitleSplitRatio   float64
 	ColHeaderRowCount int
 	DataRowsPerPage   int
-	ColProportions []GLColProportion
+	TopMarginRows     int
+	BottomMarginRows  int
+	ColProportions    []GLColProportion
 }
 
 // GLColProportion 定义总分类账一列在内容区中的宽度占比。
@@ -29,31 +31,33 @@ type GLColProportion struct {
 
 // GLLayout 是 GLComputeLayout 的输出结果，包含所有坐标信息。
 type GLLayout struct {
-	FrontLeftMM  float64
-	FrontWidthMM float64
-	PageGapLeftMM  float64
-	PageGapWidthMM float64
-	BackLeftMM  float64
-	BackWidthMM float64
-	Columns []GLColumnPos
-	BindingLeftCols  int
-	FrontStartCol    int
-	PageGapStartCol  int
-	BackStartCol     int
-	BindingRightCols int
-	TotalCols        int
-	ExcelColumns []GLExcelCol
-	TitleRow     int
-	PageNumRow   int
-	AccountRow   int
-	HeaderRow    int
-	DataStartRow int
-	TitleColLeft     int
-	TitleColRight    int
-	AccountColLeft   int
-	AccountColRight  int
-	TitleColSpan     int
-	AccountColSpan   int
+	FrontLeftMM       float64
+	FrontWidthMM      float64
+	PageGapLeftMM     float64
+	PageGapWidthMM    float64
+	BackLeftMM        float64
+	BackWidthMM       float64
+	Columns           []GLColumnPos
+	BindingLeftCols   int
+	FrontStartCol     int
+	PageGapStartCol   int
+	BackStartCol      int
+	BindingRightCols  int
+	TotalCols         int
+	ExcelColumns      []GLExcelCol
+	TopMarginRows     int
+	BottomMarginRows  int
+	TitleRow          int
+	PageNumRow        int
+	HeaderRow         int
+	SubHeaderRow      int
+	DataStartRow      int
+	TitleColLeft      int
+	TitleColRight     int
+	AccountColLeft    int
+	AccountColRight   int
+	TitleColSpan      int
+	AccountColSpan    int
 }
 
 // GLColumnPos 列在一侧内容区中的位置（mm）
@@ -74,29 +78,35 @@ func DefaultGLSpec() GLSpec {
 	return GLSpec{
 		PaperWidthMM:      297,
 		PaperHeightMM:     210,
-		LeftMarginMM:      15,
-		RightMarginMM:     15,
+		LeftMarginMM:      25, // 装订侧边距（5/6 of total margin）
+		RightMarginMM:     5,  // 书口侧边距（1/6 of total margin，比例5:1）
 		PageGapMM:         8,
 		TitleRowCount:     3,
 		TitleSplitRatio:   0.5,
-		ColHeaderRowCount: 1,
+		ColHeaderRowCount: 2,
 		DataRowsPerPage:   20,
+		TopMarginRows:     1,
+		BottomMarginRows:  1,
 		ColProportions: []GLColProportion{
-			{Name: "日期", Ratio: 10},
-			{Name: "凭证号", Ratio: 9},
-			{Name: "摘要", Ratio: 25},
+			{Name: "月", Ratio: 2},
+			{Name: "日", Ratio: 2},
+			{Name: "字", Ratio: 2},
+			{Name: "号", Ratio: 2},
+			{Name: "摘要", Ratio: 36},
 			{Name: "借方金额", Ratio: 16},
+			{Name: "✓", Ratio: 2},
 			{Name: "贷方金额", Ratio: 16},
-			{Name: "方向", Ratio: 5},
-			{Name: "余额", Ratio: 14},
-			{Name: "金额分栏", Ratio: 5},
+			{Name: "✓", Ratio: 2},
+			{Name: "借或贷", Ratio: 2},
+			{Name: "余额", Ratio: 16},
+			{Name: "✓", Ratio: 2},
 		},
 	}
 }
 
 // GLComputeLayout 从 GLSpec 计算所有坐标。纯函数。
 func GLComputeLayout(spec GLSpec) GLLayout {
-	contentWidth := (spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM - spec.PageGapMM) / 2
+	contentWidth := spec.PaperWidthMM - spec.LeftMarginMM - spec.RightMarginMM
 	frontLeft := spec.LeftMarginMM
 	pageGapLeft := frontLeft + contentWidth
 	backLeft := pageGapLeft + spec.PageGapMM
@@ -119,7 +129,7 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 	frontStart := bindingLeftCols + 1
 	pageGapStart := frontStart + nCol
 	backStart := pageGapStart + 1
-	total := backStart + nCol + bindingRightCols
+	total := backStart + nCol - 1 + bindingRightCols
 
 	var exc []GLExcelCol
 	for i := range cols {
@@ -147,10 +157,12 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 		BindingRightCols:  bindingRightCols,
 		TotalCols:         total,
 		ExcelColumns:      exc,
-		TitleRow:          1,
-		PageNumRow:        0,
-		AccountRow:        2,
-		HeaderRow:         4,
+		TopMarginRows:     spec.TopMarginRows,
+		BottomMarginRows:  spec.BottomMarginRows,
+		TitleRow:          spec.TopMarginRows,
+		PageNumRow:        spec.TopMarginRows + 1,
+		HeaderRow:         3 + spec.TopMarginRows,
+		SubHeaderRow:      4 + spec.TopMarginRows,
 		DataStartRow:      5,
 		TitleColLeft:      frontStart,
 		TitleColRight:     frontStart + titleCols - 1,
@@ -161,11 +173,16 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 	}
 }
 
-// GLMMToExcelColWidth 将 mm 宽度近似转换为 Excel 列宽单位。
+// GLMMToExcelColWidth 将 mm 精确转换为 Excel 列宽单位。
+// ECMA-376 标准：列宽单位 = (像素宽度 - 5px 内边距) / MaxDigitWidth(7px)
 func GLMMToExcelColWidth(mm float64) float64 {
-	const pxPerMM = 96.0 / 25.4
-	const pxPerColUnit = 7.0
-	return mm * pxPerMM / pxPerColUnit
+	const dpi = 96.0
+	const maxDigitWidth = 7.0
+	pixelWidth := mm * dpi / 25.4
+	if pixelWidth <= 5 {
+		return 0
+	}
+	return (pixelWidth - 5) / maxDigitWidth
 }
 
 // GLMMToExcelRowHeight 将 mm 高度转换为 Excel 行高（磅）。

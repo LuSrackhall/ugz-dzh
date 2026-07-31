@@ -173,7 +173,13 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	tickStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Color: "006100", Size: 12},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-})
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: 1},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
 	for _, offset := range []int{6, 8, 11} {
 		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+offset, lay.HeaderRow+1),
 			cellName(lay.FrontStartCol+offset, lay.SubHeaderRow+1), tickStyle)
@@ -181,7 +187,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10, Color: "006100"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "CC0000", Style: 6},
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -264,7 +270,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		Font:      &excelize.Font{Size: 9, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "CC0000", Style: 6},
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -575,19 +581,6 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 		}
 
-		// 摘要列自动换行 + 9号加粗
-		summaryCell := cellName(dataCol(lay, pageNum, 4), row)
-		summaryStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font: &excelize.Font{Size: 9, Bold: true},
-			Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
-			Border: []excelize.Border{
-				{Type: "top", Color: "#006100", Style: 1},
-				{Type: "right", Color: "#006100", Style: 1},
-				{Type: "bottom", Color: "#006100", Style: bottomBorder},
-				{Type: "left", Color: "#006100", Style: 1},
-			},
-		})
-		wb.File.SetCellStyle(sheet, summaryCell, summaryCell, summaryStyle)
 	}
 
 	return nil
@@ -611,6 +604,7 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int) 
 	// 上年结转行绿色边框
 	cfStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -641,6 +635,7 @@ func (wb *Workbook) insertCarryForwardAtRow(sheet string, amount int64, pageNum 
 	// 上年结转行绿色边框
 	cfStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -794,6 +789,7 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 		Font:      &excelize.Font{Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "CC0000", Style: 6},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -808,6 +804,7 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 		Font:      &excelize.Font{Color: "CC0000", Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "CC0000", Style: 6},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -836,6 +833,7 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 	// 承前页行绿色边框
 	cfBorderStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -977,6 +975,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 		Font:      &excelize.Font{Color: "006100", Size: 12},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -989,6 +988,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10, Color: "006100"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -1074,6 +1074,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 		Font:      &excelize.Font{Size: 9, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "#006100", Style: 1},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -1137,6 +1138,7 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 		Font:      &excelize.Font{Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "CC0000", Style: 6},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -1150,6 +1152,7 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 		Font:      &excelize.Font{Color: sealRed, Size: 10},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
 			{Type: "right", Color: "#006100", Style: 1},
 			{Type: "bottom", Color: "CC0000", Style: 6},
 			{Type: "left", Color: "#006100", Style: 1},
@@ -1164,8 +1167,7 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 	endRow := breakRow
 	for row := startRow; row <= endRow; row++ {
 		// 计算当前行是页内第几行（从1开始）
-		rowInPage := row - startRow - 1
-			if rowInPage <= 0 { continue } // 跳过表头行
+		rowInPage := row - startRow + 1
 		// 每5行底边加粗
 		bottomStyle := 1 // 细线
 		if rowInPage%5 == 0 {
@@ -1183,8 +1185,8 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 				{Type: "left", Color: "#006100", Style: 1},
 			},
 		})
-			wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, row),
-				cellName(lay.FrontStartCol+glColCount-1+colOff, row), rowBorderStyle)
+		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol+colOff, row),
+			cellName(lay.FrontStartCol+glColCount-1+colOff, row), rowBorderStyle)
 	}
 
 	return nil
@@ -1315,25 +1317,25 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 		}
 	}
-
-	// 摘要列字体9号加粗+换行+左对齐（获取已有样式保留边框，只改字体和对齐）
+	// 摘要列数据行：9号加粗+自动换行+左对齐（最后统一应用，保留边框）
 	for _, s := range wb.File.GetSheetList() {
 		if !strings.HasPrefix(s, sheetPrefixGL) { continue }
 		lay := glLayout()
-		r, _ := wb.File.GetRows(s)
+		rows, _ := wb.File.GetRows(s)
 		minRow := lay.DataStartRow + 1 + lay.TopMarginRows
-		for i := range r {
+		for i := range rows {
 			row := i + 1
 			if row < minRow { continue }
-			if len(r[i]) > lay.BindingLeftCols+4 && (r[i][lay.BindingLeftCols+4] == pageBreakLabel || r[i][lay.BindingLeftCols+4] == carryForwardLabel) { continue }
-			if len(r[i]) > lay.BackStartCol+3 && (r[i][lay.BackStartCol+3] == pageBreakLabel || r[i][lay.BackStartCol+3] == carryForwardLabel) { continue }
+			// 跳过断页行、承前页行、表头行
+			if len(rows[i]) > lay.BindingLeftCols+4 && (rows[i][lay.BindingLeftCols+4] == pageBreakLabel || rows[i][lay.BindingLeftCols+4] == carryForwardLabel) { continue }
+			if len(rows[i]) > lay.BackStartCol+3 && (rows[i][lay.BackStartCol+3] == pageBreakLabel || rows[i][lay.BackStartCol+3] == carryForwardLabel) { continue }
 			fi := lay.BindingLeftCols
-			if len(r[i]) > fi && (r[i][fi] == "月" || r[i][fi] == "年") { continue }
+			if len(rows[i]) > fi && (rows[i][fi] == "月" || rows[i][fi] == "年") { continue }
 			bi := lay.BackStartCol - 1
-			if len(r[i]) > bi && (r[i][bi] == "月" || r[i][bi] == "年") { continue }
-			// 跳过摘要表头行（摘字开头的是表头，不是数据）
-			if len(r[i]) > lay.BindingLeftCols+4 && strings.HasPrefix(r[i][lay.BindingLeftCols+4], "摘") { continue }
-			if len(r[i]) > lay.BackStartCol+3 && strings.HasPrefix(r[i][lay.BackStartCol+3], "摘") { continue }
+			if len(rows[i]) > bi && (rows[i][bi] == "月" || rows[i][bi] == "年") { continue }
+			// 跳过摘要表头行（摘字开头）
+			if len(rows[i]) > lay.BindingLeftCols+4 && strings.HasPrefix(rows[i][lay.BindingLeftCols+4], "摘") { continue }
+			if len(rows[i]) > lay.BackStartCol+3 && strings.HasPrefix(rows[i][lay.BackStartCol+3], "摘") { continue }
 			for _, colOff := range []int{0, lay.BackStartCol - lay.FrontStartCol} {
 				cell := cellName(lay.FrontStartCol+4+colOff, row)
 				if sid, err := wb.File.GetCellStyle(s, cell); err == nil && sid > 0 {
@@ -1348,7 +1350,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		}
 	}
 
-		// 为所有Sheet应用页面布局（新创建的Sheet在NewWorkbook时未配置）
+	// 为所有Sheet应用页面布局（新创建的Sheet在NewWorkbook时未配置）
 	setAllSheetPageLayout(wb.File)
 	return nil
 }

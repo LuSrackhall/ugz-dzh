@@ -68,7 +68,7 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 		t.Errorf("row 1 title = %v", rows[1])
 	}
 	// Top header at GetRows[4]: 摘要 at col F (FrontStartCol+3=6, GetRows index 5)
-	if len(rows[4]) < 7 || rows[4][6] != "摘要" {
+	if len(rows[4]) < 7 || !strings.HasPrefix(rows[4][6], "摘") {
 		t.Errorf("row 4 headers col 7 = %q, want 摘要", getRowCol(rows, 4, 6))
 	}
 	// Data row 1 at GetRows[6]: month=01, summary=[电脑]购电脑

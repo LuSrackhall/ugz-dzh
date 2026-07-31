@@ -99,29 +99,26 @@ if [ "$SKIP_TEST" = false ]; then
 fi
 
 echo ""
-# 复制并重命名关键月份，避免 WPS 同名冲突
-WT_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's/[^a-zA-Z0-9_-]/-/g')
-if [ -n "$WT_NAME" ] && [ "$WT_NAME" != "main" ]; then
-  for f in "$OUT/2025/2025-12.xlsx" "$OUT/2026/2026-06.xlsx"; do
-    if [ -f "$f" ]; then
-      base=$(basename "$f")
-      cp "$f" "$OUT/$WT_NAME-$base"
-      echo "  已复制: $OUT/$WT_NAME-$base"
-    fi
-  done
-fi
+# 热更新：权威文件保留原路径，另复制到唯一命名的预览副本再打开。
+# 每次运行文件名都不同（时间戳+随机数），WPS 打开的是新文件，
+# 因此不会因旧文件被占用而无法覆盖权威文件。旧预览副本每次运行前清理。
+PREVIEW_DIR="$OUT/_preview"
+rm -rf "$PREVIEW_DIR"
+mkdir -p "$PREVIEW_DIR"
+RUN_ID="$(date +%s)-$RANDOM"
 
-find "$OUT" -name "*.xlsx" | sort
+find "$OUT" -name "*.xlsx" -not -path "$PREVIEW_DIR/*" | sort
 
-# 自动打开 2025-12 和 2026-06 账本，方便快速手动测试
-if [ -n "$WT_NAME" ] && [ "$WT_NAME" != "main" ]; then
-  for f in "$OUT/$WT_NAME-2025-12.xlsx" "$OUT/$WT_NAME-2026-06.xlsx"; do
-    [ -f "$f" ] && open "$f"
-  done
-else
-  for f in "$OUT/2025/2025-12.xlsx" "$OUT/2026/2026-06.xlsx"; do
-    [ -f "$f" ] && open "$f"
-  done
-fi
+echo ""
+echo "已打开预览副本（热更新，权威文件不受影响）:"
+for f in "$OUT/2025/2025-12.xlsx" "$OUT/2026/2026-06.xlsx"; do
+  if [ -f "$f" ]; then
+    base=$(basename "$f")
+    target="$PREVIEW_DIR/${base%.xlsx}-$RUN_ID.xlsx"
+    cp "$f" "$target"
+    open "$target"
+    echo "  $target"
+  fi
+done
 
 echo "=== 完成 ==="

@@ -97,13 +97,17 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 	return wb, nil
 }
 
-// setAllSheetPageLayout 为所有 Sheet 设置 A4 横向、页边距 0、FitToWidth=1
+// setAllSheetPageLayout 为所有非多科目明细账 Sheet 设置 A4 横向、页边距 0、FitToWidth=1。
+// 多科目明细账使用独立布局 setMLSheetPageLayout，避免被 FitToWidth 压缩左右两半。
 func setAllSheetPageLayout(f *excelize.File) {
 	paperSize := 9
 	fw := 1
 	fh := 0
 	fp := true
 	for _, sheet := range f.GetSheetList() {
+		if len(sheet) >= len(sheetPrefixML) && sheet[:len(sheetPrefixML)] == sheetPrefixML {
+			continue // ML sheet 由 setMLSheetPageLayout 单独处理
+		}
 		f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
 			Orientation: stringPtr("landscape"),
 			Size:        &paperSize,
@@ -142,6 +146,8 @@ func (wb *Workbook) Save() error {
 	if len(wb.File.GetSheetList()) > 1 {
 		wb.File.DeleteSheet("Sheet1")
 	}
+	// 多科目明细账独立布局（左右各一张 A4，关闭 FitToWidth）
+	setMLSheetPageLayout(wb.File)
 	return wb.File.SaveAs(wb.currentPath())
 }
 

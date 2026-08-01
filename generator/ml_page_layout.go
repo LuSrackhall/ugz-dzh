@@ -37,6 +37,28 @@ func setMLSheetPageLayout(f *excelize.File) {
 			FitToPage: &fp,
 		})
 		setMLColumnWidths(f, sheet)
+		setMLDataRowHeights(f, sheet)
+	}
+}
+
+// setMLDataRowHeights 将每页内容区（20 数据行 + 1 过次页行）的行高统一设为 25pt。
+// 每页块 = DataStartRow 页头 + pageSize 数据行 + 1 过次页 = 29 行，
+// 块起始行依次为 1, 1+29, ...（Paper1 Front 也从 row 1 起，占 rows 1-29）。
+func setMLDataRowHeights(f *excelize.File, sheet string) {
+	lay := mlLayout()
+	rows, _ := f.GetRows(sheet)
+	if len(rows) == 0 {
+		return
+	}
+	const dataRowHeight = 25.0
+	blockRows := lay.DataStartRow + pageSize + 1
+	lastRow := len(rows)
+	for start := 1; start <= lastRow; start += blockRows {
+		dataStart := start + lay.DataStartRow
+		dataEnd := dataStart + pageSize // 含过次页行
+		for r := dataStart; r <= dataEnd && r <= lastRow; r++ {
+			f.SetRowHeight(sheet, r, dataRowHeight)
+		}
 	}
 }
 

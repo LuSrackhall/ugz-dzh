@@ -15,9 +15,11 @@ const (
 	mlMaxDetails     = 14 // 明细科目上限
 	mlDetailStartCol = 8  // 明细列起始列 H（保留常量用于非 Layout 上下文）
 
-	// Back 侧基础列偏移（相对 BackStartCol），与两行表头对齐：
-	// Row4: [年(合并)] [凭证(合并)] 摘要 借方 贷方 方向 余额
-	// Row5:  月  日     字  号
+	// Back 侧基础列偏移（相对 BackStartCol），与四行表头对齐：
+	// Row4: [年(合并)] [凭证(合并)] 摘要 借..方 贷..方 借或贷 余..额
+	// Row5:  月  日   字  号      明细科目们（中两行）
+	// Row6: （延续）              （延续）
+	// Row7: （延续）  摘要(四行)   借或贷(四行)
 	mlOffMonth    = 0 // 月
 	mlOffDay      = 1 // 日
 	mlOffVouChar  = 2 // 字
@@ -30,11 +32,11 @@ const (
 )
 
 // mlFirstDataPageStart 返回第一个数据页 header 的起始行号。
-// Paper1 Front 占位页占 rows 1 ~ (DataStartRow + pageSize + 1)，即 rows 1-27。
-// 数据页 header 从下一行开始。
+// Paper1 Front 占位页占 rows 1 ~ (DataStartRow + pageSize + 1)，即 rows 1-29
+//（8 行页头 + 20 数据行 + 1 结构过次页）。数据页 header 从下一行开始。
 func mlFirstDataPageStart() int {
 	lay := mlLayout()
-	return lay.DataStartRow + pageSize + 2 // = 6 + 20 + 2 = 28
+	return lay.DataStartRow + pageSize + 2 // = 8 + 20 + 2 = 30
 }
 
 // mlLayout 返回多科目明细账的布局规格（独立于 GL 布局）。
@@ -397,7 +399,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 
 		// 更新标题行（仅更新新增的列，数据页列标题行）
 			lay := mlLayout()
-			colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header
+			colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header
 			for _, nd := range newAppended {
 				col := mlDetailCol(lay, finalIdx[nd])
 				cell := mlCellName(col, colHeaderRow)
@@ -469,7 +471,7 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 	wb.File.SetCellStyle(name, p1Cell, p1Cell, redS)
 
 	// 数据页列标题行写入实际明细科目名
-	colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header
+	colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, colHeaderRow)
@@ -539,7 +541,7 @@ func cellColLetter(col int) string {
 // updateMLDetailHeaders 更新已有 Sheet 的明细列标题（Paper1 Front 第5行），以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	lay := mlLayout()
-	colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header // 1-based
+	colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header // 1-based
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, colHeaderRow)
@@ -562,7 +564,7 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取 Sheet %s: %w", sheet, err)
 	}
-	colHeaderRow := mlFirstDataPageStart() + 4 // Row+4 of first data page header // 1-based row number
+	colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header // 1-based row number
 	if len(rows) < colHeaderRow {
 		return detailIdx, details, nil
 	}
@@ -586,7 +588,7 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 // 用于 writeMLPageHeader 覆盖通用标签后恢复实际名称。
 func (wb *Workbook) rewriteMLDetailNames(sheet string, details []string) {
 	lay := mlLayout()
-	colHeaderRow := mlFirstDataPageStart() + 4
+	colHeaderRow := mlFirstDataPageStart() + 5
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, colHeaderRow)
@@ -850,8 +852,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		}
 		wb.rewriteMLDetailNames(sheet, reDetails)
 
-		// 结转行在第34行（mlFirstDataPageStart + DataStartRow = 28 + 6）
-		row = mlFirstDataPageStart() + lay.DataStartRow // = 34: 数据页header后承前页行
+		// 结转行在第38行（mlFirstDataPageStart + DataStartRow = 30 + 8）
+		row = mlFirstDataPageStart() + lay.DataStartRow // = 38: 数据页header后承前页行
 		cfLabel := carryForwardLabel
 		if initial != 0 {
 			cfLabel = "上年结转"
@@ -1134,84 +1136,116 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	// Row +3: 空行
 	row++
 
-	// Row +4: 列标题 — Back 侧（两行表头：年|凭证 合并，子表头 月|日|字|号）
+	// Row +4 ~ Row +7: 四行表头（行高比 2.5:1:1:2.5，总高与旧两行一致 = 30pt）
 	year := wb.Month[:4]
-	if hasBack {
-		// "年" 合并月+日两列
-		yearLeft := mlCellName(lay.BackStartCol, row)
-		yearRight := mlCellName(lay.BackStartCol+1, row)
-		wb.File.MergeCell(sheet, yearLeft, yearRight)
-		wb.File.SetCellValue(sheet, yearLeft, year+"年")
-		// "凭证" 合并字+号两列
-		vouchLeft := mlCellName(lay.BackStartCol+2, row)
-		vouchRight := mlCellName(lay.BackStartCol+3, row)
-		wb.File.MergeCell(sheet, vouchLeft, vouchRight)
-		wb.File.SetCellValue(sheet, vouchLeft, "凭证")
-		// 摘要 ~ 余额 各占单列
-		otherCols := []string{"摘要", "借方金额", "贷方金额", "方向", "余额"}
-		for i, h := range otherCols {
-			cell := mlCellName(lay.BackStartCol+4+i, row)
-			wb.File.SetCellValue(sheet, cell, h)
-		}
-		// Back 侧明细1~4 列标题（通用标签，ensureMLSheet 会在首页覆盖为实际科目名）
-		for i := 0; i < 4 && i < mlMaxDetails; i++ {
-			col := mlDetailCol(lay, i)
-			cell := mlCellName(col, row)
-			wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
-		}
-	}
+	h1, h2, h3, h4 := row, row+1, row+2, row+3
 
-	// Row +4: 列标题 — Front 侧（明细5~14）
-	if hasFront {
-		for i := 4; i < mlMaxDetails; i++ {
-			col := mlDetailCol(lay, i)
-			cell := mlCellName(col, row)
-			wb.File.SetCellValue(sheet, cell, fmt.Sprintf("明细%d", i+1))
-		}
+	headerBorders := []excelize.Border{
+		{Type: "top", Color: "#808080", Style: 1},
+		{Type: "bottom", Color: "#808080", Style: 1},
+		{Type: "left", Color: "#808080", Style: 1},
+		{Type: "right", Color: "#808080", Style: 1},
 	}
-
-	headerStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10, Color: darkGreen},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
-		Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
+	// 主标签样式（粗体深绿、四边灰细框、居中）
+	gridStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: darkGreen},
+		Border:    headerBorders,
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	// Back 侧基础列表头样式（Row +4）
-	if hasBack {
-		hsBack := mlCellName(lay.BackStartCol, row)
-		heBack := mlCellName(lay.BackStartCol+mlOffBalance, row)
-		wb.File.SetCellStyle(sheet, hsBack, heBack, headerStyle)
-		for i := 0; i < 4 && i < mlMaxDetails; i++ {
-			cell := mlCellName(mlDetailCol(lay, i), row)
-			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
-		}
-	}
-	// Front 侧明细5~14 表头样式（Row +4）
-	if hasFront {
-		for i := 4; i < mlMaxDetails; i++ {
-			cell := mlCellName(mlDetailCol(lay, i), row)
-			wb.File.SetCellStyle(sheet, cell, cell, headerStyle)
-		}
-	}
-	row++
+	// 子表头样式（月/日/字/号、明细科目名：小字号，同四边灰细框）
+	subHeadStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 9, Color: darkGreen},
+		Border:    headerBorders,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
 
-	// Row +5: 子表头 — Back 侧前4列（月/日/字/号）
+	// 1) 年|凭证：上两行合并；月|日|字|号：下两行合并
+	// 2) 摘要：四行合并
+	// 3) 借方/贷方/余额：上三行合并，两字间隔 12 空格
+	// 4) 方向：四行合并，自动换行居中
+	// 6) 明细科目们：中两行合并
 	if hasBack {
-		subHeaders := []string{"月", "日", "字", "号"}
-		for i, h := range subHeaders {
-			cell := mlCellName(lay.BackStartCol+i, row)
-			wb.File.SetCellValue(sheet, cell, h)
+		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol, h1), mlCellName(lay.BackStartCol+1, h2))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol, h1), year+"年")
+		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+2, h1), mlCellName(lay.BackStartCol+3, h2))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, h1), "凭证")
+		for i, h := range []string{"月", "日", "字", "号"} {
+			wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+i, h3), mlCellName(lay.BackStartCol+i, h4))
+			wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+i, h3), h)
 		}
-		subStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font: &excelize.Font{Size: 9, Color: darkGreen},
-			Fill: excelize.Fill{Type: "pattern", Color: []string{"#D9E1F2"}, Pattern: 1},
-			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		})
-		subLeft := mlCellName(lay.BackStartCol, row)
-		subRight := mlCellName(lay.BackStartCol+3, row)
-		wb.File.SetCellStyle(sheet, subLeft, subRight, subStyle)
+		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffSummary, h1), mlCellName(lay.BackStartCol+mlOffSummary, h4))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffSummary, h1), "摘要")
+		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffDebit, h1), mlCellName(lay.BackStartCol+mlOffDebit, h3))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDebit, h1), "借            方")
+		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffCredit, h1), mlCellName(lay.BackStartCol+mlOffCredit, h3))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffCredit, h1), "贷            方")
+		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffDir, h1), mlCellName(lay.BackStartCol+mlOffDir, h4))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDir, h1), "借或贷")
+		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffBalance, h1), mlCellName(lay.BackStartCol+mlOffBalance, h3))
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffBalance, h1), "余            额")
 	}
+
+	// 6) 明细科目们：中两行合并（通用标签，首页会被覆盖为实际科目名）
+	for i := 0; i < mlMaxDetails; i++ {
+		if (i < 4 && !hasBack) || (i >= 4 && !hasFront) {
+			continue
+		}
+		col := mlDetailCol(lay, i)
+		wb.File.MergeCell(sheet, mlCellName(col, h2), mlCellName(col, h3))
+		wb.File.SetCellValue(sheet, mlCellName(col, h2), fmt.Sprintf("明细%d", i+1))
+	}
+
+	// 明细科目上方的行：左4列合并为"( ) 方 金"，右10列合并为"额 分 析"（金额分析表头）
+	if hasBack {
+		wb.File.MergeCell(sheet, mlCellName(mlDetailCol(lay, 0), h1), mlCellName(mlDetailCol(lay, 3), h1))
+		wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), h1),
+			"("+strings.Repeat(" ", 10)+")"+strings.Repeat(" ", 20)+"方"+strings.Repeat(" ", 20)+"金")
+	}
+	if hasFront {
+		wb.File.MergeCell(sheet, mlCellName(mlDetailCol(lay, 4), h1), mlCellName(mlDetailCol(lay, mlMaxDetails-1), h1))
+		wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 4), h1),
+			"额"+strings.Repeat(" ", 100)+"分"+strings.Repeat(" ", 100)+"析")
+	}
+
+	// 整块先铺网格样式，再对子表头/方向覆盖
+	if hasBack {
+		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, h1), mlCellName(lay.BackStartCol+mlOffBalance, h4), gridStyle)
+	}
+	for i := 0; i < mlMaxDetails; i++ {
+		if (i < 4 && !hasBack) || (i >= 4 && !hasFront) {
+			continue
+		}
+		col := mlDetailCol(lay, i)
+		wb.File.SetCellStyle(sheet, mlCellName(col, h1), mlCellName(col, h4), gridStyle)
+	}
+	// 方向：自动换行居中
+	dirStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: darkGreen},
+		Border:    headerBorders,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	if hasBack {
+		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol+mlOffDir, h1), mlCellName(lay.BackStartCol+mlOffDir, h1), dirStyle)
+	}
+	// 月/日/字/号、明细科目名：小字号
+	if hasBack {
+		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol, h3), mlCellName(lay.BackStartCol+3, h3), subHeadStyle)
+	}
+	for i := 0; i < mlMaxDetails; i++ {
+		if (i < 4 && !hasBack) || (i >= 4 && !hasFront) {
+			continue
+		}
+		col := mlDetailCol(lay, i)
+		wb.File.SetCellStyle(sheet, mlCellName(col, h2), mlCellName(col, h2), subHeadStyle)
+	}
+
+	// 行高：2.5:1:1:2.5，总高 56pt（单行高 8pt）
+	const headerTotalHeight = 56.0
+	hu := headerTotalHeight / 7.0
+	wb.File.SetRowHeight(sheet, h1, hu*2.5)
+	wb.File.SetRowHeight(sheet, h2, hu)
+	wb.File.SetRowHeight(sheet, h3, hu)
+	wb.File.SetRowHeight(sheet, h4, hu*2.5)
 
 	return nil
 }

@@ -79,8 +79,8 @@ func DefaultMLSpec() MLSpec {
 		ColHeaderRowCount: 1,
 		DataRowsPerPage:   20,
 		BackColProportions: []MLColProportion{
-			{Name: "日期", Ratio: 8},
-			{Name: "凭证号", Ratio: 7},
+			{Name: "日期", Ratio: 4},
+			{Name: "凭证号", Ratio: 4},
 			{Name: "摘要", Ratio: 15},
 			{Name: "借方金额", Ratio: 10},
 			{Name: "贷方金额", Ratio: 10},

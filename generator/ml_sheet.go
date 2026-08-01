@@ -466,7 +466,8 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 	p1Cell := mlCellName(lay.BackStartCol+mlOffSummary, p1BreakRow)
 	wb.File.SetCellValue(name, p1Cell, pageBreakLabel)
 	redS, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+		Font:      &excelize.Font{Color: "CC0000", Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	wb.File.SetCellStyle(name, p1Cell, p1Cell, redS)
 
@@ -962,7 +963,8 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffSummary, row), pageBreakLabel)
 	// 过次页标签红色加粗
 	redStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+		Font:      &excelize.Font{Color: "CC0000", Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol+mlOffSummary, row), mlCellName(lay.BackStartCol+mlOffSummary, row), redStyle)
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDebit, row), centsToYuan(pageDebit))

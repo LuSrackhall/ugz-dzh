@@ -263,7 +263,8 @@ func (wb *Workbook) WriteMLMonthClosings(
 		if brVal == "" {
 			wb.File.SetCellValue(sheet, brCell, pageBreakLabel)
 			redBr, _ := wb.File.NewStyle(&excelize.Style{
-				Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+				Font:      &excelize.Font{Color: "CC0000", Size: 10},
+				Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 			})
 			wb.File.SetCellStyle(sheet, brCell, brCell, redBr)
 		}
@@ -316,7 +317,8 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 		if structVal == "" {
 			wb.File.SetCellValue(sheet, structCell, pageBreakLabel)
 			redStyle, _ := wb.File.NewStyle(&excelize.Style{
-				Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
+				Font:      &excelize.Font{Color: "CC0000", Size: 10},
+				Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 			})
 			wb.File.SetCellStyle(sheet, structCell, structCell, redStyle)
 		}

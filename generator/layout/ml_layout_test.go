@@ -24,13 +24,13 @@ func TestDefaultMLSpec(t *testing.T) {
 		t.Errorf("data rows: want 20, got %d", spec.DataRowsPerPage)
 	}
 
-	// Back proportions: 8+7+15+10+10+4+8+6+6+6+6 = 86
+	// Back proportions: 4+4+15+10+10+4+8+6+6+6+6 = 79（日期/凭证号参考 GL 月日字号各2%）
 	var backSum float64
 	for _, p := range spec.BackColProportions {
 		backSum += p.Ratio
 	}
-	if backSum < 85.9 || backSum > 86.1 {
-		t.Errorf("back col proportions sum: want ~86, got %g", backSum)
+	if backSum < 78.9 || backSum > 79.1 {
+		t.Errorf("back col proportions sum: want ~79, got %g", backSum)
 	}
 
 	// Front proportions: 10x10 = 100

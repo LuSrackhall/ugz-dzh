@@ -115,6 +115,7 @@ func setMLDataRowHeights(f *excelize.File, sheet string) {
 		return
 	}
 	const dataRowHeight = 25.0
+	const bottomMarginHeight = 25.0
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
 	lastRow := len(rows)
 	// 上限延伸到最后一块的下边距行（GetRows 不含空的下边距行，但该行由 applyMLBorders 创建）
@@ -124,7 +125,11 @@ func setMLDataRowHeights(f *excelize.File, sheet string) {
 		dataStart := start + lay.DataStartRow
 		dataEnd := dataStart + pageSize + lay.BottomMarginRows // 数据+过次页+下边距
 		for r := dataStart; r <= dataEnd && r <= maxRow; r++ {
-			f.SetRowHeight(sheet, r, dataRowHeight)
+			h := dataRowHeight
+			if r == dataEnd {
+				h = bottomMarginHeight // 下边距行 26
+			}
+			f.SetRowHeight(sheet, r, h)
 		}
 	}
 }

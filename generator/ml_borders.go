@@ -191,5 +191,13 @@ func applyMLBorders(f *excelize.File, sheet string) {
 			}
 			mlBorderSet(f, sheet, frontL, r, "left", mlRed, mlBorderDouble) // Front 左
 		}
+
+		// 6) 中间装订列（P）清除所有边框 — 应为空白装订边（防止月结样式等误画）
+		for r := start; r <= bottomMargin; r++ {
+			mlBorderClear(f, sheet, gapCol, r, "left")
+			mlBorderClear(f, sheet, gapCol, r, "right")
+			mlBorderClear(f, sheet, gapCol, r, "top")
+			mlBorderClear(f, sheet, gapCol, r, "bottom")
+		}
 	}
 }

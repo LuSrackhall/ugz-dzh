@@ -126,21 +126,23 @@ func setMLDataRowHeights(f *excelize.File, sheet string) {
 	}
 }
 
-// setMLColumnWidths 设置列宽，使左半（Back）和右半（Front）各占一张 A4。
-// 边距角色：上/下边距行与 GL 一致；中间共享间隙是装订边（宽），两侧外缘是窄边（非装订，与 GL 相反）。
+// setMLColumnWidths 设置列宽，使半页总列宽与 GL 一致（每半页 153.24）。
+// 半页划分：左半 A-P、右半 P-AB，中间装订列 P 为共享（两半均含 P）。
+// 边距与 GL 结构相反但总宽一致：GL 装订=2列×7（总14）、非装订=1列×2；
+// ML 装订=中间 1 共享列 P=14，非装订=两侧 2 列各 1（总2）。
 // 金额栏（借/贷/余/明细1-14）宽度统一；摘要列吸收差额使两半同宽。
 func setMLColumnWidths(f *excelize.File, sheet string) {
 	lay := mlLayout()
-	const a4HalfUnits = 160.0   // 一页 A4 横向 ≈ 160 Excel 宽度单位
-	const edgeW = 2.0           // 外缘窄边（书口，非装订）
-	const bindW = 7.0           // 中间装订边（共享）
-	const glDateVouchColW = 3.0 // 月/日/字/号（GL：各 3）
+	const a4HalfUnits = 153.24 // 半页总列宽 = GL 半页（总 306.48）
+	const edgeW = 1.0          // 两侧外缘非装订（2列总宽=2，与 GL 非装订总宽一致）
+	const bindW = 14.0         // 中间装订边（1共享列，与 GL 装订 2列总宽一致）
+	const glDateVouchColW = 3.0
 	const dirRatio = 1.1
 	dirNew := glDateVouchColW * dirRatio // 借或贷 = 3.3
 
-	// Front 半页 = 10 明细列 + 右侧外缘 2 列，合计一页 A4
-	frontW := (a4HalfUnits - 2*edgeW) / 10.0
-	// Back 半页 = 左侧外缘2 + 日期2×3 + 凭证2×3 + 摘要 + 方向 + 7金额 + 中间装订
+	// 右半 P-AB = 装订14 + 10明细 + 右侧外缘2
+	frontW := (a4HalfUnits - bindW - 2*edgeW) / 10.0
+	// 左半 A-P = 左侧外缘2 + 日期2×3 + 凭证2×3 + 摘要 + 方向 + 7金额 + 装订14（P 共享）
 	sumNew := a4HalfUnits - 2*edgeW - bindW - (2*glDateVouchColW + 2*glDateVouchColW + dirNew) - 7*frontW
 
 	// 左外缘 A-B（窄边，非装订）

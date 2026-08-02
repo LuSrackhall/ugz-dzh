@@ -11,6 +11,8 @@ type MLSpec struct {
 	TitleRowCount     int
 	ColHeaderRowCount int
 	DataRowsPerPage   int
+	TopMarginRows     int
+	BottomMarginRows  int
 
 	// 两套独立列比例
 	BackColProportions  []MLColProportion // 左半：7基础 + 明细1~4
@@ -46,6 +48,7 @@ type MLLayout struct {
 	ExcelColumns []MLExcelCol // 列名 → Excel 编号映射（仅用于兼容，非核心路径）
 
 	TitleRow, PageNumRow, AccountRow, HeaderRow, DataStartRow int // 行号，两侧共享
+	TopMarginRows, BottomMarginRows int
 
 	// 合并单元格坐标（两侧独立）
 	BackTitleColLeft, BackTitleColRight           int
@@ -78,6 +81,8 @@ func DefaultMLSpec() MLSpec {
 		TitleRowCount:     3,
 		ColHeaderRowCount: 1,
 		DataRowsPerPage:   20,
+		TopMarginRows:     1,
+		BottomMarginRows:  1,
 		BackColProportions: []MLColProportion{
 			{Name: "日期", Ratio: 4},
 			{Name: "凭证号", Ratio: 4},
@@ -198,7 +203,9 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 		PageNumRow:        0,
 		AccountRow:        2,
 		HeaderRow:         4,
-		DataStartRow:      8,
+		DataStartRow:      8, // 上边距1行 + 7行页头
+		TopMarginRows:     spec.TopMarginRows,
+		BottomMarginRows:  spec.BottomMarginRows,
 		BackTitleColLeft:      backStart,
 		BackTitleColRight:     backStart + backTitleSplit - 1,
 		BackAccountColLeft:    backStart + backTitleSplit,

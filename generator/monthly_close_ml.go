@@ -78,7 +78,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		curPageStart := mlFirstDataPageStart() + lay.DataStartRow
 		for i := len(bRows) - 1; i >= 0; i-- {
 			if mlHasPageBreakAt(bRows[i], lay) && !mlIsStructuralBreak(bRows[i], lay) {
-				curPageStart = i + 2 + lay.DataStartRow
+				curPageStart = i + 2 + lay.DataStartRow + lay.BottomMarginRows
 				break
 			}
 		}
@@ -93,8 +93,9 @@ func (wb *Workbook) WriteMLMonthClosings(
 			}
 			pageNum++
 			wb.writeMLPageBreakRow(sheet, initBreakPos, bal, 0, 0, make([]mlDetailTotals, numDetails))
-			wb.writeMLPageHeader(sheet, initBreakPos+1, pageNum, pageNum, general, true, true)
-			cfRow := initBreakPos + 1 + lay.DataStartRow
+			wb.writeMLPageHeader(sheet, initBreakPos+1+lay.BottomMarginRows, pageNum, pageNum, general, true, true)
+			wb.writeMLDetailNamesAt(sheet, initBreakPos+1+lay.BottomMarginRows, details)
+			cfRow := initBreakPos + 1 + lay.DataStartRow + lay.BottomMarginRows
 			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
 			row = cfRow + 1
 		}
@@ -106,7 +107,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			ps := mlFirstDataPageStart() + lay.DataStartRow
 			for i := len(bRows) - 1; i >= 0; i-- {
 				if mlHasPageBreakAt(bRows[i], lay) && !mlIsStructuralBreak(bRows[i], lay) {
-					ps = i + 2 + lay.DataStartRow
+					ps = i + 2 + lay.DataStartRow + lay.BottomMarginRows
 					break
 				}
 			}
@@ -128,8 +129,9 @@ func (wb *Workbook) WriteMLMonthClosings(
 			}
 			pageNum++
 			wb.writeMLPageBreakRow(sheet, pbRow, bal, 0, 0, make([]mlDetailTotals, numDetails))
-			wb.writeMLPageHeader(sheet, pbRow+1, pageNum, pageNum, general, true, true)
-			cfRow := pbRow + 1 + lay.DataStartRow
+			wb.writeMLPageHeader(sheet, pbRow+1+lay.BottomMarginRows, pageNum, pageNum, general, true, true)
+			wb.writeMLDetailNamesAt(sheet, pbRow+1+lay.BottomMarginRows, details)
+			cfRow := pbRow + 1 + lay.DataStartRow + lay.BottomMarginRows
 			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
 			return cfRow + 1
 		}
@@ -253,7 +255,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		bRowsFinal, _ := wb.File.GetRows(sheet)
 		for i := len(bRowsFinal) - 1; i >= 0; i-- {
 			if mlHasPageBreakAt(bRowsFinal[i], lay) && !mlIsStructuralBreak(bRowsFinal[i], lay) {
-				ps = i + 2 + lay.DataStartRow
+				ps = i + 2 + lay.DataStartRow + lay.BottomMarginRows
 				break
 			}
 		}
@@ -295,7 +297,7 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 	pageStart := mlFirstDataPageStart() + lay.DataStartRow
 	for i := len(rows) - 1; i >= 0; i-- {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-			pageStart = i + 2 + lay.DataStartRow
+			pageStart = i + 2 + lay.DataStartRow + lay.BottomMarginRows
 			break
 		}
 	}
@@ -325,7 +327,7 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 	}
 
 	// PaperN Back 尾部占位：底部结构过次页
-	pnRow := structRow + 1 + lay.DataStartRow + pageSize
+	pnRow := structRow + 1 + lay.DataStartRow + lay.BottomMarginRows + pageSize
 	pnCell := mlCellName(lay.BackStartCol+mlOffSummary, pnRow)
 	pnVal, _ := wb.File.GetCellValue(sheet, pnCell)
 	if pnVal == "" {

@@ -31,12 +31,12 @@ const (
 	mlOffBalance  = 8 // 余额
 )
 
-// mlFirstDataPageStart 返回第一个数据页 header 的起始行号。
-// Paper1 Front 占位页占 rows 1 ~ (DataStartRow + pageSize + 1)，即 rows 1-29
-//（8 行页头 + 20 数据行 + 1 结构过次页）。数据页 header 从下一行开始。
+// mlFirstDataPageStart 返回第一个数据页 block 的起始行号（= 该页上边距行）。
+// Paper1 Front 占位页占 rows 1 ~ (DataStartRow + pageSize + 1 + BottomMarginRows)，
+// 即 1 ~ 30（上边距 + 7页头 + 20数据 + 过次页 + 下边距）。
 func mlFirstDataPageStart() int {
 	lay := mlLayout()
-	return lay.DataStartRow + pageSize + 2 // = 8 + 20 + 2 = 30
+	return lay.DataStartRow + pageSize + 2 + lay.BottomMarginRows // = 8 + 20 + 2 + 1 = 31
 }
 
 // mlLayout 返回多科目明细账的布局规格（独立于 GL 布局）。
@@ -169,7 +169,7 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 
 	// 如果最后一条数据是真实过次页 → 新页面，承前页在 DataStartRow 后
 	if mlHasPageBreakAt(rows[lastDataIdx], lay) && !mlIsStructuralBreak(rows[lastDataIdx], lay) {
-		return lastDataIdx + 2 + lay.DataStartRow, nil
+		return lastDataIdx + 2 + lay.DataStartRow + lay.BottomMarginRows, nil
 	}
 
 	return lastDataIdx + 2, nil // 0-indexed → 1-based, then +1 for next row
@@ -308,7 +308,7 @@ func (wb *Workbook) mlPageStartRow(sheet string) int {
 	}
 	for i := len(rows) - 1; i >= 0; i-- {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-			return i + 2 + lay.DataStartRow
+			return i + 2 + lay.DataStartRow + lay.BottomMarginRows
 		}
 	}
 	return mlFirstDataPageStart() + lay.DataStartRow
@@ -350,7 +350,7 @@ func (wb *Workbook) mlNextDataRowAfterBreak(sheet string) (int, error) {
 		// 检查尾行之后是否有真实过次页
 		for i := tailRow; i < len(rows); i++ {
 			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-				return i + 2 + lay.DataStartRow, nil
+				return i + 2 + lay.DataStartRow + lay.BottomMarginRows, nil
 			}
 		}
 		return tailRow + 1, nil
@@ -456,32 +456,15 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		return "", nil, nil, fmt.Errorf("总账科目 %q 明细科目数 %d 超过上限 %d", general, len(initDetails), mlMaxDetails)
 	}
 
-	// Paper1 Front 占位页：完整空页模板（Front 侧，页码=0，不写 Back 侧）
+	// Paper1 Front 占位页：空占位表（Front 侧，页码=0，不写 Back 侧）
 	lay := mlLayout()
 	if err := wb.writeMLPageHeader(name, 1, 0, 0, general, false, true); err != nil {
 		return "", nil, nil, err
 	}
-	// 占位页底部结构过次页（行 = 1 + DataStartRow + pageSize = 27）
-	p1BreakRow := 1 + lay.DataStartRow + pageSize
-	p1Cell := mlCellName(lay.BackStartCol+mlOffSummary, p1BreakRow)
-	wb.File.SetCellValue(name, p1Cell, pageBreakLabel)
-	redS, _ := wb.File.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Color: "CC0000", Size: 10},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	wb.File.SetCellStyle(name, p1Cell, p1Cell, redS)
 
-	// 数据页列标题行写入实际明细科目名
-	colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header
-	for i := 0; i < mlMaxDetails; i++ {
-		col := mlDetailCol(lay, i)
-		cell := mlCellName(col, colHeaderRow)
-		label := ""
-		if i < len(initDetails) {
-			label = initDetails[i]
-		}
-		wb.File.SetCellValue(name, cell, label)
-	}
+	// 占位表为空白模板：不写明细科目名（保持空列），也不写 Back 侧结构过次页占位
+	// 首个数据页页头写入实际明细科目名
+	wb.writeMLDetailNamesAt(name, mlFirstDataPageStart(), initDetails)
 	// 列宽（Front 侧明细列）
 	for i := 0; i < mlMaxDetails; i++ {
 		colLetter := cellColLetter(mlDetailCol(lay, i))
@@ -585,11 +568,12 @@ func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int,
 	return detailIdx, details, nil
 }
 
-// rewriteMLDetailNames 在数据页列标题行重写实际明细科目名。
-// 用于 writeMLPageHeader 覆盖通用标签后恢复实际名称。
-func (wb *Workbook) rewriteMLDetailNames(sheet string, details []string) {
+// writeMLDetailNamesAt 在指定页头的表头第2行（4行表头的中两行首行）写入实际明细科目名。
+// 无科目或空列写入空字符串（不写"明细N"占位）。
+// headerRow 是页 block 起始行（上边距行），明细名位于 headerRow + 5。
+func (wb *Workbook) writeMLDetailNamesAt(sheet string, headerRow int, details []string) {
 	lay := mlLayout()
-	colHeaderRow := mlFirstDataPageStart() + 5
+	colHeaderRow := headerRow + 5
 	for i := 0; i < mlMaxDetails; i++ {
 		col := mlDetailCol(lay, i)
 		cell := mlCellName(col, colHeaderRow)
@@ -811,6 +795,12 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	lay := mlLayout()
 	numDetails := mlMaxDetails
 
+	// 明细列实际科目名（空列留空），供每个页头写入
+	reDetails := make([]string, mlMaxDetails)
+	for name, idx := range detailIdx {
+		reDetails[idx] = name
+	}
+
 	rows, _ := wb.File.GetRows(sheet)
 	fdp := mlFirstDataPageStart()
 	isNew := len(rows) < fdp || len(rows[fdp-1]) == 0
@@ -844,14 +834,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		// Paper1 Front 已在 rows 1-5（ensureMLSheet 写入）
 		// 写入第一个数据页标题：两侧同一逻辑页号
 		wb.writeMLPageHeader(sheet, mlFirstDataPageStart(), logicalPageNum, logicalPageNum, general, true, true)
-
-		// writeMLPageHeader 会在 Row+4 写通用"明细1~14"标签，覆盖 ensureMLSheet 写的实际科目名。
-		// 在 header 写完后用 detailIdx 重建实际明细科目名。
-		reDetails := make([]string, mlMaxDetails)
-		for name, idx := range detailIdx {
-			reDetails[idx] = name
-		}
-		wb.rewriteMLDetailNames(sheet, reDetails)
+		// 页头写完后写入实际明细科目名（空列留空，无"明细N"占位）
+		wb.writeMLDetailNamesAt(sheet, mlFirstDataPageStart(), reDetails)
 
 		// 结转行在第38行（mlFirstDataPageStart + DataStartRow = 30 + 8）
 		row = mlFirstDataPageStart() + lay.DataStartRow // = 38: 数据页header后承前页行
@@ -880,6 +864,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			pbDetails := wb.lastBreakDetailTotals(sheet)
 			logicalPageNum++
 			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
+			wb.writeMLDetailNamesAt(sheet, row, reDetails)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
 			row++
@@ -891,9 +876,10 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		// 页满 → 过次页 + 标题 + 承前页
 		if wb.mlRowIsPageBreak(sheet, row) {
 			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails)
-			row++
+			row += 1 + lay.BottomMarginRows // 下边距 + 新页上边距
 			logicalPageNum++
 			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
+			wb.writeMLDetailNamesAt(sheet, row, reDetails)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel)
 			row++
@@ -1035,51 +1021,73 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 }
 
 
+// writeMLPageNumLayout 写"分第 n 页(suffix)"，三段分别占指定列区间：
+//   分第（右对齐）| n（居中，绿色虚线下划线）| 页(suffix)（左对齐）
+// num<=0 时 n 位置仅绿色虚线下划线（无数字），分第/页 绿字保留（空白表占位）。
+func (wb *Workbook) writeMLPageNumLayout(sheet string, row, num int, suffix string,
+	fenDiStart, fenDiSpan, nStart, nSpan, sufStart, sufSpan int) {
+	darkGreen := "006100"
+	sealRed := "CC0000"
+	l := mlCellName(fenDiStart, row)
+	r := mlCellName(fenDiStart+fenDiSpan-1, row)
+	wb.File.MergeCell(sheet, l, r)
+	wb.File.SetCellValue(sheet, l, "分第 ")
+	s1, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Color: darkGreen, Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
+	})
+	wb.File.SetCellStyle(sheet, l, r, s1)
+
+	n1 := mlCellName(nStart, row)
+	n2 := mlCellName(nStart+nSpan-1, row)
+	wb.File.MergeCell(sheet, n1, n2)
+	if num > 0 {
+		wb.File.SetCellValue(sheet, n1, fmt.Sprintf("%d", num))
+	}
+	s2, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Color: sealRed, Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "bottom"},
+		Border:    []excelize.Border{{Type: "bottom", Color: darkGreen, Style: 4}},
+	})
+	wb.File.SetCellStyle(sheet, n1, n2, s2)
+
+	s3 := mlCellName(sufStart, row)
+	s4 := mlCellName(sufStart+sufSpan-1, row)
+	wb.File.MergeCell(sheet, s3, s4)
+	wb.File.SetCellValue(sheet, s3, " 页"+suffix)
+	s5, _ := wb.File.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Color: darkGreen, Size: 10},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "bottom"},
+	})
+	wb.File.SetCellStyle(sheet, s3, s4, s5)
+}
+
 // writeMLPageHeader 写入多科目明细账后续页双面标题行（过次页之后、承前页之前调用）。
 // 写入 Back 和/或 Front 两侧的标题、页码、科目名、列标题。
 // hasBack/hasFront 控制是否写对应侧；backPageNum/frontPageNum 分别是两侧的"分第N页"。
-// 行结构（5 行）：
-//   Row +0: 分第 n 页 — Back 侧标题区 + Front 侧标题区
-//   Row +1: 多科目明细账 — XXX（Back 侧标题区）| 科目名（Front 侧标题区，印章红）
-//   Row +2: 科目名 — Back 侧 + Front 侧科目区（印章红）
-//   Row +3: [空行]
-//   Row +4: 列标题 — Back 侧（7基础列 + 明细1~4）| Front 侧（明细5~14）
+// row 是该页 block 的起始行（上边距行）。
+// 行结构（9 行）：
+//   Row +0: 上边距行（空）
+//   Row +1: 分第 n 页 — Back 侧标题区 + Front 侧标题区
+//   Row +2: 多科目明细账 — XXX（Back 侧标题区）| 科目名（Front 侧标题区，印章红）
+//   Row +3: 科目名 — Back 侧 + Front 侧科目区（印章红）
+//   Row +4: [空行]
+//   Row +5~8: 列标题 — Back 侧（7基础列 + 明细1~4）| Front 侧（明细5~14）
 func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontPageNum int, general string, hasBack, hasFront bool) error {
 	lay := mlLayout()
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
-	// Row +0: "分第N页(左)" — Back 侧（backPageNum>0 时显示）
-	if hasBack && backPageNum > 0 {
-		pnBack := mlCellName(lay.BackTitleColLeft, row)
-		pnBackEnd := mlCellName(lay.BackTitleColRight, row)
-		wb.File.MergeCell(sheet, pnBack, pnBackEnd)
-		wb.File.SetCellRichText(sheet, pnBack, []excelize.RichTextRun{
-			{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-			{Text: fmt.Sprintf("%d", backPageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
-			{Text: " 页(左)", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-		})
-	}
-
-	// Row +0: "分第N页(右)" — Front 侧（frontPageNum>0 时显示）
-	if hasFront && frontPageNum > 0 {
-		pnFront := mlCellName(lay.FrontTitleColLeft, row)
-		pnFrontEnd := mlCellName(lay.FrontTitleColRight, row)
-		wb.File.MergeCell(sheet, pnFront, pnFrontEnd)
-		wb.File.SetCellRichText(sheet, pnFront, []excelize.RichTextRun{
-			{Text: "分第 ", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-			{Text: fmt.Sprintf("%d", frontPageNum), Font: &excelize.Font{Color: sealRed, Size: 10}},
-			{Text: " 页(右)", Font: &excelize.Font{Color: darkGreen, Size: 10}},
-		})
-	}
-	wb.File.SetRowHeight(sheet, row, 18)
+	// Row +0: 上边距行（空，高与数据行一致）
+	wb.File.SetRowHeight(sheet, row, 25)
 	row++
 
-	// Row +1: 标题 — Back 侧（右对齐，明细3~4列下双线边框，无文字）
+	// Row +1: 标题行 — 分第N页(左) 在反面页左边；正面页 明 细 帐 + 分第N页(右)
 	if hasBack {
+		// Back 标题（空，下双线边框保留）
 		dbStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font:    &excelize.Font{Bold: true, Size: 14, Color: darkGreen},
-			Border:  []excelize.Border{{Type: "bottom", Color: darkGreen, Style: 6}},
+			Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen},
+			Border:    []excelize.Border{{Type: "bottom", Color: darkGreen, Style: 6}},
 			Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
 		})
 		// 明细3~4列逐列设双线边框
@@ -1087,15 +1095,18 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 			cell := mlCellName(mlDetailCol(lay, i), row)
 			wb.File.SetCellStyle(sheet, cell, cell, dbStyle)
 		}
+		// 分第N页(左) — 分第 占两列(如年C-D)、n 占两列(如凭证E-F)、页(左) 对齐摘要列G
+		wb.writeMLPageNumLayout(sheet, row, backPageNum, "(左)",
+			lay.BackStartCol, 2, lay.BackStartCol+2, 2, lay.BackStartCol+4, 1)
 	}
 
-	// Row +1: Front 侧标题 — "明      细      帐"，下双线边框到明细5~7列
 	if hasFront {
+		// Front 标题 "明      细      帐"
 		fcell := mlCellName(mlDetailCol(lay, 4), row)
 		wb.File.SetCellValue(sheet, fcell, "明      细      帐")
 		frontTitleStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font:    &excelize.Font{Bold: true, Size: 14, Color: "006100"},
-			Border:  []excelize.Border{{Type: "bottom", Color: "006100", Style: 6}},
+			Font:      &excelize.Font{Bold: true, Size: 14, Color: "006100"},
+			Border:    []excelize.Border{{Type: "bottom", Color: "006100", Style: 6}},
 			Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "bottom"},
 		})
 		// 明细5~7列逐列设双线边框
@@ -1103,34 +1114,36 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 			cell := mlCellName(mlDetailCol(lay, i), row)
 			wb.File.SetCellStyle(sheet, cell, cell, frontTitleStyle)
 		}
+		// 分第N页(右) — 分第 对齐明细12(X)、n 对齐明细13(Y)、页(右) 对齐明细14(Z)
+		wb.writeMLPageNumLayout(sheet, row, frontPageNum, "(右)",
+			mlDetailCol(lay, 11), 1, mlDetailCol(lay, 12), 1, mlDetailCol(lay, 13), 1)
 	}
 	wb.File.SetRowHeight(sheet, row, 28)
 	row++
 
-	// Row +2: 科目名 — Back 侧
-	if hasBack {
-		acBack := mlCellName(lay.BackAccountColLeft, row)
-		acBackEnd := mlCellName(lay.BackAccountColRight, row)
-		wb.File.MergeCell(sheet, acBack, acBackEnd)
-		wb.File.SetCellValue(sheet, acBack, general)
-		acRowStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Color: sealRed, Size: 10},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-		})
-		wb.File.SetCellStyle(sheet, acBack, acBackEnd, acRowStyle)
-	}
-
-	// Row +2: 科目名 — Front 侧
+	// Row +2: 科目行 — 反面不展示科目字样；正面 "会计科目" 对齐明细12列 + 科目名
+	isPaper1 := backPageNum == 0 && frontPageNum == 0
+	detail12Col := mlDetailCol(lay, 11) // 明细12 = X
 	if hasFront {
-		acFront := mlCellName(lay.FrontAccountColLeft, row)
-		acFrontEnd := mlCellName(lay.FrontAccountColRight, row)
-		wb.File.MergeCell(sheet, acFront, acFrontEnd)
-		wb.File.SetCellValue(sheet, acFront, general)
-		acRowStyle2, _ := wb.File.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Color: sealRed, Size: 10},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		label := mlCellName(detail12Col, row)
+		wb.File.SetCellValue(sheet, label, "会计科目")
+		labelStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Color: darkGreen, Size: 10},
+			Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
 		})
-		wb.File.SetCellStyle(sheet, acFront, acFrontEnd, acRowStyle2)
+		wb.File.SetCellStyle(sheet, label, label, labelStyle)
+		nameLeft := mlCellName(detail12Col+1, row)
+		nameRight := mlCellName(detail12Col+2, row)
+		wb.File.MergeCell(sheet, nameLeft, nameRight)
+		if !isPaper1 {
+			wb.File.SetCellValue(sheet, nameLeft, general)
+		}
+		nameStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Color: sealRed, Size: 10},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "bottom"},
+			Border:    []excelize.Border{{Type: "bottom", Color: darkGreen, Style: 4}},
+		})
+		wb.File.SetCellStyle(sheet, nameLeft, nameRight, nameStyle)
 	}
 	wb.File.SetRowHeight(sheet, row, 18)
 	row++
@@ -1168,7 +1181,11 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	// 6) 明细科目们：中两行合并
 	if hasBack {
 		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol, h1), mlCellName(lay.BackStartCol+1, h2))
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol, h1), year+"年")
+		// 年份数字红色，"年"绿色（GL 风格）
+		wb.File.SetCellRichText(sheet, mlCellName(lay.BackStartCol, h1), []excelize.RichTextRun{
+			{Text: year, Font: &excelize.Font{Bold: true, Size: 10, Color: "CC0000"}},
+			{Text: "年", Font: &excelize.Font{Bold: true, Size: 10, Color: "006100"}},
+		})
 		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+2, h1), mlCellName(lay.BackStartCol+3, h2))
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+2, h1), "凭证")
 		for i, h := range []string{"月", "日", "字", "号"} {
@@ -1187,14 +1204,13 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffBalance, h1), "余            额")
 	}
 
-	// 6) 明细科目们：中两行合并（通用标签，首页会被覆盖为实际科目名）
+	// 6) 明细科目们：中两行合并（科目名由调用方 writeMLDetailNamesAt 写入，空列留空，无"明细N"占位）
 	for i := 0; i < mlMaxDetails; i++ {
 		if (i < 4 && !hasBack) || (i >= 4 && !hasFront) {
 			continue
 		}
 		col := mlDetailCol(lay, i)
 		wb.File.MergeCell(sheet, mlCellName(col, h2), mlCellName(col, h3))
-		wb.File.SetCellValue(sheet, mlCellName(col, h2), fmt.Sprintf("明细%d", i+1))
 	}
 
 	// 明细科目上方的行：左4列合并为"( ) 方 金"，右10列合并为"额 分 析"（金额分析表头）

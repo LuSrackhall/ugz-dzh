@@ -1217,7 +1217,7 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	if hasBack {
 		wb.File.MergeCell(sheet, mlCellName(mlDetailCol(lay, 0), h1), mlCellName(mlDetailCol(lay, 3), h1))
 		wb.File.SetCellValue(sheet, mlCellName(mlDetailCol(lay, 0), h1),
-			"("+strings.Repeat(" ", 10)+")"+strings.Repeat(" ", 20)+"方"+strings.Repeat(" ", 20)+"金")
+			"("+strings.Repeat(" ", 15)+")"+strings.Repeat(" ", 32)+"方"+strings.Repeat(" ", 32)+"金")
 	}
 	if hasFront {
 		wb.File.MergeCell(sheet, mlCellName(mlDetailCol(lay, 4), h1), mlCellName(mlDetailCol(lay, mlMaxDetails-1), h1))

@@ -279,9 +279,9 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.SubHeaderRow+1), cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), subHStyle)
 
 	// ── 行高 ──
-	// 上边距空行
+	// 上边距空行（28，与 ML 一致）
 	for i := 1; i <= lay.TopMarginRows; i++ {
-		wb.File.SetRowHeight(sheet, i, 25)
+		wb.File.SetRowHeight(sheet, i, 28)
 	}
 	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)  // 表头行1
 	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 26)  // 表头行2
@@ -522,7 +522,11 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			row += lay.BottomMarginRows + lay.TopMarginRows
 				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
 				for d := marginStart; d < row; d++ {
-					wb.File.SetRowHeight(sheet, d, 25)
+					h := 25.0 // 下边距
+					if d >= row-lay.TopMarginRows {
+						h = 28.0 // 下页上边距（与 ML 一致）
+					}
+					wb.File.SetRowHeight(sheet, d, h)
 				}
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow

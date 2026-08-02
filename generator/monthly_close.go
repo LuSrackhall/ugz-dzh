@@ -34,7 +34,11 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				row += lay.BottomMarginRows + lay.TopMarginRows
 				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
 				for d := marginStart; d < row; d++ {
-					wb.File.SetRowHeight(sheet, d, 25)
+					h := 25.0 // 下边距
+					if d >= row-lay.TopMarginRows {
+						h = 28.0 // 下页上边距（与 ML 一致）
+					}
+					wb.File.SetRowHeight(sheet, d, h)
 				}
 				wb.writePageHeader(sheet, row, pageNum, account)
 				row += lay.DataStartRow

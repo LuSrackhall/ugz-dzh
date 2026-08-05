@@ -164,24 +164,12 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 		if err != nil {
 			continue
 		}
-	// 找到最后一个"期末余额"行（月结行）
+		// 找到最后一个"期末余额"行（月结行），读有符号余额（借正贷负）
 		var lastBalance int64
 		for _, row := range rows {
-			// 期末余额在 Front 区
-			if len(row) >= lay.BindingLeftCols+3 && row[lay.BindingLeftCols+2] == periodEndLabel {
-				if len(row) >= lay.BindingLeftCols+7 {
-					if v, err := yuanStrToCents(row[lay.BindingLeftCols+6]); err == nil {
-						lastBalance = v
-					}
-				}
-			}
-			// 期末余额在 Back 区
-			if len(row) > lay.BackStartCol+1 && row[lay.BackStartCol+1] == periodEndLabel {
-				balIdx := lay.BackStartCol + 5
-				if len(row) > balIdx {
-					if v, err := yuanStrToCents(row[balIdx]); err == nil {
-						lastBalance = v
-					}
+			if glRowLabel(row, lay) == periodEndLabel {
+				if v, ok := glRowSignedBalance(row, lay); ok {
+					lastBalance = v
 				}
 			}
 		}

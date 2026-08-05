@@ -52,19 +52,24 @@ JSON `{year}/{year}.json` 中的以下字段直接影响代码路径：
 
 **关键约束**：`excelize.GetRows()` 返回 `[][]string`，cell 通过 slice index 访问（不是 Excel 列字母）。引入装订列（`BindingLeftCols`）后，所有依赖固定 index 的读取代码必须同步偏移。
 
-读取索引定义（以 `BindingLeftCols=2, FrontStartCol=3` 为例）：
+读取索引定义（以 `BindingLeftCols=2, BackStartCol=16` 为例）。GL 正面页（奇数页）数据在 Front 区，反面页（偶数页）在 Back 区；Back 区 GetRows 索引 = `BackStartCol + offset - 1`。ML 反向同理。
 
-| 数据 | GetRows index | 含义 |
-|---|---|---|
-| `row[BindingLeftCols+0]` | `row[2]` | 日期 |
-| `row[BindingLeftCols+1]` | `row[3]` | 凭证号 |
-| `row[BindingLeftCols+2]` | `row[4]` | 摘要（含"过次页"/"承前页"标记） |
-| `row[BindingLeftCols+3]` | `row[5]` | 借方金额 |
-| `row[BindingLeftCols+4]` | `row[6]` | 贷方金额 |
-| `row[BindingLeftCols+5]` | `row[7]` | 方向 |
-| `row[BindingLeftCols+6]` | `row[8]` | 余额 |
+| 数据 | offset | Front 索引 | Back 索引 |
+|---|---|---|---|
+| 月 | `glColMonth`(0) | `row[BindingLeftCols+0]`=row[2] | `row[BackStartCol-1+0]`=row[15] |
+| 日 | `glColDay`(1) | row[3] | row[16] |
+| 字 | `glColWord`(2) | row[4] | row[17] |
+| 号 | `glColNum`(3) | row[5] | row[18] |
+| 摘要 | `glColSummary`(4) | row[6] | row[19] |
+| 借方金额 | `glColDebit`(5) | row[7] | row[20] |
+| ✓ | `glColTick1`(6) | row[8] | row[21] |
+| 贷方金额 | `glColCredit`(7) | row[9] | row[22] |
+| ✓ | `glColTick2`(8) | row[10] | row[23] |
+| 方向 | `glColDir`(9) | row[11] | row[24] |
+| 余额 | `glColBalance`(10) | row[12] | row[25] |
+| ✓ | `glColTick3`(11) | row[13] | row[26] |
 
-所有读取"过次页/承前页"标记（`row[i][2]` → `row[i][BindingLeftCols+2]`）和提取期末余额（`row[i][6]` → `row[i][BindingLeftCols+6]`）的辅助函数都必须通过 `layout.BindingLeftCols` 计算偏移，**不得硬编码**。
+读取"过次页/承前页"标记用 `glRowLabel`（摘要列，含正/反侧）；提取期末余额用 `glRowSignedBalance`（**有符号**，借正贷负）。**不得硬编码索引，一律通过 `glCol*`/`mlOff*` 常量计算。**
 
 涉及以下函数：`lastPageBalance`、`lastRowIsOrphanBreak`、`lastBreakTotals`、`pageStartRow`、`rowIsPageBreak`、`pageHasBreakRow`、`ExtractLastMonthFinals`、`lastBreakDetailTotals`、`nextDataRow`、`nextDataRowAfterBreak`。
 

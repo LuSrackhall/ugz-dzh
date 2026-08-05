@@ -11,7 +11,6 @@ import (
 // 每写一行前检查页容量，满了就过次页翻页，保证每页恰好20数据行+1过次页行。
 func (wb *Workbook) WriteMLMonthClosings(
 	entries []voucher.Entry,
-	initials map[string]int64,
 	ytdDebit, ytdCredit map[string]int64,
 	qtdDebit, qtdCredit map[string]int64,
 	changedSheets map[string]bool,
@@ -27,9 +26,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 	}
 
 	for _, e := range entries {
-		if e.DetailAccount == "" {
-			continue
-		}
+		// 注：不按 DetailAccount 过滤——无明细分录也写入了 ML 余额列，须计入本月合计/期末
 		if mlSuppress[e.GeneralAccount] {
 			continue
 		}
@@ -232,7 +229,8 @@ func (wb *Workbook) WriteMLMonthClosings(
 
 		// 期末余额
 		row = mlCheckPageBreak(row)
-		endBalance := initials[general] + mtdDebit - mtdCredit
+		// 期末余额 = 余额列最后一条分录的运行余额（含历史累计），而非 initials[general]（general 期初未聚合）
+		endBalance := wb.mlLastPageBalance(sheet)
 		endDir, endDisp := directionFor(endBalance, 0)
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffMonth, row), "")
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDay, row), "")

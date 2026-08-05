@@ -313,9 +313,9 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本月合计")
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(mtdDebit))
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(mtdCredit))
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(mtdDebit))
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(mtdCredit))
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 
 	monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -325,8 +325,8 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 		},
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColDir), row), monthlyStyle)
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 	row++
 
@@ -335,18 +335,18 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本季合计")
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(qtDebit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(qtCredit))
-		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(qtDebit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(qtCredit))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 
 		qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 		})
 		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColDir), row), qtStyle)
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, 4))
 		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDir))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 		row++
 	}
 
@@ -354,9 +354,9 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本年累计")
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), centsToYuan(cumDebit))
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(cumCredit))
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(cumDebit))
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(cumCredit))
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 
 	cumStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -366,6 +366,8 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 		},
 	})
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColDir), row), cumStyle)
+	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))

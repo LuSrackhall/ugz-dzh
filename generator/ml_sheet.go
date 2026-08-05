@@ -175,78 +175,37 @@ func (wb *Workbook) mlNextDataRow(sheet string) (int, error) {
 	return lastDataIdx + 2, nil // 0-indexed → 1-based, then +1 for next row
 }
 
-// (wb *Workbook) mlLastPageBalance 获取最近一个过次页结束的余额。
-// 有过次页时读最后一个过次页之前最近的期末余额或数据行余额。
-// 无过次页时从最后一行往前找最近的余额（跳过承前页和结构行）。
+// mlLastPageBalance 获取 Sheet 最后一条真实分录的运行余额（跨页/跨月连续）。
+// 跳过 承前页/上年结转/月结行/过次页/期末余额 等标签行与结构过次页。
 func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 0
 	}
-	// 从后往前找最后一个真实过次页
-	lastBreak := -1
-	for i := len(rows) - 1; i >= 0; i-- {
-		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-			lastBreak = i
-			break
-		}
-	}
-	if lastBreak >= 0 {
-		// 找上一个过次页（或页首），确定当前页范围
-		prevBreak := 0
-		for i := lastBreak - 1; i >= 0; i-- {
-			if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
-				prevBreak = i + 1
-				break
-			}
-		}
-		// 优先：找最近的非承前页、非月结行的数据行余额（即分录行的 running balance）
-		for i := lastBreak - 1; i >= prevBreak; i-- {
-			r := rows[i]
-			if len(r) <= lay.BindingLeftCols+mlOffBalance {
-				continue
-			}
-			summary := ""
-			if len(r) > lay.BindingLeftCols+mlOffSummary {
-				summary = r[lay.BindingLeftCols+mlOffSummary]
-			}
-			// 跳过承前页行、月结行
-			if summary == carryForwardLabel || summary == "上年结转" ||
-				summary == "本月合计" || summary == "本季合计" || summary == "本年累计" || summary == periodEndLabel {
-				continue
-			}
-			balStr := strings.TrimSpace(r[lay.BindingLeftCols+mlOffBalance])
-			if balStr == "" {
-				continue
-			}
-			if v, err := yuanStrToCents(balStr); err == nil {
-				return v
-			}
-		}
-		// 回退到过次页行自身余额
-		if len(rows[lastBreak]) > lay.BindingLeftCols+mlOffBalance {
-			if v, err := yuanStrToCents(rows[lastBreak][lay.BindingLeftCols+mlOffBalance]); err == nil {
-				return v
-			}
-		}
-		return 0
-	}
-	// 无过次页 → 从后往前找最近的余额（跳过承前页行和结构行）
+	sumIdx := lay.BindingLeftCols + mlOffSummary
+	balIdx := lay.BindingLeftCols + mlOffBalance
 	for i := len(rows) - 1; i >= 0; i-- {
 		r := rows[i]
 		if mlHasPageBreakAt(r, lay) && mlIsStructuralBreak(r, lay) {
 			continue
 		}
-		if len(r) > lay.BindingLeftCols+mlOffSummary &&
-			(r[lay.BindingLeftCols+mlOffSummary] == carryForwardLabel || r[lay.BindingLeftCols+mlOffSummary] == "上年结转") {
-			continue
-		}
-		balIdx := lay.BindingLeftCols + mlOffBalance
 		if len(r) <= balIdx {
 			continue
 		}
-		if v, err := yuanStrToCents(r[balIdx]); err == nil {
+		sum := ""
+		if len(r) > sumIdx {
+			sum = strings.TrimSpace(r[sumIdx])
+		}
+		switch sum {
+		case carryForwardLabel, "上年结转", "本月合计", "本季合计", "本年累计", periodEndLabel, pageBreakLabel:
+			continue
+		}
+		balStr := strings.TrimSpace(r[balIdx])
+		if balStr == "" {
+			continue
+		}
+		if v, err := yuanStrToCents(balStr); err == nil {
 			return v
 		}
 	}
@@ -778,7 +737,14 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 			}
 			wb.Config.DetailOrder[general] = dedupedMerged
 		}
-		if err := wb.appendToMLSheet(general, g.entries, detailIdx, initials[general]); err != nil {
+		// 该总账科目期初 = 其下明细子科目期初之和（general 本身不在期初映射中，只有叶子路径）
+		generalInit := initials[general]
+		for account, init := range initials {
+			if strings.HasPrefix(account, general+"-") {
+				generalInit += init
+			}
+		}
+		if err := wb.appendToMLSheet(general, g.entries, detailIdx, generalInit); err != nil {
 			return fmt.Errorf("多科目明细账 %s: %w", general, err)
 		}
 	}
@@ -803,7 +769,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 	rows, _ := wb.File.GetRows(sheet)
 	fdp := mlFirstDataPageStart()
-	isNew := len(rows) < fdp || len(rows[fdp-1]) == 0
+	// fdp 是首数据页块起始（上边距行，空）；改查其后的标题行（row fdp+1，GetRows 索引 fdp）判断是否已初始化
+	isNew := len(rows) < fdp || len(rows[fdp]) == 0
 
 	// ── 计算逻辑页号──
 	// logicalPageNum = 已有真实过次页数 + 1（跳过结构预写）
@@ -1193,7 +1160,7 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 			wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+i, h3), h)
 		}
 		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffSummary, h1), mlCellName(lay.BackStartCol+mlOffSummary, h4))
-		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffSummary, h1), "摘要")
+		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffSummary, h1), "摘"+strings.Repeat(" ", 18)+"要")
 		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffDebit, h1), mlCellName(lay.BackStartCol+mlOffDebit, h3))
 		wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDebit, h1), "借            方")
 		wb.File.MergeCell(sheet, mlCellName(lay.BackStartCol+mlOffCredit, h1), mlCellName(lay.BackStartCol+mlOffCredit, h3))
@@ -1235,6 +1202,16 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 		}
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellStyle(sheet, mlCellName(col, h1), mlCellName(col, h4), gridStyle)
+	}
+	// 摘要表头：字号 12（其余表头 10）
+	if hasBack {
+		sumStyle, _ := wb.File.NewStyle(&excelize.Style{
+			Font:      &excelize.Font{Bold: true, Size: 12, Color: darkGreen},
+			Border:    headerBorders,
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		})
+		wb.File.SetCellStyle(sheet, mlCellName(lay.BackStartCol+mlOffSummary, h1),
+			mlCellName(lay.BackStartCol+mlOffSummary, h1), sumStyle)
 	}
 	// 方向：自动换行居中
 	dirStyle, _ := wb.File.NewStyle(&excelize.Style{

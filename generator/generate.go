@@ -110,7 +110,7 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	}
 
 	// 9.1 月末结账（多科目明细账）
-	if err := wb.WriteMLMonthClosings(entries, initials, ytdDebit, ytdCredit, qtdDebit, qtdCredit, changedSheets); err != nil {
+	if err := wb.WriteMLMonthClosings(entries, ytdDebit, ytdCredit, qtdDebit, qtdCredit, changedSheets); err != nil {
 		return fmt.Errorf("多科目明细账月结: %w", err)
 	}
 

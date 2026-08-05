@@ -90,10 +90,6 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 		{GeneralAccount: "银行存款", DetailAccount: "建行", DebitCents: 50000, CreditCents: 20000},
 	}
 
-	initials := map[string]int64{
-		"银行存款": 1500000,
-	}
-
 	ytdDebit := map[string]int64{
 		"银行存款-工行": 300000,
 		"银行存款-建行": 200000,
@@ -114,7 +110,7 @@ func TestWriteMLMonthClosings_CumulativeAggregation(t *testing.T) {
 
 	changedSheets := map[string]bool{sheet: true}
 
-	err := wb.WriteMLMonthClosings(entries, initials, ytdDebit, ytdCredit, qtdDebit, qtdCredit, changedSheets)
+	err := wb.WriteMLMonthClosings(entries, ytdDebit, ytdCredit, qtdDebit, qtdCredit, changedSheets)
 	if err != nil {
 		t.Fatalf("WriteMLMonthClosings: %v", err)
 	}

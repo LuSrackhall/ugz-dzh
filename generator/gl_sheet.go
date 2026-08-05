@@ -28,7 +28,60 @@ const (
 	glColBalance  = 10 // 余额
 	glColTick3    = 11 // ✓
 	glColCount    = 12 // 总列数
+
+	// GetRows 索引（BindingLeftCols=2, BackStartCol=16）：
+	// Front 摘要=BindingLeftCols+glColSummary(6)、余额=BindingLeftCols+glColBalance(12)、方向=BindingLeftCols+glColDir(11)
+	// Back 摘要=BackStartCol+glColSummary-1(19)、余额=BackStartCol+glColBalance-1(25)、方向=BackStartCol+glColDir-1(24)
 )
+
+// glRowLabel 返回 GL 数据行摘要列文字（Front 或 Back 侧，空则返回 ""）。
+func glRowLabel(row []string, lay layout.GLLayout) string {
+	if len(row) > lay.BindingLeftCols+glColSummary {
+		if s := strings.TrimSpace(row[lay.BindingLeftCols+glColSummary]); s != "" {
+			return s
+		}
+	}
+	backIdx := lay.BackStartCol + glColSummary - 1
+	if len(row) > backIdx {
+		return strings.TrimSpace(row[backIdx])
+	}
+	return ""
+}
+
+// glRowSignedBalance 读取 GL 数据行的有符号余额（借正、贷负）。
+func glRowSignedBalance(row []string, lay layout.GLLayout) (int64, bool) {
+	// Front 侧
+	if len(row) > lay.BindingLeftCols+glColBalance {
+		dir := strings.TrimSpace(row[lay.BindingLeftCols+glColDir])
+		balStr := strings.TrimSpace(row[lay.BindingLeftCols+glColBalance])
+		if balStr != "" {
+			if v, err := yuanStrToCents(balStr); err == nil {
+				return signByDir(dir, v), true
+			}
+		}
+	}
+	// Back 侧
+	balIdx := lay.BackStartCol + glColBalance - 1
+	dirIdx := lay.BackStartCol + glColDir - 1
+	if len(row) > balIdx && len(row) > dirIdx {
+		dir := strings.TrimSpace(row[dirIdx])
+		balStr := strings.TrimSpace(row[balIdx])
+		if balStr != "" {
+			if v, err := yuanStrToCents(balStr); err == nil {
+				return signByDir(dir, v), true
+			}
+		}
+	}
+	return 0, false
+}
+
+// signByDir 按方向对余额取符号（贷为负）。
+func signByDir(dir string, v int64) int64 {
+	if strings.TrimSpace(dir) == "贷" {
+		return -v
+	}
+	return v
+}
 
 const carryForwardLabel = "承前页"
 
@@ -661,35 +714,30 @@ func (wb *Workbook) lastRowIsOrphanBreak(sheet string) bool {
 	return hasPageBreakAt(last, lay)
 }
 
-// lastPageBalance 获取最后一个过次页行的余额。
+// lastPageBalance 获取 Sheet 的最近余额（续写起点）。
+// 优先读最后一个"期末余额"行（有符号：借正贷负），否则回退到最后一个真实过次页行的余额。
 func (wb *Workbook) lastPageBalance(sheet string) int64 {
 	lay := glLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
 		return 0
 	}
+	// 优先：最后一个"期末余额"行（月结行，权威运行余额）
+	for i := len(rows) - 1; i >= 0; i-- {
+		if glRowLabel(rows[i], lay) == periodEndLabel {
+			if bal, ok := glRowSignedBalance(rows[i], lay); ok {
+				return bal
+			}
+		}
+	}
+	// 回退：最后一个真实过次页行的余额
 	for i := len(rows) - 1; i >= 0; i-- {
 		if !hasPageBreakAt(rows[i], lay) {
 			continue
 		}
-		// 过次页在 Front 区
-		if len(rows[i]) > lay.BindingLeftCols+4 && rows[i][lay.BindingLeftCols+4] == pageBreakLabel {
-			if len(rows[i]) >= lay.BindingLeftCols+9 {
-				if v, err := yuanStrToCents(rows[i][lay.BindingLeftCols+glColBalance]); err == nil {
-					return v
-				}
-			}
+		if bal, ok := glRowSignedBalance(rows[i], lay); ok {
+			return bal
 		}
-		// 过次页在 Back 区
-		if len(rows[i]) > lay.BackStartCol+3 && rows[i][lay.BackStartCol+3] == pageBreakLabel {
-			balIdx := lay.BackStartCol + 7 // GetRows index = col - 1
-			if len(rows[i]) > balIdx {
-				if v, err := yuanStrToCents(rows[i][balIdx]); err == nil {
-					return v
-				}
-			}
-		}
-		return 0
 	}
 	return 0
 }
@@ -718,8 +766,8 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 		}
 		// 过次页在 Back 区
 		if len(rows[i]) > lay.BackStartCol+3 && rows[i][lay.BackStartCol+3] == pageBreakLabel {
-			debIdx := lay.BackStartCol + 4 // GetRows index for debit
-			crdIdx := lay.BackStartCol + 5 // GetRows index for credit
+			debIdx := lay.BackStartCol + glColDebit - 1 // GetRows index for debit
+			crdIdx := lay.BackStartCol + glColCredit - 1 // GetRows index for credit
 			if len(rows[i]) > crdIdx {
 				if v, err := yuanStrToCents(rows[i][debIdx]); err == nil {
 					debit = v

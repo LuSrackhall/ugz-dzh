@@ -1045,8 +1045,8 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
-	// Row +0: 上边距行（空，高 28）
-	wb.File.SetRowHeight(sheet, row, 28)
+	// Row +0: 上边距行（空，高 20）
+	wb.File.SetRowHeight(sheet, row, 20)
 	row++
 
 	// Row +1: 标题行 — 分第N页(左) 在反面页左边；正面页 明 细 帐 + 分第N页(右)

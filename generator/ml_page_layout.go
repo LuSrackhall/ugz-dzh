@@ -106,6 +106,7 @@ func setMLSummaryFonts(f *excelize.File, sheet string, summaryStyle int) {
 }
 
 // setMLDataRowHeights 将每页内容区（20 数据行 + 1 过次页行 + 1 下边距行）的行高统一设为 25pt。
+// 下边距行高 16，与 GL 一致。
 // 每页块 = 上边距 + DataStartRow 页头 + pageSize 数据 + 过次页 + 下边距 = 30 行，
 // 块起始行依次为 1, 1+30, ...（Paper1 Front 也从 row 1 起）。
 func setMLDataRowHeights(f *excelize.File, sheet string) {
@@ -115,7 +116,7 @@ func setMLDataRowHeights(f *excelize.File, sheet string) {
 		return
 	}
 	const dataRowHeight = 25.0
-	const bottomMarginHeight = 25.0
+	const bottomMarginHeight = 16.0
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
 	lastRow := len(rows)
 	// 上限延伸到最后一块的下边距行（GetRows 不含空的下边距行，但该行由 applyMLBorders 创建）
@@ -127,7 +128,7 @@ func setMLDataRowHeights(f *excelize.File, sheet string) {
 		for r := dataStart; r <= dataEnd && r <= maxRow; r++ {
 			h := dataRowHeight
 			if r == dataEnd {
-				h = bottomMarginHeight // 下边距行 26
+				h = bottomMarginHeight // 下边距行 16
 			}
 			f.SetRowHeight(sheet, r, h)
 		}

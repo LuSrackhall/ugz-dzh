@@ -332,9 +332,9 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.SubHeaderRow+1), cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), subHStyle)
 
 	// ── 行高 ──
-	// 上边距空行（28，与 ML 一致）
+	// 上边距空行（20，与 ML 一致）
 	for i := 1; i <= lay.TopMarginRows; i++ {
-		wb.File.SetRowHeight(sheet, i, 28)
+		wb.File.SetRowHeight(sheet, i, 20)
 	}
 	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)  // 表头行1
 	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 26)  // 表头行2
@@ -366,13 +366,13 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	for _, offset := range []int{1, 2} {
 		if offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 7)
+			wb.File.SetColWidth(sheet, cl, cl, 7.15)
 		}
 	}
-	// 页间隙列（正面页右边距/背面页左边距 = 1倍）
+	// 页间隙列（正面页右边距/背面页左边距 = 1倍，非装订边距 0）
 	if lay.PageGapStartCol <= lay.TotalCols {
 		cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
-		wb.File.SetColWidth(sheet, cl, cl, 2)
+		wb.File.SetColWidth(sheet, cl, cl, 0)
 	}
 	// 反面区列宽（与正面按比例一致）
 	for i, c := range lay.Columns {
@@ -397,7 +397,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	for _, offset := range []int{lay.TotalCols, lay.TotalCols - 1} {
 		if offset > 0 && offset > lay.BackStartCol && offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 7)
+			wb.File.SetColWidth(sheet, cl, cl, 7.15)
 		}
 	}
 
@@ -575,9 +575,9 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			row += lay.BottomMarginRows + lay.TopMarginRows
 				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
 				for d := marginStart; d < row; d++ {
-					h := 25.0 // 下边距
+					h := 16.0 // 下边距
 					if d >= row-lay.TopMarginRows {
-						h = 28.0 // 下页上边距（与 ML 一致）
+						h = 20.0 // 下页上边距（与 ML 一致）
 					}
 					wb.File.SetRowHeight(sheet, d, h)
 				}
@@ -1306,7 +1306,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 			outerBottom := row + lay.BottomMarginRows
 				for d := len(rows) + 1; d <= outerBottom; d++ {
-					wb.File.SetRowHeight(sheet, d, 25)
+					wb.File.SetRowHeight(sheet, d, 16)
 				}
 			if pageNum%2 == 1 {
 				// 正面页（奇数）：左侧红色双线，右侧无边框

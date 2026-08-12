@@ -127,8 +127,10 @@ func setAllSheetPageLayout(f *excelize.File) {
 			f.SetSheetProps(sheet, &excelize.SheetPropsOptions{
 				FitToPage: &fp,
 			})
-			// 垂直分页：反面区（col P=16）前分页，正/反面各一张纸
-			f.InsertPageBreak(sheet, "P1")
+			// 垂直分页：反面书口列前分页（正面+正面书口 / 反面书口+反面数据各一张纸）
+			lay := glLayout()
+			pbCell, _ := excelize.ColumnNumberToName(lay.PageGapStartCol + 1)
+			f.InsertPageBreak(sheet, pbCell+"1")
 			continue
 		}
 		// 其他 sheet：A4 横向、页边距 0、FitToWidth=1

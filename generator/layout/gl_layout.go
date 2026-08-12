@@ -128,7 +128,7 @@ func GLComputeLayout(spec GLSpec) GLLayout {
 	nCol := len(spec.ColProportions)
 	frontStart := bindingLeftCols + 1
 	pageGapStart := frontStart + nCol
-	backStart := pageGapStart + 1
+	backStart := pageGapStart + 2 // 中间两个书口列（正面1.2 + 反面1.2）之后
 	total := backStart + nCol - 1 + bindingRightCols
 
 	var exc []GLExcelCol

@@ -29,9 +29,9 @@ const (
 	glColTick3    = 11 // ✓
 	glColCount    = 12 // 总列数
 
-	// GetRows 索引（BindingLeftCols=2, BackStartCol=16）：
+	// GetRows 索引（BindingLeftCols=2, BackStartCol=17）：
 	// Front 摘要=BindingLeftCols+glColSummary(6)、余额=BindingLeftCols+glColBalance(12)、方向=BindingLeftCols+glColDir(11)
-	// Back 摘要=BackStartCol+glColSummary-1(19)、余额=BackStartCol+glColBalance-1(25)、方向=BackStartCol+glColDir-1(24)
+	// Back 摘要=BackStartCol+glColSummary-1(20)、余额=BackStartCol+glColBalance-1(26)、方向=BackStartCol+glColDir-1(25)
 )
 
 // glRowLabel 返回 GL 数据行摘要列文字（Front 或 Back 侧，空则返回 ""）。
@@ -375,10 +375,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 			wb.File.SetColWidth(sheet, cl, cl, 7.75)
 		}
 	}
-	// 页间隙列（正面页右边距/背面页左边距 = 1倍，非装订边距 1.2）
-	if lay.PageGapStartCol <= lay.TotalCols {
-		cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
-		wb.File.SetColWidth(sheet, cl, cl, 1.2)
+	// 书口列（正面/反面各 1.2）：PageGapStartCol = 正面书口，+1 = 反面书口
+	for _, off := range []int{0, 1} {
+		if lay.PageGapStartCol+off <= lay.TotalCols {
+			cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol + off)
+			wb.File.SetColWidth(sheet, cl, cl, 1.2)
+		}
 	}
 	// 反面区列宽（与正面按比例一致）
 	for i, c := range lay.Columns {

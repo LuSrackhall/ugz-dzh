@@ -34,6 +34,17 @@ const (
 	// Back 摘要=BackStartCol+glColSummary-1(20)、余额=BackStartCol+glColBalance-1(26)、方向=BackStartCol+glColDir-1(25)
 )
 
+// 打印机补偿：GL 装订/书口列宽（Excel 列宽单位）。
+// 正面页为打印首张纸，受打印机物理不可打印区影响（左侧裁切风险大），
+// 故正面装订列加宽、正面书口收窄（总宽守恒，装订 +0.8 书口 -0.8）。
+// 反面页保持原宽。若更换打印机导致打印偏移/裁切，调整这些常量即可，无需改其他逻辑。
+const (
+	glFrontBindColW = 8.15 // 正面装订列每列宽（A-B）
+	glFrontGutterW  = 0.4  // 正面书口列宽（O）
+	glBackBindColW  = 7.75 // 反面装订列每列宽（AC-AD）
+	glBackGutterW   = 1.2  // 反面书口列宽（P）
+)
+
 // glRowLabel 返回 GL 数据行摘要列文字（Front 或 Back 侧，空则返回 ""）。
 func glRowLabel(row []string, lay layout.GLLayout) string {
 	if len(row) > lay.BindingLeftCols+glColSummary {
@@ -368,19 +379,21 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	summaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 5.2
 	wb.File.SetColWidth(sheet, cl, cl, summaryW)
 	// 装订列
-	// 左侧装订列（正面页左边距 = 5倍间隙）
+	// 左侧装订列（正面页左边距，打印机补偿加宽）
 	for _, offset := range []int{1, 2} {
 		if offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 7.75)
+			wb.File.SetColWidth(sheet, cl, cl, glFrontBindColW)
 		}
 	}
-	// 书口列（正面/反面各 1.2）：PageGapStartCol = 正面书口，+1 = 反面书口
-	for _, off := range []int{0, 1} {
-		if lay.PageGapStartCol+off <= lay.TotalCols {
-			cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol + off)
-			wb.File.SetColWidth(sheet, cl, cl, 1.2)
-		}
+	// 书口列：PageGapStartCol = 正面书口（打印机补偿收窄），+1 = 反面书口（原宽）
+	if lay.PageGapStartCol <= lay.TotalCols {
+		cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
+		wb.File.SetColWidth(sheet, cl, cl, glFrontGutterW)
+	}
+	if lay.PageGapStartCol+1 <= lay.TotalCols {
+		cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol + 1)
+		wb.File.SetColWidth(sheet, cl, cl, glBackGutterW)
 	}
 	// 反面区列宽（与正面按比例一致）
 	for i, c := range lay.Columns {
@@ -408,11 +421,11 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	backSummaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 5.2
 	wb.File.SetColWidth(sheet, cl2, cl2, backSummaryW)
 
-	// 右侧装订列（背面页右边距 = 5倍间隙）
+	// 右侧装订列（背面页右边距，保持原宽）
 	for _, offset := range []int{lay.TotalCols, lay.TotalCols - 1} {
 		if offset > 0 && offset > lay.BackStartCol && offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 7.75)
+			wb.File.SetColWidth(sheet, cl, cl, glBackBindColW)
 		}
 	}
 

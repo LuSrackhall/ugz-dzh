@@ -588,9 +588,9 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			row += lay.BottomMarginRows + lay.TopMarginRows
 				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
 				for d := marginStart; d < row; d++ {
-					h := 16.0 // 下边距
+					h := 20.0 // 下边距
 					if d >= row-lay.TopMarginRows {
-						h = 20.0 // 下页上边距（与 ML 一致）
+						h = 16.0 // 下页上边距
 					}
 					wb.File.SetRowHeight(sheet, d, h)
 				}

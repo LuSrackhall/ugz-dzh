@@ -1339,6 +1339,10 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			pageNum++
 				pageStart = row + 4 + lay.TopMarginRows + lay.BottomMarginRows // 过次页行+边距 = 列标题行
 				pageTop = row + 1 + lay.BottomMarginRows // 过次页下一行 = 下页上边距
+				// 显式水平分页符：下一页对上边距前分页（每页对 28 行固定）
+				if pageTop <= len(rows) {
+					wb.File.InsertPageBreak(sheet, fmt.Sprintf("A%d", pageTop))
+				}
 		}
 
 		// 最后一页（无过次页标记）：从 pageStart 到 sheet 末尾

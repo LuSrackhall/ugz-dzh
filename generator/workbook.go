@@ -100,14 +100,42 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 // setAllSheetPageLayout 为所有非多科目明细账 Sheet 设置 A4 横向、页边距 0、FitToWidth=1。
 // 多科目明细账使用独立布局 setMLSheetPageLayout，避免被 FitToWidth 压缩左右两半。
 func setAllSheetPageLayout(f *excelize.File) {
-	paperSize := 9
-	fw := 1
-	fh := 0
-	fp := true
 	for _, sheet := range f.GetSheetList() {
 		if len(sheet) >= len(sheetPrefixML) && sheet[:len(sheetPrefixML)] == sheetPrefixML {
 			continue // ML sheet 由 setMLSheetPageLayout 单独处理
 		}
+		if len(sheet) >= len(sheetPrefixGL) && sheet[:len(sheetPrefixGL)] == sheetPrefixGL {
+			// GL（含合并 GL）：B5 横向、固定缩放 74%、边距 0、显式分页
+			paperSize := 13 // B5 (JIS)
+			scale := uint(74)
+			fw := 0
+			fh := 0
+			fp := false
+			f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
+				Orientation: stringPtr("landscape"),
+				Size:        &paperSize,
+				AdjustTo:    &scale,
+				FitToWidth:  &fw,
+				FitToHeight: &fh,
+			})
+			f.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
+				Top:    float64Ptr(0),
+				Bottom: float64Ptr(0),
+				Left:   float64Ptr(0),
+				Right:  float64Ptr(0),
+			})
+			f.SetSheetProps(sheet, &excelize.SheetPropsOptions{
+				FitToPage: &fp,
+			})
+			// 垂直分页：反面区（col P=16）前分页，正/反面各一张纸
+			f.InsertPageBreak(sheet, "P1")
+			continue
+		}
+		// 其他 sheet：A4 横向、页边距 0、FitToWidth=1
+		paperSize := 9
+		fw := 1
+		fh := 0
+		fp := true
 		f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
 			Orientation: stringPtr("landscape"),
 			Size:        &paperSize,

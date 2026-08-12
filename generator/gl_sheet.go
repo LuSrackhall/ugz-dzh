@@ -356,10 +356,10 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		}
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
-	// 借方/贷方/余额列各加宽 0.4，补装订边增宽
+	// 借方/贷方/余额列各减窄 0.4，让位装订边增宽
 	for _, offset := range []int{glColDebit, glColCredit, glColBalance} {
 		cl, _ := excelize.ColumnNumberToName(lay.ExcelColumns[offset].Col)
-		w := layout.GLMMToExcelColWidth(lay.Columns[offset].WidthMM) + 0.4
+		w := layout.GLMMToExcelColWidth(lay.Columns[offset].WidthMM) - 0.4
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
 	// 摘要列分出16宽度给装订列，再缩短1.2让位非装订边
@@ -393,11 +393,11 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		}
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
-	// 反面借/贷/余额列各加宽 0.4，补装订边增宽
+	// 反面借/贷/余额列各减窄 0.4，让位装订边增宽
 	for _, offset := range []int{glColDebit, glColCredit, glColBalance} {
 		backCol := lay.ExcelColumns[offset].Col + (lay.BackStartCol - lay.FrontStartCol)
 		cl, _ := excelize.ColumnNumberToName(backCol)
-		w := layout.GLMMToExcelColWidth(lay.Columns[offset].WidthMM) + 0.4
+		w := layout.GLMMToExcelColWidth(lay.Columns[offset].WidthMM) - 0.4
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
 	// 反面摘要列同样分出16，再缩短1.2让位非装订边

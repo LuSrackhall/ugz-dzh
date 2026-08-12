@@ -332,9 +332,9 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, lay.SubHeaderRow+1), cellName(lay.FrontStartCol+3, lay.SubHeaderRow+1), subHStyle)
 
 	// ── 行高 ──
-	// 上边距空行（20，与 ML 一致）
+	// 上边距空行（16）
 	for i := 1; i <= lay.TopMarginRows; i++ {
-		wb.File.SetRowHeight(sheet, i, 20)
+		wb.File.SetRowHeight(sheet, i, 16)
 	}
 	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)  // 表头行1
 	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 26)  // 表头行2
@@ -356,23 +356,29 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		}
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
-	// 摘要列分出16宽度给装订列
+	// 借方/贷方/余额列各加宽 0.4，补装订边增宽
+	for _, offset := range []int{glColDebit, glColCredit, glColBalance} {
+		cl, _ := excelize.ColumnNumberToName(lay.ExcelColumns[offset].Col)
+		w := layout.GLMMToExcelColWidth(lay.Columns[offset].WidthMM) + 0.4
+		wb.File.SetColWidth(sheet, cl, cl, w)
+	}
+	// 摘要列分出16宽度给装订列，再缩短1.2让位非装订边
 	summaryCol := lay.ExcelColumns[4].Col
 	cl, _ := excelize.ColumnNumberToName(summaryCol)
-	summaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 4
+	summaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 5.2
 	wb.File.SetColWidth(sheet, cl, cl, summaryW)
 	// 装订列
 	// 左侧装订列（正面页左边距 = 5倍间隙）
 	for _, offset := range []int{1, 2} {
 		if offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 7.15)
+			wb.File.SetColWidth(sheet, cl, cl, 7.75)
 		}
 	}
-	// 页间隙列（正面页右边距/背面页左边距 = 1倍，非装订边距 0）
+	// 页间隙列（正面页右边距/背面页左边距 = 1倍，非装订边距 1.2）
 	if lay.PageGapStartCol <= lay.TotalCols {
 		cl, _ := excelize.ColumnNumberToName(lay.PageGapStartCol)
-		wb.File.SetColWidth(sheet, cl, cl, 0)
+		wb.File.SetColWidth(sheet, cl, cl, 1.2)
 	}
 	// 反面区列宽（与正面按比例一致）
 	for i, c := range lay.Columns {
@@ -387,17 +393,24 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 		}
 		wb.File.SetColWidth(sheet, cl, cl, w)
 	}
-	// 反面摘要列同样分出16
-		backSummaryCol := lay.BackStartCol + 4
-		cl2, _ := excelize.ColumnNumberToName(backSummaryCol)
-		backSummaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 4
-		wb.File.SetColWidth(sheet, cl2, cl2, backSummaryW)
+	// 反面借/贷/余额列各加宽 0.4，补装订边增宽
+	for _, offset := range []int{glColDebit, glColCredit, glColBalance} {
+		backCol := lay.ExcelColumns[offset].Col + (lay.BackStartCol - lay.FrontStartCol)
+		cl, _ := excelize.ColumnNumberToName(backCol)
+		w := layout.GLMMToExcelColWidth(lay.Columns[offset].WidthMM) + 0.4
+		wb.File.SetColWidth(sheet, cl, cl, w)
+	}
+	// 反面摘要列同样分出16，再缩短1.2让位非装订边
+	backSummaryCol := lay.BackStartCol + 4
+	cl2, _ := excelize.ColumnNumberToName(backSummaryCol)
+	backSummaryW := layout.GLMMToExcelColWidth(lay.Columns[4].WidthMM) - 5.2
+	wb.File.SetColWidth(sheet, cl2, cl2, backSummaryW)
 
-		// 右侧装订列（背面页右边距 = 5倍间隙）
+	// 右侧装订列（背面页右边距 = 5倍间隙）
 	for _, offset := range []int{lay.TotalCols, lay.TotalCols - 1} {
 		if offset > 0 && offset > lay.BackStartCol && offset <= lay.TotalCols {
 			cl, _ := excelize.ColumnNumberToName(offset)
-			wb.File.SetColWidth(sheet, cl, cl, 7.15)
+			wb.File.SetColWidth(sheet, cl, cl, 7.75)
 		}
 	}
 
@@ -1306,7 +1319,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 			outerBottom := row + lay.BottomMarginRows
 				for d := len(rows) + 1; d <= outerBottom; d++ {
-					wb.File.SetRowHeight(sheet, d, 16)
+					wb.File.SetRowHeight(sheet, d, 20)
 				}
 			if pageNum%2 == 1 {
 				// 正面页（奇数）：左侧红色双线，右侧无边框
@@ -1354,7 +1367,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		}
 		outerBottom := len(rows)
 			for d := len(rows) + 1; d <= len(rows)+lay.BottomMarginRows; d++ {
-				wb.File.SetRowHeight(sheet, d, 25)
+				wb.File.SetRowHeight(sheet, d, 20)
 				outerBottom = d
 			}
 		if pageNum%2 == 1 {

@@ -117,8 +117,8 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 	frontLeft := spec.LeftMarginMM
 	pageGapLeft := frontLeft + contentWidth
 	backLeft := pageGapLeft + spec.PageGapMM
-	bindingLeftCols := 2
-	bindingRightCols := 2
+	bindingLeftCols := 1 // Back 书口（非装订，最左）
+	bindingRightCols := 1 // Front 书口（非装订，最右）
 
 	// Back 实际渲染 13 列（月日字号4 + 摘要/借/贷/方向/余额5 + 明细1~4），
 	// 而 BackColProportions 仅 11 项（日期/凭证号 为复合列，各含 2 子列）。
@@ -151,17 +151,19 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 		startMM += w
 	}
 
-	// Excel 列号布局（对齐 GL：两侧装订、中间两书口列、无共享列）
-	// A-B:   装订（反面 Back，7.75×2） → col 1-2
-	// C-O:   Back 数据 (13 cols)       → col 3-15
-	// P:     反面书口（1.2）           → col 16
-	// Q:     正面书口（0）             → col 17
-	// R-AA:  Front 数据 (10 cols: 明细5~14) → col 18-27
-	// AB-AC: 装订（正面 Front，8.35×2）→ col 28-29
-	backStart := bindingLeftCols + 1          // = col 3 (左半 = Back 数据区)
-	pageGapStart := backStart + backColCount  // = col 16 (反面书口，第一书口列)
-	frontStart := pageGapStart + 2            // = col 18 (两个书口列之后 = Front 数据区)
-	total := frontStart + frontColCount + bindingRightCols - 1 // = col 29 (装订末列)
+	// Excel 列号布局（对齐 GL 的正反逻辑，但 ML 装订在中间、书口在两侧）：
+	//   Back（反面，左半）：书口在左、装订在右（col 15-16）
+	//   Front（正面，右半）：装订在左（col 17-18）、书口在右
+	// A:     Back 书口（1.2）           → col 1
+	// B-N:   Back 数据 (13 cols)        → col 2-14
+	// O-P:   Back 装订（7.75×2）        → col 15-16
+	// Q-R:   Front 装订（8.35×2）       → col 17-18
+	// S-AB:  Front 数据 (10 cols: 明细5~14) → col 19-28
+	// AC:    Front 书口（0）            → col 29
+	backStart := bindingLeftCols + 1          // = col 2 (左半 = Back 数据区)
+	pageGapStart := backStart + backColCount  // = col 15 (中间装订区起始 = Back 装订)
+	frontStart := pageGapStart + 4            // = col 19 (Back装订2列 + Front装订2列 之后)
+	total := frontStart + frontColCount + bindingRightCols - 1 // = col 29 (Front 书口末列)
 
 	// 合并列名映射（Back + Front 两段）
 	var exc []MLExcelCol

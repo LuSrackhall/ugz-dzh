@@ -183,18 +183,18 @@ func TestMLComputeLayout_BackFrontColumns(t *testing.T) {
 		t.Errorf("Back 列与 Front 列重叠：Back end=%d, Front start=%d", backEnd, lay.FrontStartCol)
 	}
 
-	// 验证书口列位置：PageGapStartCol = 反面书口（Back 数据末列之后）
+	// 验证书口列位置：PageGapStartCol = 中间装订区起始（Back 数据末列之后）
 	wantPageGap := lay.BackStartCol + lay.BackColCount
 	if lay.PageGapStartCol != wantPageGap {
 		t.Errorf("PageGap 位置错误：%d != %d", lay.PageGapStartCol, wantPageGap)
 	}
 
-	// 验证 Front 起始列在两个书口列之后（反面书口 + 正面书口）
-	if lay.FrontStartCol != lay.PageGapStartCol+2 {
-		t.Errorf("Front 起始列应在两个书口列后：Front=%d, PageGap=%d", lay.FrontStartCol, lay.PageGapStartCol)
+	// 验证 Front 起始列在中间装订区之后（Back装订2列 + Front装订2列）
+	if lay.FrontStartCol != lay.PageGapStartCol+4 {
+		t.Errorf("Front 起始列应在中间装订区后：Front=%d, PageGap=%d", lay.FrontStartCol, lay.PageGapStartCol)
 	}
 
-	// 验证总列数（含右侧装订）
+	// 验证总列数（含右侧书口）
 	wantTotal := lay.FrontStartCol + len(lay.FrontColumns) + lay.BindingRightCols - 1
 	if lay.TotalCols != wantTotal {
 		t.Errorf("TotalCols 错误：%d != %d", lay.TotalCols, wantTotal)

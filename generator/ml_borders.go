@@ -85,12 +85,12 @@ func applyMLBorders(f *excelize.File, sheet string) {
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows // 31
 	lastRow := len(rows)
 
-	backL := lay.BackStartCol                    // C = 3
-	backR := mlDetailCol(lay, 3)                 // O（明细4）= 15
-	frontL := mlDetailCol(lay, 4)                // R（明细5）= 18
-	frontR := mlDetailCol(lay, mlMaxDetails-1)   // AA（明细14）= 27
-	gapL := backR + 1                            // P 反面书口 = 16
-	gapR := frontL - 1                           // Q 正面书口 = 17
+	backL := lay.BackStartCol                    // B = 2
+	backR := mlDetailCol(lay, 3)                 // N（明细4）= 14
+	frontL := mlDetailCol(lay, 4)                // S（明细5）= 19
+	frontR := mlDetailCol(lay, mlMaxDetails-1)   // AB（明细14）= 28
+	gapL := backR + 1                            // O 中间装订区起始 = 15
+	gapR := frontL - 1                           // R 中间装订区末 = 18
 	isGutter := func(c int) bool { return c >= gapL && c <= gapR }
 
 	for start := 1; start <= lastRow; start += blockRows {

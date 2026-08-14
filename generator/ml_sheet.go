@@ -32,11 +32,9 @@ const (
 )
 
 // mlFirstDataPageStart 返回第一个数据页 block 的起始行号（= 该页上边距行）。
-// Paper1 Front 占位页占 rows 1 ~ (DataStartRow + pageSize + 1 + BottomMarginRows)，
-// 即 1 ~ 30（上边距 + 7页头 + 20数据 + 过次页 + 下边距）。
+// 无 Paper1 占位页：首数据页直接从行 1 开始，避免打印时前面多出空白占位纸。
 func mlFirstDataPageStart() int {
-	lay := mlLayout()
-	return lay.DataStartRow + pageSize + 2 + lay.BottomMarginRows // = 8 + 20 + 2 + 1 = 31
+	return 1
 }
 
 // mlLayout 返回多科目明细账的布局规格（独立于 GL 布局）。
@@ -415,14 +413,9 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		return "", nil, nil, fmt.Errorf("总账科目 %q 明细科目数 %d 超过上限 %d", general, len(initDetails), mlMaxDetails)
 	}
 
-	// Paper1 Front 占位页：空占位表（Front 侧，页码=0，不写 Back 侧）
+	// 首数据页从行 1 开始（无 Paper1 占位页，避免打印前面多出空白纸）。
+	// 页头由 appendToMLSheet 写入，此处先写明细名便于跨月读取表头。
 	lay := mlLayout()
-	if err := wb.writeMLPageHeader(name, 1, 0, 0, general, false, true); err != nil {
-		return "", nil, nil, err
-	}
-
-	// 占位表为空白模板：不写明细科目名（保持空列），也不写 Back 侧结构过次页占位
-	// 首个数据页页头写入实际明细科目名
 	wb.writeMLDetailNamesAt(name, mlFirstDataPageStart(), initDetails)
 	// 列宽（Front 侧明细列）
 	for i := 0; i < mlMaxDetails; i++ {
@@ -481,7 +474,7 @@ func cellColLetter(col int) string {
 	return l
 }
 
-// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（Paper1 Front 第5行），以匹配当月明细科目集。
+// updateMLDetailHeaders 更新已有 Sheet 的明细列标题（首数据页表头），以匹配当月明细科目集。
 func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	lay := mlLayout()
 	colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header // 1-based
@@ -496,7 +489,7 @@ func (wb *Workbook) updateMLDetailHeaders(sheet string, details []string) {
 	}
 }
 
-// readMLDetailHeaders 从 Sheet 第5行（Paper1 Front 表头行）读取现有明细列标题。
+// readMLDetailHeaders 从首数据页表头行读取现有明细列标题。
 // 返回的 details 按列顺序排列（空列对应空字符串）。
 func (wb *Workbook) readMLDetailHeaders(sheet string) (detailIdx map[string]int, details []string, err error) {
 	lay := mlLayout()
@@ -754,8 +747,7 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 
 // appendToMLSheet 追加分录到指定总账科目的多科目明细账 Sheet。
 // 逻辑页号：数据块两侧页码相同
-// Paper1 Front 占位页已经由 ensureMLSheet 写入第1-5行。
-// 数据页标题从第6行开始。
+// 首数据页从行 1 开始（无 Paper1 占位页，避免打印前面多出空白纸）。
 func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, detailIdx map[string]int, initial int64) error {
 	sheet := sheetNameML(general)
 	lay := mlLayout()
@@ -769,7 +761,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 	rows, _ := wb.File.GetRows(sheet)
 	fdp := mlFirstDataPageStart()
-	// fdp 是首数据页块起始（上边距行，空）；改查其后的标题行（row fdp+1，GetRows 索引 fdp）判断是否已初始化
+	// fdp 是首数据页块起始（行 1 上边距行）；其后标题行有内容则已初始化
 	isNew := len(rows) < fdp || len(rows[fdp]) == 0
 
 	// ── 计算逻辑页号──
@@ -798,14 +790,13 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	var row int
 
 	if isNew {
-		// Paper1 Front 已在 rows 1-5（ensureMLSheet 写入）
-		// 写入第一个数据页标题：两侧同一逻辑页号
+		// 首数据页表头（行 1-8）从行 1 写起，两侧同一逻辑页号
 		wb.writeMLPageHeader(sheet, mlFirstDataPageStart(), logicalPageNum, logicalPageNum, general, true, true)
 		// 页头写完后写入实际明细科目名（空列留空，无"明细N"占位）
 		wb.writeMLDetailNamesAt(sheet, mlFirstDataPageStart(), reDetails)
 
-		// 结转行在第38行（mlFirstDataPageStart + DataStartRow = 30 + 8）
-		row = mlFirstDataPageStart() + lay.DataStartRow // = 38: 数据页header后承前页行
+		// 结转行在行 9（mlFirstDataPageStart + DataStartRow = 1 + 8）
+		row = mlFirstDataPageStart() + lay.DataStartRow
 		cfLabel := carryForwardLabel
 		if initial != 0 {
 			cfLabel = "上年结转"

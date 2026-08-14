@@ -603,7 +603,7 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			row += lay.BottomMarginRows + lay.TopMarginRows
 				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
 				for d := marginStart; d < row; d++ {
-					h := 20.0 // 下边距
+					h := 19.0 // 下边距
 					if d >= row-lay.TopMarginRows {
 						h = 16.0 // 下页上边距
 					}
@@ -1334,7 +1334,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			}
 			outerBottom := row + lay.BottomMarginRows
 				for d := len(rows) + 1; d <= outerBottom; d++ {
-					wb.File.SetRowHeight(sheet, d, 20)
+					wb.File.SetRowHeight(sheet, d, 19)
 				}
 			if pageNum%2 == 1 {
 				// 正面页（奇数）：左侧红色双线，右侧无边框
@@ -1386,7 +1386,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		}
 		outerBottom := len(rows)
 			for d := len(rows) + 1; d <= len(rows)+lay.BottomMarginRows; d++ {
-				wb.File.SetRowHeight(sheet, d, 20)
+				wb.File.SetRowHeight(sheet, d, 19)
 				outerBottom = d
 			}
 		if pageNum%2 == 1 {

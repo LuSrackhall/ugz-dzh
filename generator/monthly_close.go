@@ -34,9 +34,9 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				row += lay.BottomMarginRows + lay.TopMarginRows
 				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
 				for d := marginStart; d < row; d++ {
-					h := 25.0 // 下边距
+					h := 19.0 // 下边距（与 GL 其他翻页统一）
 					if d >= row-lay.TopMarginRows {
-						h = 28.0 // 下页上边距（与 ML 一致）
+						h = 16.0 // 下页上边距（与 GL 其他翻页统一）
 					}
 					wb.File.SetRowHeight(sheet, d, h)
 				}

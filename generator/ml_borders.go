@@ -94,8 +94,12 @@ func applyMLBorders(f *excelize.File, sheet string) {
 	isGutter := func(c int) bool { return c >= gapL && c <= gapR }
 
 	for start := 1; start <= lastRow; start += blockRows {
-		// 每页对含完整 Back + Front 表（无 Paper1 占位）
+		// Paper1 Front 占位块（首块）只有 Front（右侧）表，Back 侧（C-O）无表
+		isPaper1 := start == 1
 		colStart := backL
+		if isPaper1 {
+			colStart = frontL
+		}
 
 		hStart := start + 4                        // 4行表头 h1 = 表内区域顶
 		hEnd := start + lay.DataStartRow - 1       // 4行表头 h4
@@ -143,20 +147,28 @@ func applyMLBorders(f *excelize.File, sheet string) {
 			}
 		}
 
-		// 3) 表头 月/日/字/号 右边框：月、字=绿色加粗；日、号=红色单线（Back 侧）
-		//    B=月, C=日, D=字, E=号；仅作用于 4 行表头区
-		for r := hStart; r <= hEnd; r++ {
-			mlBorderSet(f, sheet, backL, r, "right", mlGreen, mlBorderThick)   // 月
-			mlBorderSet(f, sheet, backL+1, r, "right", mlRed, mlBorderThin)    // 日
-			mlBorderSet(f, sheet, backL+2, r, "right", mlGreen, mlBorderThick) // 字
-			mlBorderSet(f, sheet, backL+3, r, "right", mlRed, mlBorderThin)    // 号
+		// 3) 表头 月/日/字/号 右边框：月、字=绿色加粗；日、号=红色单线（仅 Back 侧有）
+		//    C=月, D=日, E=字, F=号；仅作用于 4 行表头区
+		if !isPaper1 {
+			for r := hStart; r <= hEnd; r++ {
+				mlBorderSet(f, sheet, backL, r, "right", mlGreen, mlBorderThick)   // 月
+				mlBorderSet(f, sheet, backL+1, r, "right", mlRed, mlBorderThin)    // 日
+				mlBorderSet(f, sheet, backL+2, r, "right", mlGreen, mlBorderThick) // 字
+				mlBorderSet(f, sheet, backL+3, r, "right", mlRed, mlBorderThin)    // 号
+			}
 		}
 
-		// 4) 金额栏（借方/贷方/余额/明细1-14）左右红色双线（表头+数据+过次页）
+		// 4) 金额栏（借方H/贷方I/余额K/明细1-14）左右红色双线（表头+数据+过次页）
+		//    Paper1 仅明细5-14（Front 侧）
 		var moneyCols []int
-		moneyCols = append(moneyCols,
-			backL+mlOffDebit, backL+mlOffCredit, backL+mlOffBalance)
+		if !isPaper1 {
+			moneyCols = append(moneyCols,
+				backL+mlOffDebit, backL+mlOffCredit, backL+mlOffBalance)
+		}
 		for i := 0; i < mlMaxDetails; i++ {
+			if isPaper1 && i < 4 {
+				continue // Paper1 无 Back 明细
+			}
 			moneyCols = append(moneyCols, mlDetailCol(lay, i))
 		}
 		for _, c := range moneyCols {
@@ -167,14 +179,18 @@ func applyMLBorders(f *excelize.File, sheet string) {
 		}
 
 		// 5) 外侧边缘（红色双线溢出直达边距行，贯穿标题区）
-		//    Back 最左（B）左边框为空；Back 最右（N）右边框红色双线（含边距行）
-		//    Front 最左（S）左边框红色双线（含边距行）；Front 最右（AB）右边框为空
+		//    Back 最左（C）左边框为空；Back 最右（O）右边框红色双线（含边距行）
+		//    Front 最左（Q）左边框红色双线（含边距行）；Front 最右（Z）右边框为空
 		for r := start; r <= bottomMargin; r++ {
 			if r >= hStart && r <= breakRow {
-				mlBorderClear(f, sheet, backL, r, "left")   // Back 左空
+				if !isPaper1 {
+					mlBorderClear(f, sheet, backL, r, "left") // Back 左空
+				}
 				mlBorderClear(f, sheet, frontR, r, "right") // Front 右空
 			}
-			mlBorderSet(f, sheet, backR, r, "right", mlRed, mlBorderDouble) // Back 右
+			if !isPaper1 {
+				mlBorderSet(f, sheet, backR, r, "right", mlRed, mlBorderDouble) // Back 右
+			}
 			mlBorderSet(f, sheet, frontL, r, "left", mlRed, mlBorderDouble) // Front 左
 		}
 

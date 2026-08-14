@@ -56,22 +56,22 @@ func mlPrintMarkCol() int {
 }
 
 // mlDetailCol 返回第 i 个明细列的 Excel 列号（1-indexed）。
-// i=0~3 → Back 侧（左半），i=4~13 → Front 侧（右半）。
+// i=0~3 → Back 侧（左半，col 12-15），i=4~13 → Front 侧（右半，col 18-27）。
 func mlDetailCol(lay layout.MLLayout, i int) int {
 	if i < 4 {
 		return lay.BackStartCol + 9 + i // 9个基本列后直接接明细
 	}
-	return lay.FrontStartCol + (i - 4) + 2 // 1-indexed: FrontStartCol(15) + 1 = 16 for i=4
+	return lay.FrontStartCol + (i - 4) // Front 数据从 FrontStartCol 直接开始（无中间列偏移）
 }
 
 // mlDetailRowIdx 返回第 i 个明细列在 GetRows 中的索引。
-// i=0~3 → Back 侧 GetRows 索引 = BindingLeftCols + 10 + i，
+// i=0~3 → Back 侧 GetRows 索引 = BindingLeftCols + 9 + i，
 // i=4~13 → Front 侧 GetRows 索引 = FrontStartCol - 1 + (i - 4)。
 func mlDetailRowIdx(lay layout.MLLayout, i int) int {
 	if i < 4 {
 		return lay.BindingLeftCols + 9 + i // 0-indexed: BindingLeftCols(2) + 9 + 0 = 11 (col L)
 	}
-	return lay.FrontStartCol + (i - 4) + 1 // 0-indexed: FrontStartCol(15) + 1 = 16 for i=4
+	return lay.FrontStartCol - 1 + (i - 4) // 0-indexed: Front 数据 col 18-27 → 17-26
 }
 
 // ── ML 独立辅助函数（与 GL 同名函数功能相同但使用 mlLayout） ──
@@ -1045,8 +1045,8 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
-	// Row +0: 上边距行（空，高 20）
-	wb.File.SetRowHeight(sheet, row, 20)
+	// Row +0: 上边距行（空，高 16，与 GL 一致）
+	wb.File.SetRowHeight(sheet, row, 16)
 	row++
 
 	// Row +1: 标题行 — 分第N页(左) 在反面页左边；正面页 明 细 帐 + 分第N页(右)

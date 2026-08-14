@@ -79,8 +79,10 @@ func TestMLComputeLayout_Basic(t *testing.T) {
 		t.Errorf("excel columns: want %d, got %d", len(spec.BackColProportions)+len(spec.FrontColProportions), len(lay.ExcelColumns))
 	}
 
-	if lay.BackColCount != len(spec.BackColProportions) {
-		t.Errorf("back col count: want %d, got %d", len(spec.BackColProportions), lay.BackColCount)
+	// Back 实际渲染 13 列（月日字号4 + 摘要/借/贷/方向/余额5 + 明细1~4），
+	// 而 BackColProportions 仅 11 项（日期/凭证号为复合列）
+	if lay.BackColCount != 13 {
+		t.Errorf("back col count: want 13, got %d", lay.BackColCount)
 	}
 	if lay.FrontColCount != len(spec.FrontColProportions) {
 		t.Errorf("front col count: want %d, got %d", len(spec.FrontColProportions), lay.FrontColCount)
@@ -181,19 +183,19 @@ func TestMLComputeLayout_BackFrontColumns(t *testing.T) {
 		t.Errorf("Back 列与 Front 列重叠：Back end=%d, Front start=%d", backEnd, lay.FrontStartCol)
 	}
 
-	// 验证间隙列位置
-	wantPageGap := lay.BackStartCol + len(lay.BackColumns)
+	// 验证书口列位置：PageGapStartCol = 反面书口（Back 数据末列之后）
+	wantPageGap := lay.BackStartCol + lay.BackColCount
 	if lay.PageGapStartCol != wantPageGap {
 		t.Errorf("PageGap 位置错误：%d != %d", lay.PageGapStartCol, wantPageGap)
 	}
 
-	// 验证 Front 起始列在间隙列之后
-	if lay.FrontStartCol != lay.PageGapStartCol+1 {
-		t.Errorf("Front 起始列应在 PageGap 后：Front=%d, PageGap=%d", lay.FrontStartCol, lay.PageGapStartCol)
+	// 验证 Front 起始列在两个书口列之后（反面书口 + 正面书口）
+	if lay.FrontStartCol != lay.PageGapStartCol+2 {
+		t.Errorf("Front 起始列应在两个书口列后：Front=%d, PageGap=%d", lay.FrontStartCol, lay.PageGapStartCol)
 	}
 
-	// 验证总列数
-	wantTotal := lay.FrontStartCol + len(lay.FrontColumns) + lay.BindingRightCols
+	// 验证总列数（含右侧装订）
+	wantTotal := lay.FrontStartCol + len(lay.FrontColumns) + lay.BindingRightCols - 1
 	if lay.TotalCols != wantTotal {
 		t.Errorf("TotalCols 错误：%d != %d", lay.TotalCols, wantTotal)
 	}

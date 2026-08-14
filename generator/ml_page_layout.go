@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"fmt"
 	"strings"
 
 	"ledger/generator/layout"
@@ -8,12 +9,16 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// setMLSheetPageLayout 为多科目明细账 Sheet 设置 A4 横向打印布局（独立于 GL）。
-// 左半（反面/Back）占一张 A4 纸宽度，右半（正面/Front）占一张 A4 纸宽度，
-// 高度不限制，按每页 20 数据行+1 过次页 纵向自然分页（有几页出几张）。
+// setMLSheetPageLayout 为多科目明细账 Sheet 设置 B5 横向打印布局（对齐 GL）。
+// 左半（反面/Back）占一张 B5 纸宽度，右半（正面/Front）占一张 B5 纸宽度，
+// 固定缩放 74%、显式分页符（垂直分页在正/反书口列之间，水平分页每页对），
+// 消除"每次打印缩放/分页不一致"的问题。
 func setMLSheetPageLayout(f *excelize.File) {
-	paperSize := 9 // A4
-	fp := true
+	paperSize := 13 // B5 (JIS)
+	fp := false
+	lay := mlLayout()
+	// 垂直分页：正面书口列（PageGapStartCol+1）前分页，Back/反面各一张纸
+	pbCell, _ := excelize.ColumnNumberToName(lay.PageGapStartCol + 1)
 	// 摘要列数据行字体：9号加粗+自动换行+左对齐（参考 GL 摘要列数据区配置）
 	summaryStyle, _ := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 9, Bold: true},
@@ -27,12 +32,14 @@ func setMLSheetPageLayout(f *excelize.File) {
 		if !strings.HasPrefix(sheet, sheetPrefixML) {
 			continue
 		}
-		// 宽度不缩放：关闭 FitToWidth，让 Excel 按列宽在中间自然分页
+		// 固定缩放 74%：关闭 FitToPage 与 FitToWidth/Height，缩放不再每次打开重算
+		scale := uint(74)
 		fw := 0
 		fh := 0
 		f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
 			Orientation: stringPtr("landscape"),
 			Size:        &paperSize,
+			AdjustTo:    &scale,
 			FitToWidth:  &fw,
 			FitToHeight: &fh,
 		})
@@ -45,6 +52,14 @@ func setMLSheetPageLayout(f *excelize.File) {
 		f.SetSheetProps(sheet, &excelize.SheetPropsOptions{
 			FitToPage: &fp,
 		})
+		f.InsertPageBreak(sheet, pbCell+"1")
+		// 水平分页：每页对（30 行）起始行前分页，打印时一页对一张纸（对齐 GL）
+		if rows, err := f.GetRows(sheet); err == nil {
+			blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
+			for start := 1 + blockRows; start <= len(rows); start += blockRows {
+				f.InsertPageBreak(sheet, fmt.Sprintf("A%d", start))
+			}
+		}
 		setMLColumnWidths(f, sheet)
 		setMLDataRowHeights(f, sheet)
 		setMLSummaryFonts(f, sheet, summaryStyle)
@@ -116,7 +131,7 @@ func setMLDataRowHeights(f *excelize.File, sheet string) {
 		return
 	}
 	const dataRowHeight = 25.0
-	const bottomMarginHeight = 16.0
+	const bottomMarginHeight = 20.0 // 与 GL 一致
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
 	lastRow := len(rows)
 	// 上限延伸到最后一块的下边距行（GetRows 不含空的下边距行，但该行由 applyMLBorders 创建）
@@ -142,41 +157,46 @@ func setMLDataRowHeights(f *excelize.File, sheet string) {
 // 金额栏（借/贷/余/明细1-14）宽度统一；摘要列吸收差额使两半同宽。
 func setMLColumnWidths(f *excelize.File, sheet string) {
 	lay := mlLayout()
-	const a4HalfUnits = 153.24 // 半页总列宽 = GL 半页（总 306.48）
-	const edgeW = 1.0          // 两侧外缘非装订（2列总宽=2，与 GL 非装订总宽一致）
-	const bindW = 14.0         // 中间装订边（1共享列，与 GL 装订 2列总宽一致）
+	// 半页总列宽对齐 GL（152.54）。GL 数据区 135.84，ML 的 Back/Front 数据区各对齐之。
+	// 打印机补偿复用 GL 常量（glBackBindColW/glFrontBindColW/glBackGutterW/glFrontGutterW）：
+	//   - 左侧装订 = 反面 Back 纸的装订边 → glBackBindColW（7.75）
+	//   - 右侧装订 = 正面 Front 纸的装订边 → glFrontBindColW（8.35）
+	//   - col16 反面书口 → glBackGutterW（1.2）；col17 正面书口 → glFrontGutterW（0）
+	// 注意：ML 正面（Front）在右、反面（Back）在左，与 GL 的左右顺序相反。
+	const backDataW = 135.84
+	const frontDataW = 135.84
 	const glDateVouchColW = 3.0
 	const dirRatio = 1.1
-	dirNew := glDateVouchColW * dirRatio // 借或贷 = 3.3
+	dirNew := glDateVouchColW * dirRatio // 方向 = 3.3
+	frontW := 13.724                     // Back 金额列（借/贷/余额/明细1-4）
+	frontW2 := frontDataW / 10.0         // Front 明细列（明细5-14，均摊）
+	// Back 摘要列吸收差额：135.84 - 月日字号(4×3) - 金额7列(7×13.724) - 方向(3.3)
+	sumNew := backDataW - 4*glDateVouchColW - 7*frontW - dirNew
 
-	// 右半 P-AB = 装订14 + 10明细 + 右侧外缘2
-	frontW := (a4HalfUnits - bindW - 2*edgeW) / 10.0
-	// 左半 A-P = 左侧外缘2 + 日期2×3 + 凭证2×3 + 摘要 + 方向 + 7金额 + 装订14（P 共享）
-	sumNew := a4HalfUnits - 2*edgeW - bindW - (2*glDateVouchColW + 2*glDateVouchColW + dirNew) - 7*frontW
-
-	// 左外缘 A-B（窄边，非装订）
-	f.SetColWidth(sheet, cellColLetter(1), cellColLetter(2), edgeW)
+	// 左侧装订（反面 Back，打印机补偿见 glBackBindColW）
+	f.SetColWidth(sheet, cellColLetter(1), cellColLetter(2), glBackBindColW)
 	// Back 基础列
-	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol), cellColLetter(lay.BackStartCol+1), glDateVouchColW)                 // 月 日
-	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+2), cellColLetter(lay.BackStartCol+3), glDateVouchColW)                 // 字 号
-	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffSummary), cellColLetter(lay.BackStartCol+mlOffSummary), sumNew)     // 摘要
-	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffDebit), cellColLetter(lay.BackStartCol+mlOffDebit), frontW)         // 借
-	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffCredit), cellColLetter(lay.BackStartCol+mlOffCredit), frontW)       // 贷
-	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffDir), cellColLetter(lay.BackStartCol+mlOffDir), dirNew)             // 方向
-	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffBalance), cellColLetter(lay.BackStartCol+mlOffBalance), frontW)     // 余额
+	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol), cellColLetter(lay.BackStartCol+1), glDateVouchColW)             // 月 日
+	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+2), cellColLetter(lay.BackStartCol+3), glDateVouchColW)             // 字 号
+	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffSummary), cellColLetter(lay.BackStartCol+mlOffSummary), sumNew) // 摘要
+	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffDebit), cellColLetter(lay.BackStartCol+mlOffDebit), frontW)     // 借
+	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffCredit), cellColLetter(lay.BackStartCol+mlOffCredit), frontW)   // 贷
+	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffDir), cellColLetter(lay.BackStartCol+mlOffDir), dirNew)         // 方向
+	f.SetColWidth(sheet, cellColLetter(lay.BackStartCol+mlOffBalance), cellColLetter(lay.BackStartCol+mlOffBalance), frontW) // 余额
 	// 明细1-4（Back 侧）
 	for i := 0; i < 4; i++ {
 		f.SetColWidth(sheet, cellColLetter(mlDetailCol(lay, i)), cellColLetter(mlDetailCol(lay, i)), frontW)
 	}
-	// 中间装订边（Back 区之后，共享）
-	f.SetColWidth(sheet, cellColLetter(mlDetailCol(lay, 3)+1), cellColLetter(mlDetailCol(lay, 3)+1), bindW)
+	// 中间书口：PageGapStartCol = 反面书口（Back 纸右缘），+1 = 正面书口（Front 纸左缘）
+	f.SetColWidth(sheet, cellColLetter(lay.PageGapStartCol), cellColLetter(lay.PageGapStartCol), glBackGutterW)
+	f.SetColWidth(sheet, cellColLetter(lay.PageGapStartCol+1), cellColLetter(lay.PageGapStartCol+1), glFrontGutterW)
 	// 明细5-14（Front 侧）
 	for i := 4; i < mlMaxDetails; i++ {
-		f.SetColWidth(sheet, cellColLetter(mlDetailCol(lay, i)), cellColLetter(mlDetailCol(lay, i)), frontW)
+		f.SetColWidth(sheet, cellColLetter(mlDetailCol(lay, i)), cellColLetter(mlDetailCol(lay, i)), frontW2)
 	}
-	// 右外缘（Front 区之后 2 列，窄边）
+	// 右侧装订（正面 Front，打印机补偿见 glFrontBindColW）
 	rightStart := mlDetailCol(lay, mlMaxDetails-1) + 1
-	f.SetColWidth(sheet, cellColLetter(rightStart), cellColLetter(rightStart+1), edgeW)
+	f.SetColWidth(sheet, cellColLetter(rightStart), cellColLetter(rightStart+1), glFrontBindColW)
 }
 
 // setMMWidth 将 mm 宽度转换为 Excel 列宽单位并设置。

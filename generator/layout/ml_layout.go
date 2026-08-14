@@ -120,7 +120,9 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 	bindingLeftCols := 2
 	bindingRightCols := 2
 
-	backColCount := len(spec.BackColProportions)
+	// Back 实际渲染 13 列（月日字号4 + 摘要/借/贷/方向/余额5 + 明细1~4），
+	// 而 BackColProportions 仅 11 项（日期/凭证号 为复合列，各含 2 子列）。
+	backColCount := 13
 	frontColCount := len(spec.FrontColProportions)
 
 	// Back 侧列坐标（左半内容：基础7列 + 明细1~4）
@@ -149,16 +151,17 @@ func MLComputeLayout(spec MLSpec) MLLayout {
 		startMM += w
 	}
 
-	// Excel 列号布局
-	// A-B: Binding left (2 cols)
-	// C-M: Back 区 (11 cols: 7 basic + 4 detail) → 起始 col=3
-	// N:   Page gap (1 col)                      → 起始 col=14
-	// O-X: Front 区 (10 cols: 明细5~14)          → 起始 col=15
-	// Y-Z: Binding right (2 cols)
-	backStart := bindingLeftCols + 1          // = col 3 (左半 = Back 区)
-	pageGapStart := backStart + backColCount  // = col 14
-	frontStart := pageGapStart + 1            // = col 15 (右半 = Front 区)
-	total := frontStart + frontColCount + bindingRightCols
+	// Excel 列号布局（对齐 GL：两侧装订、中间两书口列、无共享列）
+	// A-B:   装订（反面 Back，7.75×2） → col 1-2
+	// C-O:   Back 数据 (13 cols)       → col 3-15
+	// P:     反面书口（1.2）           → col 16
+	// Q:     正面书口（0）             → col 17
+	// R-AA:  Front 数据 (10 cols: 明细5~14) → col 18-27
+	// AB-AC: 装订（正面 Front，8.35×2）→ col 28-29
+	backStart := bindingLeftCols + 1          // = col 3 (左半 = Back 数据区)
+	pageGapStart := backStart + backColCount  // = col 16 (反面书口，第一书口列)
+	frontStart := pageGapStart + 2            // = col 18 (两个书口列之后 = Front 数据区)
+	total := frontStart + frontColCount + bindingRightCols - 1 // = col 29 (装订末列)
 
 	// 合并列名映射（Back + Front 两段）
 	var exc []MLExcelCol

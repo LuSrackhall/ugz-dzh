@@ -85,11 +85,13 @@ func applyMLBorders(f *excelize.File, sheet string) {
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows // 31
 	lastRow := len(rows)
 
-	backL := lay.BackStartCol                    // C
-	backR := mlDetailCol(lay, 3)                 // O（明细4）
-	frontL := mlDetailCol(lay, 4)                // Q（明细5）
-	frontR := mlDetailCol(lay, mlMaxDetails-1)   // Z（明细14）
-	gapCol := backR + 1                          // P 页间隙
+	backL := lay.BackStartCol                    // C = 3
+	backR := mlDetailCol(lay, 3)                 // O（明细4）= 15
+	frontL := mlDetailCol(lay, 4)                // R（明细5）= 18
+	frontR := mlDetailCol(lay, mlMaxDetails-1)   // AA（明细14）= 27
+	gapL := backR + 1                            // P 反面书口 = 16
+	gapR := frontL - 1                           // Q 正面书口 = 17
+	isGutter := func(c int) bool { return c >= gapL && c <= gapR }
 
 	for start := 1; start <= lastRow; start += blockRows {
 		// Paper1 Front 占位块（首块）只有 Front（右侧）表，Back 侧（C-O）无表
@@ -108,7 +110,7 @@ func applyMLBorders(f *excelize.File, sheet string) {
 		// 1) 表内区域绿色细框（表头+数据+过次页；标题区在外，不加边框）
 		for r := hStart; r <= breakRow; r++ {
 			for c := colStart; c <= frontR; c++ {
-				if c == gapCol {
+				if isGutter(c) {
 					continue
 				}
 				mlBorderSet(f, sheet, c, r, "top", mlGreen, mlBorderThin)
@@ -121,7 +123,7 @@ func applyMLBorders(f *excelize.File, sheet string) {
 		// 2) 横向特殊边框
 		// 每页表格最上方（表头顶）与最下方（过次页底） 红色双线
 		for c := colStart; c <= frontR; c++ {
-			if c == gapCol {
+			if isGutter(c) {
 				continue
 			}
 			mlBorderSet(f, sheet, c, hStart, "top", mlRed, mlBorderDouble)
@@ -129,7 +131,7 @@ func applyMLBorders(f *excelize.File, sheet string) {
 		}
 		// 表头最下行下边框 绿色加粗（= 首数据行上边框）
 		for c := colStart; c <= frontR; c++ {
-			if c == gapCol {
+			if isGutter(c) {
 				continue
 			}
 			mlBorderSet(f, sheet, c, hEnd, "bottom", mlGreen, mlBorderThick)
@@ -138,7 +140,7 @@ func applyMLBorders(f *excelize.File, sheet string) {
 		for k := 4; k < pageSize; k += 5 {
 			r := dataStart + k
 			for c := colStart; c <= frontR; c++ {
-				if c == gapCol {
+				if isGutter(c) {
 					continue
 				}
 				mlBorderSet(f, sheet, c, r, "bottom", mlGreen, mlBorderThick)
@@ -192,12 +194,14 @@ func applyMLBorders(f *excelize.File, sheet string) {
 			mlBorderSet(f, sheet, frontL, r, "left", mlRed, mlBorderDouble) // Front 左
 		}
 
-		// 6) 中间装订列（P）清除所有边框 — 应为空白装订边（防止月结样式等误画）
+		// 6) 中间书口列（P/Q）清除所有边框 — 应为空白书口（防止月结样式等误画）
 		for r := start; r <= bottomMargin; r++ {
-			mlBorderClear(f, sheet, gapCol, r, "left")
-			mlBorderClear(f, sheet, gapCol, r, "right")
-			mlBorderClear(f, sheet, gapCol, r, "top")
-			mlBorderClear(f, sheet, gapCol, r, "bottom")
+			for c := gapL; c <= gapR; c++ {
+				mlBorderClear(f, sheet, c, r, "left")
+				mlBorderClear(f, sheet, c, r, "right")
+				mlBorderClear(f, sheet, c, r, "top")
+				mlBorderClear(f, sheet, c, r, "bottom")
+			}
 		}
 	}
 }

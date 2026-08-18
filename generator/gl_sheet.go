@@ -437,6 +437,18 @@ func glLayout() layout.GLLayout {
 	return layout.GLComputeLayout(layout.DefaultGLSpec())
 }
 
+// glPageRows 为 GL 每页对固定行数：上边距1+标题1+科目1+空1+表头2+数据20+过次页1+下边距1。
+const glPageRows = 28
+
+// glRowInPage 返回 GL 行 row 在其所在页内的数据行号（1-based，首页数据起始=第1行）。
+// 每页对固定 glPageRows 行，数据起始依次为 base, base+glPageRows, base+2*glPageRows...
+// 用于每5行加粗判断。不能依赖 pageStartRow——它返回"最后过次页后的新页起始"，
+// 跨页时对当前页基准错误，会导致本应加粗的行（页内第5/10/15/20行）误判为细线。
+func glRowInPage(lay layout.GLLayout, row int) int {
+	base := lay.DataStartRow + 1 + lay.TopMarginRows // 首页数据起始（Excel 行）
+	return (row-base)%glPageRows + 1
+}
+
 // dataCol 根据 pageNum 奇偶决定写入列，奇数→FrontStartCol，偶数→BackStartCol。
 func dataCol(lay layout.GLLayout, pageNum, offset int) int {
 	if pageNum%2 == 1 {
@@ -634,9 +646,8 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
-		// 计算是否为每5行
-		pageStart := wb.pageStartRow(sheet)
-		rowInPage := row - pageStart + 1
+		// 计算是否为每5行（基于固定页结构，避免 pageStartRow 跨页基准错误）
+		rowInPage := glRowInPage(lay, row)
 		isThickRow := rowInPage%5 == 0
 
 		// 1. 先应用边框样式到整行（包含正确的底边粗细）

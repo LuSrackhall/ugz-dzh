@@ -73,10 +73,8 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), monthlyStyle)
 
-		// 应用每5行底边加粗样式
-		pageStart := wb.pageStartRow(sheet)
-		rowInPage := row - pageStart + 1
-		isThickRow := rowInPage%5 == 0
+		// 应用每5行底边加粗样式（基于固定页结构）
+		isThickRow := glRowInPage(lay, row)%5 == 0
 
 		if isThickRow {
 			monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
@@ -138,10 +136,8 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 				cellName(dataCol(lay, pageNum, glColCount-1), row), qtStyle)
 
-			// 应用每5行底边加粗样式
-			ps2 := wb.pageStartRow(sheet)
-			ri2 := row - ps2 + 1
-			if ri2%5 == 0 {
+			// 应用每5行底边加粗样式（基于固定页结构）
+			if glRowInPage(lay, row)%5 == 0 {
 				ts2, _ := wb.File.NewStyle(&excelize.Style{
 					Font: &excelize.Font{Bold: true, Size: 10},
 					Border: []excelize.Border{
@@ -156,11 +152,11 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+			} else {
+				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 			}
-
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
 			row++
 		}
@@ -190,10 +186,8 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), cumStyle)
 
-			// 应用每5行底边加粗样式
-			ps3 := wb.pageStartRow(sheet)
-			ri3 := row - ps3 + 1
-			if ri3%5 == 0 {
+			// 应用每5行底边加粗样式（基于固定页结构）
+			if glRowInPage(lay, row)%5 == 0 {
 				ts3, _ := wb.File.NewStyle(&excelize.Style{
 					Font: &excelize.Font{Bold: true, Size: 10},
 					Border: []excelize.Border{
@@ -208,13 +202,13 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+				} else {
+				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 			}
 
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-
-		row++
+			row++
 
 		// "期末余额" 行 — 期初 + 本月借 - 本月贷
 		checkBreak()
@@ -241,10 +235,8 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), endStyle)
 
-			// 应用每5行底边加粗样式
-			ps4 := wb.pageStartRow(sheet)
-			ri4 := row - ps4 + 1
-			if ri4%5 == 0 {
+			// 应用每5行底边加粗样式（基于固定页结构）
+			if glRowInPage(lay, row)%5 == 0 {
 				ts4, _ := wb.File.NewStyle(&excelize.Style{
 					Font: &excelize.Font{Bold: true, Size: 10},
 					Border: []excelize.Border{
@@ -259,10 +251,10 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
 				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+			} else {
+				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 			}
-
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-	}
+		}
 
 	return nil
 }

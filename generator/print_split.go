@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ledger/generator/layout"
-
 	"github.com/xuri/excelize/v2"
 )
 
@@ -80,10 +78,34 @@ func (wb *Workbook) splitGLSheet(f *excelize.File, sheet string) error {
 	rows, _ := f.GetRows(sheet)
 	lastRow := len(rows)
 
-	// 表头行集合：首页 + 各过次页后的表头（大标题行 / 小列表头行）
-	titleRows := map[int]bool{}
+	// 表头行（小列表头写入处）：首页 SubHeaderRow+1 + 每个过次页后的对应行。
+	// GL 翻页结构：过次页(row) → 下边距(row+1) → 上边距(row+2) → 标题(+3) → 科目(+4) → 空(+5) → 表头1(+6) → 表头2(+7)
 	subRows := map[int]bool{}
-	collectGLHeaderRows(lay, rows, titleRows, subRows)
+	dataRows := map[int]bool{} // 允许拆位的数据行
+	subRows[lay.SubHeaderRow+1] = true
+	for r := lay.DataStartRow + 1 + lay.TopMarginRows; r <= lastRow; r++ {
+		dataRows[r] = true
+	}
+	for i, r := range rows {
+		row := i + 1
+		if hasPageBreakAt(r, lay) {
+			topMargin := row + 1 + lay.BottomMarginRows // 下页上边距行
+			subRows[topMargin+5] = true                 // 表头2（月日字号行）
+			// 新页数据区从表头2后开始
+			for d := topMargin + 7; d <= lastRow; d++ {
+				dataRows[d] = true
+			}
+		}
+	}
+	// 过次页行及其后的边距/标题/科目/空行/表头不属于数据区
+	for i, r := range rows {
+		row := i + 1
+		if hasPageBreakAt(r, lay) {
+			for b := row; b <= row+6+lay.BottomMarginRows && b <= lastRow; b++ {
+				delete(dataRows, b)
+			}
+		}
+	}
 
 	// 金额列（改造前列号）：正反面各 借/贷/余
 	var moneyCols []int
@@ -91,22 +113,7 @@ func (wb *Workbook) splitGLSheet(f *excelize.File, sheet string) error {
 		moneyCols = append(moneyCols, lay.FrontStartCol+off, lay.BackStartCol+off)
 	}
 
-	return splitMoneyColumns(f, sheet, moneyCols, lastRow, titleRows, subRows)
-}
-
-// collectGLHeaderRows 收集 GL 的表头行：首页固定 + 每个过次页后的新表头。
-func collectGLHeaderRows(lay layout.GLLayout, rows [][]string, titleRows, subRows map[int]bool) {
-	titleRows[lay.HeaderRow+1] = true
-	subRows[lay.SubHeaderRow+1] = true
-	for i, r := range rows {
-		row := i + 1
-		if hasPageBreakAt(r, lay) {
-			// 过次页行 row → 下页上边距 row+1+BottomMargin → 标题=上边距+1，小表头=标题+2
-			topMargin := row + 1 + lay.BottomMarginRows
-			titleRows[topMargin+1] = true
-			subRows[topMargin+2] = true
-		}
-	}
+	return splitMoneyColumns(f, sheet, moneyCols, lastRow, subRows, dataRows)
 }
 
 // ── ML ──
@@ -119,12 +126,16 @@ func (wb *Workbook) splitMLSheet(f *excelize.File, sheet string) error {
 
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
 
-	// ML 每页 block：h1=start+1（借/贷/余大标题），h4=start+4（小列表头）
-	titleRows := map[int]bool{}
+	// ML 每页 block（start=上边距行）：
+	//   h4 = start+4 小列表头行（借/贷/余 h1-h3 合并、明细 h2-h3 合并，h4 均空）
+	//   数据区 = start+DataStartRow .. start+DataStartRow+pageSize（含过次页）
 	subRows := map[int]bool{}
+	dataRows := map[int]bool{}
 	for start := 1; start <= lastRow; start += blockRows {
-		titleRows[start+1] = true
 		subRows[start+4] = true
+		for d := start + lay.DataStartRow; d <= start+lay.DataStartRow+pageSize && d <= lastRow; d++ {
+			dataRows[d] = true
+		}
 	}
 
 	// 金额列：Back 借/贷/余 + 明细1-14
@@ -136,7 +147,7 @@ func (wb *Workbook) splitMLSheet(f *excelize.File, sheet string) error {
 		moneyCols = append(moneyCols, mlDetailCol(lay, i))
 	}
 
-	return splitMoneyColumns(f, sheet, moneyCols, lastRow, titleRows, subRows)
+	return splitMoneyColumns(f, sheet, moneyCols, lastRow, subRows, dataRows)
 }
 
 // ── 核心拆分 ──
@@ -150,7 +161,7 @@ func splitMoneyColumns(
 	sheet string,
 	moneyCols []int,
 	lastRow int,
-	titleRows, subRows map[int]bool,
+	subRows, dataRows map[int]bool,
 ) error {
 	// 从右往左排序
 	cols := make([]int, len(moneyCols))
@@ -175,7 +186,7 @@ func splitMoneyColumns(
 
 	// 从右往左逐列拆分（仅插列+均分宽+数据填位）
 	for _, col := range cols {
-		if err := splitOneMoneyColumn(f, sheet, col, lastRow, widths[col]); err != nil {
+		if err := splitOneMoneyColumn(f, sheet, col, lastRow, widths[col], dataRows); err != nil {
 			return err
 		}
 	}
@@ -196,9 +207,6 @@ func splitMoneyColumns(
 		for sr := range subRows {
 			writePrintSubHeader(f, sheet, newCol, sr)
 		}
-		for tr := range titleRows {
-			retitlePrintMoneyHeader(f, sheet, newCol, tr)
-		}
 	}
 	return nil
 }
@@ -206,13 +214,14 @@ func splitMoneyColumns(
 // splitOneMoneyColumn 拆分单个金额列（仅插列+均分宽+数据填位，表头由调用方统一写）：
 //  1. 在 col+1 前插入 11 列
 //  2. 12 小列均分原宽
-//  3. 数据行金额拆位填入 12 小列
+//  3. 仅对 dataRows 中的行做金额拆位填入（页码/科目/标题等非数据区不动）
 func splitOneMoneyColumn(
 	f *excelize.File,
 	sheet string,
 	col int,
 	lastRow int,
 	origWidth float64,
+	dataRows map[int]bool,
 ) error {
 	// 读全部数据值（改造前行号在插入后不变——只动列）
 	type cellVal struct {
@@ -221,6 +230,9 @@ func splitOneMoneyColumn(
 	}
 	var vals []cellVal
 	for row := 1; row <= lastRow; row++ {
+		if !dataRows[row] {
+			continue // 非数据区（页码/科目/标题/边距等）一律不动
+		}
 		v, _ := f.GetCellValue(sheet, cellName(col, row))
 		if v != "" {
 			vals = append(vals, cellVal{row, v})
@@ -285,17 +297,6 @@ func writePrintSubHeader(f *excelize.File, sheet string, col, row int) {
 			f.SetCellStyle(sheet, cell, cell, baseStyle)
 		}
 	}
-}
-
-// retitlePrintMoneyHeader 将大标题行原单格标题扩展为跨 12 列合并。
-// 原"借 方"文字保留在首格。
-func retitlePrintMoneyHeader(f *excelize.File, sheet string, col, row int) {
-	v, _ := f.GetCellValue(sheet, cellName(col, row))
-	if v == "" {
-		return // 该列此行无大标题（如明细列）
-	}
-	// 合并前先清除旧样式冲突：直接合并 [col, col+11]
-	f.MergeCell(sheet, cellName(col, row), cellName(col+printSplitCols-1, row))
 }
 
 // splitAmountToDigits 把金额字符串（如 "1234.56"、"-11700"、"0"）拆成 12 位

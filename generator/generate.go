@@ -141,6 +141,11 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("保存 xlsx: %w", err)
 	}
 
+	// 13. 导出打印版（金额分栏）到 {output}/{year}/print/
+	if err := wb.ExportPrintVersion(); err != nil {
+		return fmt.Errorf("导出打印版: %w", err)
+	}
+
 	return nil
 }
 

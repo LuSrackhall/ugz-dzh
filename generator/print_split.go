@@ -20,6 +20,10 @@ import (
 //   - 组界加粗：「十|亿」「百|十万千」「千|百十元」共 3 处（;）
 //   - 红色单细线：「元|角」共 1 处（.）
 //   - 其余为普通细线
+//
+// 实现方式：复制查看版 xlsx 为底稿 → 卸载全部合并区 → 从右往左对每个
+// 金额列插入 11 小列 → 按新列号重建合并区 → 写小列表头。
+// （excelize 的 InsertCols 会拉伸跨越插入点的合并区，故必须先卸载。）
 
 const printSplitCols = 12 // 每个金额格拆分的小列数
 
@@ -78,10 +82,10 @@ func (wb *Workbook) splitGLSheet(f *excelize.File, sheet string) error {
 	rows, _ := f.GetRows(sheet)
 	lastRow := len(rows)
 
-	// 表头行（小列表头写入处）：首页 SubHeaderRow+1 + 每个过次页后的对应行。
-	// GL 翻页结构：过次页(row) → 下边距(row+1) → 上边距(row+2) → 标题(+3) → 科目(+4) → 空(+5) → 表头1(+6) → 表头2(+7)
+	// 小列表头行：首页 SubHeaderRow+1 + 每个过次页后的对应行。
+	// GL 翻页结构：过次页(row) → 下边距(+1) → 上边距(+2) → 标题(+3) → 科目(+4) → 空(+5) → 表头1(+6) → 表头2(+7)
 	subRows := map[int]bool{}
-	dataRows := map[int]bool{} // 允许拆位的数据行
+	dataRows := map[int]bool{}
 	subRows[lay.SubHeaderRow+1] = true
 	for r := lay.DataStartRow + 1 + lay.TopMarginRows; r <= lastRow; r++ {
 		dataRows[r] = true
@@ -89,19 +93,9 @@ func (wb *Workbook) splitGLSheet(f *excelize.File, sheet string) error {
 	for i, r := range rows {
 		row := i + 1
 		if hasPageBreakAt(r, lay) {
-			topMargin := row + 1 + lay.BottomMarginRows // 下页上边距行
-			subRows[topMargin+5] = true                 // 表头2（月日字号行）
-			// 新页数据区从表头2后开始
-			for d := topMargin + 7; d <= lastRow; d++ {
-				dataRows[d] = true
-			}
-		}
-	}
-	// 过次页行及其后的边距/标题/科目/空行/表头不属于数据区
-	for i, r := range rows {
-		row := i + 1
-		if hasPageBreakAt(r, lay) {
-			for b := row; b <= row+6+lay.BottomMarginRows && b <= lastRow; b++ {
+			topMargin := row + 1 + lay.BottomMarginRows
+			subRows[topMargin+5] = true
+			for b := row; b <= topMargin+6 && b <= lastRow; b++ {
 				delete(dataRows, b)
 			}
 		}
@@ -126,9 +120,8 @@ func (wb *Workbook) splitMLSheet(f *excelize.File, sheet string) error {
 
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
 
-	// ML 每页 block（start=上边距行）：
-	//   h4 = start+4 小列表头行（借/贷/余 h1-h3 合并、明细 h2-h3 合并，h4 均空）
-	//   数据区 = start+DataStartRow .. start+DataStartRow+pageSize（含过次页）
+	// ML 每页 block（start=上边距行）：h4=start+4 小列表头行；
+	// 数据区 = start+DataStartRow .. start+DataStartRow+pageSize（含过次页）
 	subRows := map[int]bool{}
 	dataRows := map[int]bool{}
 	for start := 1; start <= lastRow; start += blockRows {
@@ -152,10 +145,13 @@ func (wb *Workbook) splitMLSheet(f *excelize.File, sheet string) error {
 
 // ── 核心拆分 ──
 
+// mergeRef 一个合并区记录（改造前坐标）。
+type mergeRef struct {
+	c1, r1, c2, r2 int
+}
+
 // splitMoneyColumns 将 moneyCols 中每个金额列拆为 12 小列。
-// 必须从最右列开始处理：插入列会平移右侧列号，从右往左可保证
-// 未处理列（左侧）的列号始终有效。
-// 表头在全部列拆分完成后统一写入（避免被后续插入平移）。
+// 流程：卸载全部合并区 → 从右往左插列拆分 → 重建合并区 → 写表头。
 func splitMoneyColumns(
 	f *excelize.File,
 	sheet string,
@@ -163,18 +159,36 @@ func splitMoneyColumns(
 	lastRow int,
 	subRows, dataRows map[int]bool,
 ) error {
-	// 从右往左排序
-	cols := make([]int, len(moneyCols))
-	copy(cols, moneyCols)
-	for i := 0; i < len(cols); i++ {
-		for j := i + 1; j < len(cols); j++ {
-			if cols[j] > cols[i] {
-				cols[i], cols[j] = cols[j], cols[i]
-			}
+	// 1. 记录并卸载全部合并区（先收集完再逐个卸载）
+	// MergeCell 格式: []string{"C2:H2", "值"}
+	merges, err := f.GetMergeCells(sheet)
+	if err != nil {
+		return err
+	}
+	var refs []mergeRef
+	for _, m := range merges {
+		parts := strings.Split(m[0], ":")
+		if len(parts) != 2 {
+			continue
+		}
+		c1, r1, err1 := excelize.CellNameToCoordinates(parts[0])
+		c2, r2, err2 := excelize.CellNameToCoordinates(parts[1])
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		refs = append(refs, mergeRef{c1, r1, c2, r2})
+	}
+	for _, ref := range refs {
+		if err := f.UnmergeCell(sheet, cellName(ref.c1, ref.r1), cellName(ref.c2, ref.r2)); err != nil {
+			return fmt.Errorf("卸载合并区: %w", err)
 		}
 	}
 
-	// 记录每个金额格的原始宽度（12 小列均分用）
+	// 2. 从右往左逐列拆分
+	cols := make([]int, len(moneyCols))
+	copy(cols, moneyCols)
+	sortDesc(cols)
+
 	widths := make(map[int]float64, len(cols))
 	for _, col := range cols {
 		w, err := f.GetColWidth(sheet, cellColLetter(col))
@@ -183,26 +197,36 @@ func splitMoneyColumns(
 		}
 		widths[col] = float64(w)
 	}
-
-	// 从右往左逐列拆分（仅插列+均分宽+数据填位）
 	for _, col := range cols {
 		if err := splitOneMoneyColumn(f, sheet, col, lastRow, widths[col], dataRows); err != nil {
 			return err
 		}
 	}
 
-	// 全部拆分完成后统一写表头。
-	// 改造后第 k 个金额列（按原列号升序）的首列 = 原首列 + k*11。
-	sorted := make([]int, len(cols))
-	copy(sorted, cols)
-	for i := 0; i < len(sorted); i++ { // 升序
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[j] < sorted[i] {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
+	// 3. 重建合并区：跨金额列的合并区扩展覆盖其 12 小列；其余原样平移。
+	// 改造后列号换算：origCol 在第 k 个金额格内（k 为升序序号）→ newCol = origCol + k*11
+	sortedAsc := make([]int, len(cols))
+	copy(sortedAsc, cols)
+	sortAsc(sortedAsc)
+	mapCol := func(origCol int) int {
+		k := 0
+		for i, c := range sortedAsc {
+			if origCol > c {
+				k = i + 1
 			}
 		}
+		return origCol + k*(printSplitCols-1)
 	}
-	for k, origCol := range sorted {
+
+	for _, ref := range refs {
+		nc1, nc2 := mapCol(ref.c1), mapCol(ref.c2)
+		if err := f.MergeCell(sheet, cellName(nc1, ref.r1), cellName(nc2, ref.r2)); err != nil {
+			return fmt.Errorf("重建合并区 %d:%d-%d:%d: %w", ref.c1, ref.r1, ref.c2, ref.r2, err)
+		}
+	}
+
+	// 4. 统一写小列表头（新列号）
+	for k, origCol := range sortedAsc {
 		newCol := origCol + k*(printSplitCols-1)
 		for sr := range subRows {
 			writePrintSubHeader(f, sheet, newCol, sr)
@@ -211,10 +235,7 @@ func splitMoneyColumns(
 	return nil
 }
 
-// splitOneMoneyColumn 拆分单个金额列（仅插列+均分宽+数据填位，表头由调用方统一写）：
-//  1. 在 col+1 前插入 11 列
-//  2. 12 小列均分原宽
-//  3. 仅对 dataRows 中的行做金额拆位填入（页码/科目/标题等非数据区不动）
+// splitOneMoneyColumn 拆分单个金额列（仅插列+均分宽+数据填位）。
 func splitOneMoneyColumn(
 	f *excelize.File,
 	sheet string,
@@ -223,7 +244,6 @@ func splitOneMoneyColumn(
 	origWidth float64,
 	dataRows map[int]bool,
 ) error {
-	// 读全部数据值（改造前行号在插入后不变——只动列）
 	type cellVal struct {
 		row int
 		val string
@@ -239,24 +259,20 @@ func splitOneMoneyColumn(
 		}
 	}
 
-	// 插入 11 列
 	if err := f.InsertCols(sheet, cellColLetter(col+1), printSplitCols-1); err != nil {
 		return fmt.Errorf("插入列: %w", err)
 	}
 
-	// 12 小列均分原宽
 	unit := origWidth / float64(printSplitCols)
 	for i := 0; i < printSplitCols; i++ {
 		f.SetColWidth(sheet, cellColLetter(col+i), cellColLetter(col+i), unit)
 	}
 
-	// 数据行金额拆位填入
 	for _, cv := range vals {
 		digits := splitAmountToDigits(cv.val)
 		if digits == nil {
-			continue // 无法解析（如文字），保持原样不动
+			continue
 		}
-		// 清原格（值移到小列后原格不再显示完整数）
 		f.SetCellValue(sheet, cellName(col, cv.row), "")
 		for i, d := range digits {
 			if d != "" {
@@ -299,9 +315,8 @@ func writePrintSubHeader(f *excelize.File, sheet string, col, row int) {
 	}
 }
 
-// splitAmountToDigits 把金额字符串（如 "1234.56"、"-11700"、"0"）拆成 12 位
-// （十亿千百十万千百十元角分），返回长度 12 的字符串切片，高位空位为 ""。
-// 负数忽略符号（账本用方向列表达借贷）。无法解析时返回 nil。
+// splitAmountToDigits 把金额字符串拆成 12 位（十亿千百十万千百十元角分），
+// 高位空位为 ""。负数忽略符号。无法解析时返回 nil。
 func splitAmountToDigits(s string) []string {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "-")
@@ -345,7 +360,28 @@ func splitAmountToDigits(s string) []string {
 		cents /= 10
 	}
 	if cents > 0 {
-		return nil // 超过千亿位，不应发生
+		return nil
 	}
 	return digits
+}
+
+// sortDesc / sortAsc 简单排序（列数少，无需 sort 包泛型开销）。
+func sortDesc(a []int) {
+	for i := 0; i < len(a); i++ {
+		for j := i + 1; j < len(a); j++ {
+			if a[j] > a[i] {
+				a[i], a[j] = a[j], a[i]
+			}
+		}
+	}
+}
+
+func sortAsc(a []int) {
+	for i := 0; i < len(a); i++ {
+		for j := i + 1; j < len(a); j++ {
+			if a[j] < a[i] {
+				a[i], a[j] = a[j], a[i]
+			}
+		}
+	}
 }

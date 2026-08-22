@@ -6,10 +6,47 @@
 package generator
 
 import (
+	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
+
+// ConvertToPrint 读取查看版 xlsx，将账页位格化后另存为打印版。
+// viewPath 为已落盘的查看版文件；printPath 通常位于 print/ 子目录，
+// 文件名与查看版相同。查看版文件本身不会被修改。
+func ConvertToPrint(viewPath, printPath string) error {
+	f, err := excelize.OpenFile(viewPath)
+	if err != nil {
+		return fmt.Errorf("打开查看版 %s: %w", viewPath, err)
+	}
+	defer f.Close()
+
+	for _, sheet := range f.GetSheetList() {
+		switch {
+		case strings.HasPrefix(sheet, sheetPrefixML):
+			err = convertMLSheet(f, sheet)
+		case strings.HasPrefix(sheet, sheetPrefixGL):
+			err = convertGLSheet(f, sheet)
+		default:
+			continue // 期初/期末表等不动
+		}
+		if err != nil {
+			return fmt.Errorf("转换 %s: %w", sheet, err)
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(printPath), 0o755); err != nil {
+		return fmt.Errorf("创建打印目录: %w", err)
+	}
+	if err := f.SaveAs(printPath); err != nil {
+		return fmt.Errorf("保存打印版 %s: %w", printPath, err)
+	}
+	return nil
+}
 
 // 12 小列从左到右的标签（十亿 → 分）。
 var digitColLabels = [12]string{"十", "亿", "千", "百", "十", "万", "千", "百", "十", "元", "角", "分"}

@@ -22,9 +22,9 @@
 
 ## 4. 入口与调用点
 
-- [ ] 4.1 实现 `ConvertToPrint(viewPath, printPath string) error`：OpenFile → 按前缀分发 Sheet 转换 → SaveAs
-- [ ] 4.2 `cmd/generate.go`：GenerateWorkbook 成功后调用 ConvertToPrint，失败仅 stderr 告警不中断
-- [ ] 4.3 `cmd/generate.go`：`-f` 级联删除同步清理 `print/` 子目录中晚于当月的打印版文件
+- [x] 4.1 实现 `ConvertToPrint(viewPath, printPath string) error`：OpenFile → 按前缀分发 Sheet 转换 → SaveAs
+- [x] 4.2 `cmd/generate.go`：GenerateWorkbook 成功后调用 ConvertToPrint，失败仅 stderr 告警不中断
+- [x] 4.3 `cmd/generate.go`：`-f` 级联删除同步清理 `print/` 子目录中晚于当月的打印版文件
 
 ## 5. 验证（宪法 1.5）
 

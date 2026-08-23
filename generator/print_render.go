@@ -641,7 +641,12 @@ func rewriteMLColWidths(f *excelize.File, sheet string, lay layout.MLLayout, exp
 			continue
 		}
 		cl, _ := excelize.ColumnNumberToName(c)
-		f.SetColWidth(sheet, cl, cl, 0.5)
+		// SetColWidth(0) 会被 excize 忽略回落默认，改用隐藏列 + 最小宽度
+		f.SetColWidth(sheet, cl, cl, 1)
+		f.SetColVisible(sheet, cl, false)
+		// 清除该列所有行的边框，避免隐藏列残留边框
+		sid, _ := f.NewStyle(&excelize.Style{Border: []excelize.Border{}})
+		f.SetCellStyle(sheet, cl+"1", cl+"500", sid)
 	}
 	return nil
 }

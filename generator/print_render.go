@@ -101,19 +101,20 @@ func transformGLMoneyCols(f *excelize.File, sheet string) error {
 		}
 	}
 	sortIntsDesc(cols)
-
-	// 表格结构行集合：每页的表头两行 + 数据区（含过次页行）。
-	// 标题区/边距行不在其中——这些行不派生分组竖线。
-	glTableRows := make(map[int]bool)
-	pageRowsTotal := lay.DataStartRow + 1 + lay.TopMarginRows + lay.BottomMarginRows
-	for pageTop := lay.HeaderRow; pageTop <= len(rows); pageTop += glPageRows {
-		for r := pageTop; r < pageTop+pageRowsTotal && r <= len(rows); r++ {
-			glTableRows[r] = true
+	// GL 表头行判定：每页两行表头 = 「月」行及其上一行（大标题合并区所在）。
+	headerRows := make(map[int]bool)
+	for i, row := range rows {
+		r := i + 1
+		for _, base := range []int{lay.FrontStartCol, lay.BackStartCol} {
+			idx := base - 1
+			if idx < len(row) && strings.TrimSpace(row[idx]) == "月" {
+				headerRows[r] = true
+				headerRows[r-1] = true
+			}
 		}
 	}
-
 	for _, col := range cols {
-		if err := expandMoneyColumn(f, sheet, col, len(rows), glTableRows); err != nil {
+		if err := expandMoneyColumn(f, sheet, col, len(rows), func(r int) bool { return headerRows[r] }); err != nil {
 			return err
 		}
 	}
@@ -300,9 +301,12 @@ func truncateVal(s string) string {
 
 // expandMoneyColumn 将单个金额列展开为 12 小列。
 // 在原列右侧插入 11 列，读取原列值，拆位写入 12 小格。
-// 边框派生仅作用于表格结构行（tableRows 内的行）；标题区行只缩字号，
-// 不派生任何分组竖线——靠边框样式推断不可靠（标题装饰线也可能是粗线）。
-func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int, tableRows map[int]bool) error {
+// 边框派生：每行读取原格完整样式 → 首格继承 left+top+bottom、
+// 末格继承 right+top+bottom、中间格 top+bottom+分组竖线。
+// 字号统一缩小；金额数字格式（#,##0.00）清除。
+// skipRow 返回 true 的行不做边框派生（如表头大标题行——合并区内部
+// 不应有竖线；表头行的竖线由标签写入函数单独处理）。
+func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int, skipRow func(r int) bool) error {
 	// 展开前快照：每行的原格样式 ID 与值
 	type rowSnap struct {
 		styleID int
@@ -359,10 +363,18 @@ func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int, tableRo
 		leftB, rightB := borderOf("left"), borderOf("right")
 		topB, bottomB := borderOf("top"), borderOf("bottom")
 
-		// 分组竖线只应出现在表格结构行内（表头标签行 + 数据区）。
-		// 用调用方传入的 tableRows 判定——不靠边框样式推断（标题装饰线
-		// 也可能是粗线/双线，会误判）。
-		inTable := tableRows[r]
+		// 表头行（大标题合并区内部）不做边框派生——竖线由标签写入函数单独处理。
+		// skipRow 由调用方定义（GL: 表头两行；ML: 表头四行）。
+		isHeaderRow := skipRow != nil && skipRow(r)
+
+		// 分组竖线只应出现在表格结构内（表头标签行 + 数据区）。
+		// 判据：原格拥有表格网格线型（细1/粗2/双6）的 top 或 bottom 边框。
+		// 标题区的装饰性下划线是虚线（Style 4），不算表格结构；
+		// 完全无边框的空白行也不算。
+		gridBorder := func(b *excelize.Border) bool {
+			return b != nil && (b.Style == 1 || b.Style == 2 || b.Style == 6)
+		}
+		inTable := !isHeaderRow && (gridBorder(topB) || gridBorder(bottomB))
 
 		// 原字体：保留颜色，字号改小；清除金额数字格式
 		fontColor := ""
@@ -450,7 +462,6 @@ func transformMLMoneyCols(f *excelize.File, sheet string) error {
 	}
 
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
-	_ = blockRows
 
 	// 逐块处理，从最后一块往前（右侧块的插列不影响左侧块的原始坐标——
 	// 但插列是全列生效的：在 col X 右侧插列影响所有行的该列之后内容。
@@ -481,20 +492,15 @@ func transformMLMoneyCols(f *excelize.File, sheet string) error {
 
 	// 从右往左展开
 	sortIntsDesc(cols)
-
-	// 表格结构行集合：每块的 4 行表头（h1-h4）+ 数据区 + 过次页行。
-	// 标题区（块首前 4 行）与边距行不在其中。
-	mlTableRows := make(map[int]bool)
+	// ML 表头行判定：每块四行表头 = start+4 ~ start+7（h1~h4）。
+	headerRows := make(map[int]bool)
 	for start := 1; start <= len(rows); start += blockRows {
-		hStart := start + 4
-		tableEnd := hStart + lay.DataStartRow - 1 + pageSize // h1 ~ 过次页行
-		for r := hStart; r <= tableEnd && r <= len(rows); r++ {
-			mlTableRows[r] = true
+		for k := 4; k <= 7; k++ {
+			headerRows[start+k] = true
 		}
 	}
-
 	for _, col := range cols {
-		if err := expandMoneyColumn(f, sheet, col, len(rows), mlTableRows); err != nil {
+		if err := expandMoneyColumn(f, sheet, col, len(rows), func(r int) bool { return headerRows[r] }); err != nil {
 			return err
 		}
 	}

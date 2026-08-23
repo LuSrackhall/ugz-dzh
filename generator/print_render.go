@@ -533,6 +533,116 @@ func transformMLMoneyCols(f *excelize.File, sheet string) error {
 			}
 		}
 	}
+
+	return rewriteMLColWidths(f, sheet, lay, cols)
+}
+
+// rewriteMLColWidths 按最终列布局整体重写 ML 列宽表。
+// excelize 多次 InsertCols 会在 <cols> 中留下碎片化/错位的宽度 range
+// （实测出现 col92-95 装订宽残留、col216+ 孤儿列），逐列覆盖无法清除，
+// 必须按新布局从 col1 到 TotalCols 全量重设。
+func rewriteMLColWidths(f *excelize.File, sheet string, lay layout.MLLayout, expandedCols []int) error {
+	const (
+		wGutterBack = glBackGutterW   // Back 书口
+		wDate       = 3.0             // 月/日/字/号
+		wMoney      = 13.724          // Back 金额列原宽
+		wDir        = 3.3             // 借或贷
+		wFrontDet   = 13.584          // Front 明细原宽（frontDataW/10）
+		wBindBack   = glBackBindColW  // Back 装订
+		wBindFront  = glFrontBindColW // Front 装订
+	)
+	// 展开后各逻辑列的物理位置与宽度
+	type colSpec struct {
+		col int
+		w   float64
+	}
+	var specs []colSpec
+
+	shifted := func(c int) int { return mlShiftedCol(c, expandedCols) }
+	isExpandedStart := make(map[int]bool)
+	for _, at := range expandedCols {
+		isExpandedStart[at] = true
+	}
+
+	set := func(c int, w float64) { specs = append(specs, colSpec{col: c, w: w}) }
+
+	// Back 书口（col1）
+	set(1, wGutterBack)
+	// 月日字号（col2-5）
+	for c := 2; c <= 5; c++ {
+		set(c, wDate)
+	}
+	// 摘要（col6）：吸收差额使两半同宽——展开后总宽守恒，保持原宽即可；
+	// 原 sumNew = backDataW - 4*3 - 7*wMoney - dir。展开后金额区变宽但
+	// 总宽不变（每列÷12），摘要列宽不变。
+	sumNew := 135.84 - 4*wDate - 7*wMoney - wDir
+	set(lay.BackStartCol + mlOffSummary, sumNew)
+
+	// Back 区其余列：借/贷/方向/余额/明细1-4 → 各自物理首列起 12 小列或单列
+	moneyOrDetail := map[int]float64{
+		lay.BackStartCol + mlOffDebit:   wMoney,
+		lay.BackStartCol + mlOffCredit:  wMoney,
+		lay.BackStartCol + mlOffBalance: wMoney,
+	}
+	for i := 0; i < 4; i++ {
+		moneyOrDetail[mlDetailCol(lay, i)] = wMoney
+	}
+	for orig := 7; orig <= mlDetailCol(lay, 3); orig++ {
+		if orig == lay.BackStartCol+mlOffSummary {
+			continue // 已设置
+		}
+		if w, ok := moneyOrDetail[orig]; ok {
+			pc := shifted(orig)
+			for k := 0; k < 12; k++ {
+				set(pc+k, w/12.0)
+			}
+		} else if orig == lay.BackStartCol+mlOffDir {
+			set(shifted(orig), wDir)
+		} else {
+			set(shifted(orig), wMoney) // 未识别列兜底用金额宽
+		}
+	}
+
+	// 中间装订区：Back 装订 2 列 + Front 装订 2 列（原始 PageGapStartCol 起 4 列）
+	bindStart := shifted(lay.PageGapStartCol)
+	set(bindStart, wBindBack)
+	set(bindStart+1, wBindBack)
+	set(bindStart+2, wBindFront)
+	set(bindStart+3, wBindFront)
+
+	// Front 侧明细5-14：12 小列
+	for i := 4; i < mlMaxDetails; i++ {
+		pc := shifted(mlDetailCol(lay, i))
+		for k := 0; k < 12; k++ {
+			set(pc+k, wFrontDet/12.0)
+		}
+	}
+	// Front 书口（TotalCols 平移后）——宽度 0 会被 excelize 忽略，用极小值代替
+	frontGutter := shifted(lay.TotalCols)
+	set(frontGutter, 0.5)
+
+	for _, s := range specs {
+		cl, _ := excelize.ColumnNumberToName(s.col)
+		f.SetColWidth(sheet, cl, cl, s.w)
+	}
+	// 清除插列产生的孤儿列：查看版 <cols> 的范围定义在插列平移后会留下
+	// 散布的碎片列（实测 col92-95 装订宽、col216 孤儿）。全量扫描 col1~500，
+	// 凡不属于本次布局 specs 的列一律压缩为不可见宽度。
+	inSpec := make(map[int]bool)
+	maxCol := 0
+	for _, s := range specs {
+		inSpec[s.col] = true
+		if s.col > maxCol {
+			maxCol = s.col
+		}
+	}
+	for c := 1; c <= 500; c++ {
+		if inSpec[c] {
+			continue
+		}
+		cl, _ := excelize.ColumnNumberToName(c)
+		f.SetColWidth(sheet, cl, cl, 0.5)
+	}
 	return nil
 }
 

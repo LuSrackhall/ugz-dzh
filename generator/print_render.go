@@ -397,11 +397,15 @@ func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int, skipRow
 		for k := 0; k < 12; k++ {
 			var st *excelize.Style
 			if !inTable {
-				// 表格外：仅缩字号+居中，不写任何边框、不动内容位置
-				st = &excelize.Style{
-					Font:      &excelize.Font{Size: printDigitFontSize, Color: fontColor, Bold: bold},
-					Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+				if k == 0 {
+					// 首格：完全保留原样式（含装饰性下划线等），仅原样
+					sid, _ := f.NewStyle(orig)
+					cell := cellName(col, r)
+					f.SetCellStyle(sheet, cell, cell, sid)
+					continue
 				}
+				// 其余小格：纯空白（无边框无下划线），避免装饰边框连片
+				st = &excelize.Style{}
 			} else {
 				st = &excelize.Style{
 					Font:      &excelize.Font{Size: printDigitFontSize, Color: fontColor, Bold: bold},
@@ -509,29 +513,11 @@ func transformMLMoneyCols(f *excelize.File, sheet string) error {
 		return err
 	}
 	// ML 标题区（每块的 row1~hStart-1：分第 n 页(左)/(右)、科目名等）：
-	// 1) 按当前坐标拆掉重建被插列破坏的合并区
+	// 按当前坐标拆掉重建被插列破坏的合并区，并恢复丢失的首格值。
+	// 注意：不做全格遍历回填——那会把快照值复制到几十个空格子（实测
+	// row2 被"01"填满），只信任 repairMLTitleMerges 的合并区级恢复。
 	if err := repairMLTitleMerges(f, sheet, lay, rows); err != nil {
 		return err
-	}
-	// 2) 全格值回填——excelize InsertCols 会丢失部分标题单元格的值（实测
-	//    「页(左)」F32、「分第(右)」Z32 等），展开前快照全部非空标题格，
-	//    按 shifted 坐标回填到空位。
-	shifted := func(col int) int { return mlShiftedCol(col, cols) }
-	for start := 1; start <= len(rows); start += blockRows {
-		titleEnd := start + 3
-		for r := start; r <= titleEnd && r <= len(rows); r++ {
-			for c := 1; c <= len(rows[r-1]); c++ {
-				v := strings.TrimSpace(rows[r-1][c-1])
-				if v == "" {
-					continue
-				}
-				cell := cellName(shifted(c), r)
-				cur, _ := f.GetCellValue(sheet, cell)
-				if strings.TrimSpace(cur) == "" {
-					f.SetCellValue(sheet, cell, v)
-				}
-			}
-		}
 	}
 
 	return rewriteMLColWidths(f, sheet, lay, cols)

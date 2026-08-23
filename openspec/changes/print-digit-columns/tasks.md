@@ -1,34 +1,50 @@
-## 1. 拆位与常量基础（generator/print_convert.go）
+## 1. 记录器基础设施（generator/print_recorder.go + print_common.go）
 
-- [x] 1.1 实现 `splitCNY(cents int64) [12]string`：负数取绝对值、0 全空、前导零留空、个位对齐「元」
-- [x] 1.2 编写 splitCNY 表驱动单元测试：0 / 1分 / 5元整 / 12345.67 / 99999999999.99 / 负数
-- [x] 1.3 定义分组边框常量表 `[11]int`（组界粗线×3、元|角红细线、其余绿细线）及小列标签数组「十 亿 千 百 十 万 千 百 十 元 角 分」与小格字号常量（初始 7pt），编写表格内容断言测试
+- [ ] 1.1 定义 PageRecorder / SheetRecord / PageRecord / RowRecord 类型（含 SheetKind、RowKind 枚举）
+- [ ] 1.2 实现 Record(sheet, pageNum, row) 方法：按 sheet 名自动创建 SheetRecord，按 pageNum 归入 PageRecord
+- [ ] 1.3 保留 splitCNY、dividerStyles、digitColLabels、printDigitFontSize（从旧 print_convert.go 迁移到 print_common.go）
+- [ ] 1.4 实现列布局计算工具：printColMap(base, moneyOffsets) → 每个逻辑 offset 对应的物理首列号（纯算术，不插列）
+- [ ] 1.5 编写单测：splitCNY 表驱动、dividerStyles 断言、printColMap 计算正确性
 
-## 2. GL 转换（generator/print_gl.go）
+## 2. GL 记录器集成（generator/gl_sheet.go + monthly_close.go）
 
-- [x] 2.1 实现金额列坐标预计算：Front/Back 区借(5)/贷(7)/余额(10) 原始 Excel 列号清单
-- [x] 2.2 实现从右往左逐列 InsertCols(11) + 列宽 ÷12（GetColWidth 后 SetColWidth ×12）
-- [x] 2.3 实现表头改造：大标题跨 12 小列合并、SubHeaderRow 写入 12 个小列标签
-- [x] 2.4 实现数据行遍历：读原金额值 → 清空原格 → splitCNY 写入 12 小格（字符串居中小号字体）
-- [x] 2.5 实现数据行边框派生：第 1/12 小格继承原左右边框语义、中间竖线按分组常量表、上下边框复制到全部 12 格
-- [x] 2.6 实现 GL 垂直分页符重建（右移 33 列）
+- [ ] 2.1 appendToGLSheet：每条分录写入后通知 recorder（RowEntry，含 debit/credit/dir/balance）
+- [ ] 2.2 writePageBreakRow：通知 recorder（RowPageBreak，含 pageDebit/pageCredit/balance）
+- [ ] 2.3 writeCarryForwardRow / insertCarryForward / insertCarryForwardAtRow：通知 recorder（RowCarryForward）
+- [ ] 2.4 WriteMonthClosings：本月合计/本季合计/本年累计/期末余额各通知 recorder（RowMonthlyClose 等）
 
-## 3. ML 转换（generator/print_ml.go）
+## 3. ML 记录器集成（generator/ml_sheet.go + monthly_close_ml.go）
 
-- [x] 3.1 实现 ML 金额列坐标预计算：Back 侧借/贷/余额+明细1-4、Front 侧明细5-14；Paper1 仅 Front 侧明细5-14
-- [x] 3.2 插列前列出跨金额区合并区清单，插列后 Unmerge + 按累计偏移重新 Merge（含科目名、「( )方金/额 分析」行）
-- [x] 3.3 复用 2.2~2.5 的共享工具完成插列、表头改造（大标题 h1-h3 矩形合并、h4 小列标签）、数据行拆位与边框派生
-- [x] 3.4 实现 ML 垂直分页符重建（右移 77 列）
+- [ ] 3.1 appendToMLSheet：每条分录通知 recorder（RowEntry，含 debit/credit/dir/balance + details[14]）
+- [ ] 3.2 writeMLPageBreakRow / writeMLCarryForwardRow：通知 recorder
+- [ ] 3.3 WriteMLMonthClosings：月结行通知 recorder
 
-## 4. 入口与调用点
+## 4. GL 打印渲染器（generator/print_render.go）
 
-- [x] 4.1 实现 `ConvertToPrint(viewPath, printPath string) error`：OpenFile → 按前缀分发 Sheet 转换 → SaveAs
-- [x] 4.2 `cmd/generate.go`：GenerateWorkbook 成功后调用 ConvertToPrint，失败仅 stderr 告警不中断
-- [x] 4.3 `cmd/generate.go`：`-f` 级联删除同步清理 `print/` 子目录中晚于当月的打印版文件
+- [ ] 4.1 实现 RenderPrintVersion(recorder, printPath)：新建工作簿 → 遍历 recorder.sheets → 按 Kind 分发渲染 → SaveAs
+- [ ] 4.2 实现 printGLSheet：列布局计算（12 小列）→ 列宽设置 → 逐页渲染标题区/表头/数据行/过次页
+- [ ] 4.3 数据行渲染：RowRecord → splitCNY 写 12 小格 + 方向/摘要/日期等非金额列原样写入
+- [ ] 4.4 表头渲染：大标题跨 12 列合并 + SubHeaderRow 小列标签 + 分组边框
+- [ ] 4.5 边框渲染：数据行分组竖线（dividerStyles）+ 上下边框（每5行加粗、过次页红双线底边——从 RowKind 推导）
+- [ ] 4.6 垂直分页符：按计算出的列位置直接写入
 
-## 5. 验证（宪法 1.5）
+## 5. ML 打印渲染器（generator/print_render_ml.go）
 
-- [x] 5.1 `go test ./...` 全绿
-- [x] 5.2 `bash scripts/test-e2e.sh --skip-test` 多月生成成功且查看版输出与转换前一致（抽查 mtime 与内容）
-- [x] 5.3 抽查打印版 xlsx：Sheet 集合一致、金额列数 = 原×12、样本数字各位正确、0 留空、合并区数量与位置正确、垂直分页符位置正确
-- [x] 5.4 打开打印版目检：表头分组边框（组界粗线、元|角红线）、每 5 行加粗保留、整体版面与查看版除金额栏外无差异
+- [ ] 5.1 实现 printMLSheet：ML 列布局计算（Back 7 金额列 + Front 10 金额列各展开 12 小列）
+- [ ] 5.2 四行表头渲染：借/贷/余额 h1-h3 矩形合并、明细名 h2-h3 扩展、h4 小列标签、「( )方金/额 分析」行
+- [ ] 5.3 数据行渲染：含明细 1-14 的 12 小格拆位
+- [ ] 5.4 Paper1 占位页渲染（仅 Front 侧明细 5-14）
+- [ ] 5.5 边框与分页符
+
+## 6. 入口与调用点
+
+- [ ] 6.1 GenerateWorkbook 末尾：创建 recorder → 现有管线运行（recorder 通知散布在步骤 2-3）→ wb.Save() → RenderPrintVersion
+- [ ] 6.2 cmd/generate.go：删除旧 ConvertToPrint 调用，保留 print/ 级联清理逻辑
+- [ ] 6.3 删除旧 print_convert.go / print_gl.go / print_ml.go / print_convert_test.go
+
+## 7. 验证
+
+- [ ] 7.1 `go test ./...` 全绿（含新单测）
+- [ ] 7.2 `bash scripts/test-e2e.sh --skip-test` 多月生成成功
+- [ ] 7.3 抽查打印版：Sheet 集合一致、行数与查看版一致、样本数字位正确、分页符位置正确
+- [ ] 7.4 打开打印版目检：表头/边框/字号/版面

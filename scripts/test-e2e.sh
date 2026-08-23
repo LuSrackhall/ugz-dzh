@@ -111,10 +111,16 @@ find "$OUT" -name "*.xlsx" -not -path "$PREVIEW_DIR/*" | sort
 
 echo ""
 echo "已打开预览副本（热更新，权威文件不受影响）:"
-for f in "$OUT/2025/2025-12.xlsx" "$OUT/2026/2026-06.xlsx"; do
+for f in "$OUT/2025/2025-12.xlsx" "$OUT/2026/2026-06.xlsx" \
+         "$OUT/2025/print/2025-12.xlsx" "$OUT/2026/print/2026-06.xlsx"; do
   if [ -f "$f" ]; then
     base=$(basename "$f")
-    target="$PREVIEW_DIR/${base%.xlsx}-$RUN_ID.xlsx"
+    # 打印版文件名加 print- 前缀，避免与查看版预览副本重名
+    case "$f" in
+      */print/*) prefix="print-" ;;
+      *) prefix="" ;;
+    esac
+    target="$PREVIEW_DIR/${prefix}${base%.xlsx}-$RUN_ID.xlsx"
     cp "$f" "$target"
     open "$target"
     echo "  $target"

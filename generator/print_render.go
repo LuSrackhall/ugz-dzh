@@ -68,6 +68,26 @@ func transformGLMoneyCols(f *excelize.File, sheet string) error {
 		return nil
 	}
 
+	// 展开前快照标题区（row1 ~ HeaderRow）的全部非空单元格值。
+	// excelize InsertCols 平移合并区内的值时存在丢失缺陷（实测页码"1"
+	// 从 K2 平移后消失），因此展开前记录、展开后按平移坐标回填。
+	type titleCell struct {
+		row, col int
+		val      string
+	}
+	var titleSnap []titleCell
+	for r := 1; r < lay.HeaderRow && r <= len(rows); r++ {
+		for c := 1; c <= lay.TotalCols+40; c++ { // 上限覆盖平移余量
+			if c-1 >= len(rows[r-1]) {
+				break
+			}
+			v := strings.TrimSpace(rows[r-1][c-1])
+			if v != "" {
+				titleSnap = append(titleSnap, titleCell{row: r, col: c, val: v})
+			}
+		}
+	}
+
 	// 收集全部金额列（Front + Back），去重后从右往左展开
 	cols := make([]int, 0, 6)
 	seen := make(map[int]bool)
@@ -87,7 +107,28 @@ func transformGLMoneyCols(f *excelize.File, sheet string) error {
 		}
 	}
 
-	return updateGLHeadersForExpanded(f, sheet, cols)
+	if err := updateGLHeadersForExpanded(f, sheet, cols); err != nil {
+		return err
+	}
+
+	// 回填标题区丢失的值：按 shifted 坐标定位新位置，仅当目标为空时写入
+	shifted := func(col int) int {
+		for _, at := range cols {
+			if col > at {
+				col += 11
+			}
+		}
+		return col
+	}
+	for _, tc := range titleSnap {
+		nc := shifted(tc.col)
+		cell := cellName(nc, tc.row)
+		cur, _ := f.GetCellValue(sheet, cell)
+		if strings.TrimSpace(cur) == "" {
+			f.SetCellValue(sheet, cell, tc.val)
+		}
+	}
+	return nil
 }
 
 // updateGLHeadersForExpanded 更新 GL 每一页的表头（GL 多页结构，每页过次页后有自己的两行表头）。
@@ -195,6 +236,43 @@ func updateGLHeadersForExpanded(f *excelize.File, sheet string, expandedCols []i
 					f.SetCellValue(sheet, top, vm.val)
 				}
 			}
+		}
+	}
+	return repairGLTitleMerges(f, sheet, lay, expandedCols)
+}
+
+// repairGLTitleMerges 修复 GL 标题区（row1~DataStartRow-1）的合并区：
+// 拆除后按【当前坐标】原样重建。注意 GetMergeCells 返回的已是插列平移后的
+// 坐标——不能再做 shifted 叠加，否则双重位移。
+func repairGLTitleMerges(f *excelize.File, sheet string, lay layout.GLLayout, expandedCols []int) error {
+	rows, _ := f.GetRows(sheet)
+	titleEnd := lay.HeaderRow // 标题区 = row1 ~ HeaderRow（表头两行之前）
+	if titleEnd > len(rows) {
+		titleEnd = len(rows)
+	}
+	type geoMerge struct {
+		c1, r1, c2, r2 int
+		val            string
+	}
+	var olds []geoMerge
+	ms, _ := f.GetMergeCells(sheet)
+	for _, m := range ms {
+		sc, sr, err1 := excelize.CellNameToCoordinates(m.GetStartAxis())
+		ec, er, err2 := excelize.CellNameToCoordinates(m.GetEndAxis())
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		if sr >= 1 && er <= titleEnd {
+			olds = append(olds, geoMerge{c1: sc, r1: sr, c2: ec, r2: er, val: m.GetCellValue()})
+			f.UnmergeCell(sheet, cellName(sc, sr), cellName(ec, er))
+		}
+	}
+	for _, g := range olds {
+		top := cellName(g.c1, g.r1)
+		bot := cellName(g.c2, g.r2)
+		f.MergeCell(sheet, top, bot)
+		if strings.TrimSpace(g.val) != "" {
+			f.SetCellValue(sheet, top, g.val)
 		}
 	}
 	return nil
@@ -403,7 +481,79 @@ func transformMLMoneyCols(f *excelize.File, sheet string) error {
 		}
 	}
 
-	return updateMLHeadersForExpanded(f, sheet, lay, cols)
+	if err := updateMLHeadersForExpanded(f, sheet, lay, cols); err != nil {
+		return err
+	}
+	// ML 标题区（每块的 row1~hStart-1：分第 n 页(左)/(右)、科目名等）：
+	// 1) 按当前坐标拆掉重建被插列破坏的合并区
+	if err := repairMLTitleMerges(f, sheet, lay, rows); err != nil {
+		return err
+	}
+	// 2) 全格值回填——excelize InsertCols 会丢失部分标题单元格的值（实测
+	//    「页(左)」F32、「分第(右)」Z32 等），展开前快照全部非空标题格，
+	//    按 shifted 坐标回填到空位。
+	shifted := func(col int) int { return mlShiftedCol(col, cols) }
+	for start := 1; start <= len(rows); start += blockRows {
+		titleEnd := start + 3
+		for r := start; r <= titleEnd && r <= len(rows); r++ {
+			for c := 1; c <= len(rows[r-1]); c++ {
+				v := strings.TrimSpace(rows[r-1][c-1])
+				if v == "" {
+					continue
+				}
+				cell := cellName(shifted(c), r)
+				cur, _ := f.GetCellValue(sheet, cell)
+				if strings.TrimSpace(cur) == "" {
+					f.SetCellValue(sheet, cell, v)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// repairMLTitleMerges 修复 ML 每块标题区的合并区：按【当前坐标】拆除后
+// 原样重建（GetMergeCells 返回的已是平移后坐标，不做二次位移）。
+// 同时用 GetRows 快照回填丢失的首格值。
+func repairMLTitleMerges(f *excelize.File, sheet string, lay layout.MLLayout, snap [][]string) error {
+	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
+	rows, _ := f.GetRows(sheet)
+
+	for start := 1; start <= len(rows); start += blockRows {
+		titleEnd := start + 3 // 标题区 = 块首 ~ h1 前一行（上边距+标题+科目+空行）
+		type geoMerge struct {
+			c1, r1, c2, r2 int
+			val            string
+		}
+		var olds []geoMerge
+		ms, _ := f.GetMergeCells(sheet)
+		for _, m := range ms {
+			sc, sr, err1 := excelize.CellNameToCoordinates(m.GetStartAxis())
+			ec, er, err2 := excelize.CellNameToCoordinates(m.GetEndAxis())
+			if err1 != nil || err2 != nil {
+				continue
+			}
+			if sr >= start && er <= titleEnd {
+				olds = append(olds, geoMerge{c1: sc, r1: sr, c2: ec, r2: er, val: m.GetCellValue()})
+				f.UnmergeCell(sheet, cellName(sc, sr), cellName(ec, er))
+			}
+		}
+		for _, g := range olds {
+			top := cellName(g.c1, g.r1)
+			bot := cellName(g.c2, g.r2)
+			f.MergeCell(sheet, top, bot)
+			if strings.TrimSpace(g.val) == "" && g.r1-1 < len(snap) && g.c1-1 < len(snap[g.r1-1]) {
+				// 合并区值为空时尝试从展开前快照回填
+				v := strings.TrimSpace(snap[g.r1-1][g.c1-1])
+				if v != "" {
+					f.SetCellValue(sheet, top, v)
+				}
+			} else if strings.TrimSpace(g.val) != "" {
+				f.SetCellValue(sheet, top, g.val)
+			}
+		}
+	}
+	return nil
 }
 
 // mlShiftedCol 计算原始列号在全部展开完成后的实际列号。
@@ -451,9 +601,20 @@ func updateMLHeadersForExpanded(f *excelize.File, sheet string, lay layout.MLLay
 		hStart := start + 4 // h1 行号
 		h4 := hStart + 3
 
-		// Step 1: 拆除本块表头四行（hStart ~ h4）内的全部既有合并区，
-		// 只取回文字内容（值跟随首格），布局由 Step 2 按已知结构主动重建。
-		texts := make(map[string]string) // "rowOff:col" → 首格文字
+		// Step 1: 拆除本块表头四行（hStart ~ h4）内的全部既有合并区。
+		// 记录两类信息：
+		//   texts — 首格文字（金额区重建时取回）
+		//   nonMoney — 非金额区合并的完整几何（起列/行偏移/跨度/值），
+		//     摘要、借或贷、年份、凭证等在金额展开后必须原样重建
+		type geoMerge struct {
+			startCol int // 平移后坐标
+			rowOff   int // 相对 hStart
+			rowSpan  int
+			colSpan  int
+			val      string
+		}
+		texts := make(map[string]string)
+		var nonMoney []geoMerge
 		ms, _ := f.GetMergeCells(sheet)
 		for _, m := range ms {
 			sc, sr, err1 := excelize.CellNameToCoordinates(m.GetStartAxis())
@@ -461,17 +622,21 @@ func updateMLHeadersForExpanded(f *excelize.File, sheet string, lay layout.MLLay
 			if err1 != nil || err2 != nil {
 				continue
 			}
-			if sr >= hStart && er <= h4 {
-				if strings.TrimSpace(m.GetCellValue()) != "" {
-					texts[fmt.Sprintf("%d:%d", sr-hStart, sc)] = m.GetCellValue()
-				}
-				f.UnmergeCell(sheet, cellName(sc, sr), cellName(ec, er))
+			if sr < hStart || er > h4 {
+				continue
 			}
+			if strings.TrimSpace(m.GetCellValue()) != "" {
+				texts[fmt.Sprintf("%d:%d", sr-hStart, sc)] = m.GetCellValue()
+			}
+			nonMoney = append(nonMoney, geoMerge{
+				startCol: sc, rowOff: sr - hStart,
+				rowSpan: er - sr + 1, colSpan: ec - sc + 1,
+				val: m.GetCellValue(),
+			})
+			f.UnmergeCell(sheet, cellName(sc, sr), cellName(ec, er))
 		}
 
-		// Step 2（主动构建）：按已知 ML 表头结构重建合并区。
-		// Back 侧列（非 Paper1）：借/贷/余额大标题 h1:h3 ×12、月日字号不动、
-		// 明细1-4 科目名 h2:h3 ×12；Front 侧：明细5-14 科目名 h2:h3 ×12。
+		// Step 2（主动构建）：金额相关合并按已知结构重建。
 		rebuildDetail := func(col int) {
 			f.MergeCell(sheet, cellName(col, hStart+1), cellName(col+11, hStart+2))
 			writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
@@ -491,15 +656,11 @@ func updateMLHeadersForExpanded(f *excelize.File, sheet string, lay layout.MLLay
 		}
 
 		// 分析行「( )方金 / 额 分析」：h1 行横跨该侧全部明细小列。
-		// Back 分析行原为明细1-4 四列（col11-14 原始）→ 平移后从明细1 首格到明细4 末格；
-		// Front 分析行原为明细5-14 十列 → 明细5 首格到明细14 末格。
 		if !isPaper1 {
 			l := mlShiftedCol(mlDetailCol(lay, 0), expandedCols)
 			r := mlShiftedCol(mlDetailCol(lay, 3), expandedCols) + 11
 			f.MergeCell(sheet, cellName(l, hStart), cellName(r, hStart))
-			if v, ok := texts[fmt.Sprintf("0:%d", l)]; ok {
-				f.SetCellValue(sheet, cellName(l, hStart), v)
-			} else if v, ok2 := texts[fmt.Sprintf("0:%d", mlShiftedCol(mlDetailCol(lay, 0), expandedCols))]; ok2 {
+			if v, ok := texts[fmt.Sprintf("0:%d", l)]; ok && strings.TrimSpace(v) != "" {
 				f.SetCellValue(sheet, cellName(l, hStart), v)
 			}
 		}
@@ -507,8 +668,28 @@ func updateMLHeadersForExpanded(f *excelize.File, sheet string, lay layout.MLLay
 			l := mlShiftedCol(mlDetailCol(lay, 4), expandedCols)
 			r := mlShiftedCol(mlDetailCol(lay, mlMaxDetails-1), expandedCols) + 11
 			f.MergeCell(sheet, cellName(l, hStart), cellName(r, hStart))
-			if v, ok := texts[fmt.Sprintf("0:%d", l)]; ok {
+			if v, ok := texts[fmt.Sprintf("0:%d", l)]; ok && strings.TrimSpace(v) != "" {
 				f.SetCellValue(sheet, cellName(l, hStart), v)
+			}
+		}
+
+		// Step 3: 非金额区合并原样重建——摘要、借或贷、年份、凭证等。
+		// 判定：起列不属于任何已重建的金额列集合。
+		moneyColSet := make(map[int]bool)
+		for _, at := range expandedCols {
+			moneyColSet[at] = true
+		}
+		for _, g := range nonMoney {
+			if moneyColSet[g.startCol] {
+				continue // 已由 Step 2 重建
+			}
+			// 跨越多个非金额列的分析行（span>1 且起点非金额列）也已排除——
+			// 分析行起点是明细首格，属于金额列集合。
+			top := cellName(g.startCol, hStart+g.rowOff)
+			bot := cellName(g.startCol+g.colSpan-1, hStart+g.rowOff+g.rowSpan-1)
+			f.MergeCell(sheet, top, bot)
+			if strings.TrimSpace(g.val) != "" {
+				f.SetCellValue(sheet, top, g.val)
 			}
 		}
 	}

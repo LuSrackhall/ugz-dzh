@@ -149,14 +149,6 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("生成工作薄: %w", err)
 		}
 
-		// 生成打印版（衍生品：失败仅告警，不影响主流程）
-		printPath := filepath.Join(printDir, month+".xlsx")
-		if err := generator.ConvertToPrint(xlsxPath, printPath); err != nil {
-			fmt.Fprintf(os.Stderr, "警告: 打印版生成失败（查看版不受影响）: %v\n", err)
-		} else if verbose {
-			fmt.Printf("已生成打印版: %s\n", printPath)
-		}
-
 		fmt.Printf("已生成 %s/%s 工作薄，共 %d 条分录\n", year, month, len(entries))
 		return nil
 	},

@@ -2,6 +2,8 @@ package generator
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"ledger/balance"
@@ -20,6 +22,8 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	if err != nil {
 		return fmt.Errorf("创建工作薄: %w", err)
 	}
+	// 启用打印版记录器：记录结构化数据供打印渲染器消费
+	wb.recorder = NewPageRecorder()
 	cfg := wb.Config
 
 	// 4. 提取上月期末作为本月期初
@@ -139,6 +143,12 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	// 12. 保存 xlsx
 	if err := wb.Save(); err != nil {
 		return fmt.Errorf("保存 xlsx: %w", err)
+	}
+
+	// 13. 生成打印版（衍生品：失败仅告警，不影响主流程）
+	printDir := filepath.Join(outputDir, "print")
+	if err := RenderPrintVersion(wb.currentPath(), printDir, month); err != nil {
+		fmt.Fprintf(os.Stderr, "警告: 打印版生成失败（查看版不受影响）: %v\n", err)
 	}
 
 	return nil

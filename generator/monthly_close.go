@@ -61,6 +61,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		closingDebit += act.Debit
 		closingCredit += act.Credit
 
+		// 通知打印记录器
+		wb.recordGLRow(sheet, pageNum, RowRecord{
+			Kind:   RowMonthlyClose,
+			Summary: "本月合计",
+			Debit:  act.Debit,
+			Credit: act.Credit,
+		})
+
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
@@ -124,6 +132,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 
+			// 通知打印记录器
+			wb.recordGLRow(sheet, pageNum, RowRecord{
+				Kind:    RowQuarterlyClose,
+				Summary: "本季合计",
+				Debit:   qtDebit,
+				Credit:  qtCredit,
+			})
+
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
 				Border: []excelize.Border{
@@ -174,6 +190,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 
+		// 通知打印记录器
+		wb.recordGLRow(sheet, pageNum, RowRecord{
+			Kind:    RowYtdClose,
+			Summary: "本年累计",
+			Debit:   cumDebit,
+			Credit:  cumCredit,
+		})
+
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{
@@ -222,6 +246,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), endDir)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(endDisp))
+
+		// 通知打印记录器
+		wb.recordGLRow(sheet, pageNum, RowRecord{
+			Kind:    RowPeriodEnd,
+			Summary: periodEndLabel,
+			Dir:     endDir,
+			Balance: endDisp,
+		})
 
 		endStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 10},

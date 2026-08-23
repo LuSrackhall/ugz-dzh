@@ -646,6 +646,18 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
+		// 通知打印记录器
+		wb.recordGLRow(sheet, pageNum, RowRecord{
+			Kind:    RowEntry,
+			Date:    e.Date,
+			Voucher: fmt.Sprintf("%d", e.VoucherNum),
+			Summary: e.Summary,
+			Dir:     dir,
+			Debit:   e.DebitCents,
+			Credit:  e.CreditCents,
+			Balance: dispBal,
+		})
+
 		// 计算是否为每5行（基于固定页结构，避免 pageStartRow 跨页基准错误）
 		rowInPage := glRowInPage(lay, row)
 		isThickRow := rowInPage%5 == 0
@@ -695,6 +707,14 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int) 
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
+	// 通知打印记录器
+	wb.recordGLRow(sheet, pageNum, RowRecord{
+		Kind:    RowCarryForward,
+		Summary: "上年结转",
+		Dir:     dir,
+		Balance: dispBal,
+	})
+
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
 	// 上年结转行绿色边框
@@ -726,6 +746,15 @@ func (wb *Workbook) insertCarryForwardAtRow(sheet string, amount int64, pageNum 
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
+
+	// 通知打印记录器
+	wb.recordGLRow(sheet, pageNum, RowRecord{
+		Kind:    RowCarryForward,
+		Summary: "上年结转",
+		Dir:     dir,
+		Balance: dispBal,
+	})
+
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 
 	// 上年结转行绿色边框
@@ -875,6 +904,16 @@ func (wb *Workbook) writePageBreakRow(sheet string, row int, balance int64, page
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
 
+	// 通知打印记录器
+	wb.recordGLRow(sheet, pageNum, RowRecord{
+		Kind:    RowPageBreak,
+		Summary: pageBreakLabel,
+		Dir:     dir,
+		Debit:   pageDebit,
+		Credit:  pageCredit,
+		Balance: dispBal,
+	})
+
 	// 过次页样式：其他列黑色字体、居中、绿色边框+红色底边双线
 	normalStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Size: 10},
@@ -918,6 +957,17 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(pageCredit))
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(dispBal))
+
+	// 通知打印记录器
+	wb.recordGLRow(sheet, pageNum, RowRecord{
+		Kind:    RowCarryForward,
+		Summary: carryForwardLabel,
+		Dir:     dir,
+		Debit:   pageDebit,
+		Credit:  pageCredit,
+		Balance: dispBal,
+	})
+
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))

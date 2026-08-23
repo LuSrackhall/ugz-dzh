@@ -23,6 +23,7 @@ type Workbook struct {
 	moneyStyleID int
 MLSheetBalances map[string]int64 // sheet名 → 最近期末余额
 	moneyStyleThickID int // 金额样式（底边加粗）
+	recorder     *PageRecorder // 打印版记录器；nil 时不记录
 }
 
 // NewWorkbook 创建或加载工作薄。若上月 xlsx 存在则复制之，否则新建。
@@ -308,4 +309,24 @@ func (wb *Workbook) setMoneyStyle(sheet string, row, col int) {
 func (wb *Workbook) setMoneyStyleThick(sheet string, row, col int) {
 	cell, _ := excelize.CoordinatesToCellName(col, row)
 	wb.File.SetCellStyle(sheet, cell, cell, wb.moneyStyleThickID)
+}
+
+// recordGLRow 通知记录器记录 GL 一行数据。
+func (wb *Workbook) recordGLRow(sheet string, pageNum int, row RowRecord) {
+	if wb.recorder == nil {
+		return
+	}
+	account := sheet[len(sheetPrefixGL):]
+	year := wb.Month[:4]
+	wb.recorder.RecordGLRow(sheet, pageNum, account, year, row)
+}
+
+// recordMLRow 通知记录器记录 ML 一行数据。
+func (wb *Workbook) recordMLRow(sheet string, pageNum int, row RowRecord) {
+	if wb.recorder == nil {
+		return
+	}
+	account := sheet[len(sheetPrefixML):]
+	year := wb.Month[:4]
+	wb.recorder.RecordMLRow(sheet, pageNum, account, year, row)
 }

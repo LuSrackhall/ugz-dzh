@@ -271,6 +271,15 @@ func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int) error {
 		leftB, rightB := borderOf("left"), borderOf("right")
 		topB, bottomB := borderOf("top"), borderOf("bottom")
 
+		// 分组竖线只应出现在表格结构内（表头标签行 + 数据区）。
+		// 判据：原格拥有表格网格线型（细1/粗2/双6）的 top 或 bottom 边框。
+		// 标题区的装饰性下划线是虚线（Style 4），不算表格结构；
+		// 完全无边框的空白行也不算。
+		gridBorder := func(b *excelize.Border) bool {
+			return b != nil && (b.Style == 1 || b.Style == 2 || b.Style == 6)
+		}
+		inTable := gridBorder(topB) || gridBorder(bottomB)
+
 		// 原字体：保留颜色，字号改小；清除金额数字格式
 		fontColor := ""
 		bold := false
@@ -287,36 +296,46 @@ func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int) error {
 				isNumeric = true
 			}
 		}
+		_ = isNumeric
 
 		for k := 0; k < 12; k++ {
-			st := &excelize.Style{
-				Font:      &excelize.Font{Size: printDigitFontSize, Color: fontColor, Bold: bold},
-				Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-			}
-			// 左边框：首格继承原左边框；其余格左边框 = 前一分隔线
-			if k == 0 {
-				if leftB != nil {
-					st.Border = append(st.Border, *leftB)
+			var st *excelize.Style
+			if !inTable {
+				// 表格外：仅缩字号+居中，不写任何边框、不动内容位置
+				st = &excelize.Style{
+					Font:      &excelize.Font{Size: printDigitFontSize, Color: fontColor, Bold: bold},
+					Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 				}
 			} else {
-				dc, ds := dividerBorder(dividerStyles[k-1])
-				st.Border = append(st.Border, excelize.Border{Type: "left", Color: dc, Style: ds})
-			}
-			// 右边框：末格继承原右边框；其余格右边框 = 自身分隔线
-			if k == 11 {
-				if rightB != nil {
-					st.Border = append(st.Border, *rightB)
+				st = &excelize.Style{
+					Font:      &excelize.Font{Size: printDigitFontSize, Color: fontColor, Bold: bold},
+					Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 				}
-			} else {
-				dc, ds := dividerBorder(dividerStyles[k])
-				st.Border = append(st.Border, excelize.Border{Type: "right", Color: dc, Style: ds})
-			}
-			// 上下边框：全部小格继承原格语义（每5行加粗、过次页红双线底边等）
-			if topB != nil {
-				st.Border = append(st.Border, *topB)
-			}
-			if bottomB != nil {
-				st.Border = append(st.Border, *bottomB)
+				// 左边框：首格继承原左边框；其余格左边框 = 前一分隔线
+				if k == 0 {
+					if leftB != nil {
+						st.Border = append(st.Border, *leftB)
+					}
+				} else {
+					dc, ds := dividerBorder(dividerStyles[k-1])
+					st.Border = append(st.Border, excelize.Border{Type: "left", Color: dc, Style: ds})
+				}
+				// 右边框：末格继承原右边框；其余格右边框 = 自身分隔线
+				if k == 11 {
+					if rightB != nil {
+						st.Border = append(st.Border, *rightB)
+					}
+				} else {
+					dc, ds := dividerBorder(dividerStyles[k])
+					st.Border = append(st.Border, excelize.Border{Type: "right", Color: dc, Style: ds})
+				}
+				// 上下边框：全部小格继承原格语义（每5行加粗、过次页红双线底边等）
+				if topB != nil {
+					st.Border = append(st.Border, *topB)
+				}
+				if bottomB != nil {
+					st.Border = append(st.Border, *bottomB)
+				}
 			}
 
 			sid, _ := f.NewStyle(st)
@@ -325,8 +344,8 @@ func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int) error {
 
 			if isNumeric {
 				f.SetCellValue(sheet, cell, digits[k])
-			} else if k > 0 {
-				// 非数字内容保留在首格，其余格清空
+			} else if k > 0 && snap.val == "" {
+				// 空格：非首格清空内容
 				f.SetCellValue(sheet, cell, "")
 			}
 		}
@@ -433,14 +452,8 @@ func updateMLHeadersForExpanded(f *excelize.File, sheet string, lay layout.MLLay
 		h4 := hStart + 3
 
 		// Step 1: 拆除本块表头四行（hStart ~ h4）内的全部既有合并区，
-		// 记录 (起列, 起行-块内偏移, 值) 供重建。
-		type oldMerge struct {
-			col    int // 平移后起列（当前坐标）
-			rowOff int // 相对 hStart 的行偏移 0..2
-			span   int // 横向跨度
-			val    string
-		}
-		var olds []oldMerge
+		// 只取回文字内容（值跟随首格），布局由 Step 2 按已知结构主动重建。
+		texts := make(map[string]string) // "rowOff:col" → 首格文字
 		ms, _ := f.GetMergeCells(sheet)
 		for _, m := range ms {
 			sc, sr, err1 := excelize.CellNameToCoordinates(m.GetStartAxis())
@@ -448,94 +461,91 @@ func updateMLHeadersForExpanded(f *excelize.File, sheet string, lay layout.MLLay
 			if err1 != nil || err2 != nil {
 				continue
 			}
-			if sr >= hStart && er <= h4 && sr == er-(er-sr) {
-				// 纵向/矩形合并：只关心起止行都在表头区内
-			}
 			if sr >= hStart && er <= h4 {
-				olds = append(olds, oldMerge{
-					col: sc, rowOff: sr - hStart, span: ec - sc + 1,
-					val: m.GetCellValue(),
-				})
+				if strings.TrimSpace(m.GetCellValue()) != "" {
+					texts[fmt.Sprintf("%d:%d", sr-hStart, sc)] = m.GetCellValue()
+				}
 				f.UnmergeCell(sheet, cellName(sc, sr), cellName(ec, er))
 			}
 		}
 
-		// Step 2: 判断旧合并区的语义角色并按新布局重建。
-		// 角色判定用「块内相对行」：
-		//   rowOff==0 且横跨整侧 → 分析行（方金/额分析），重建为跨该侧全部小列
-		//   rowOff==1 → 明细科目名，扩展为 12 列宽
-		//   rowOff==0 单列跨 0..2 行 → 借/贷/余额大标题，扩展为 12×3 矩形
-		for _, om := range olds {
-			switch {
-			case om.rowOff == 0 && om.span > 1:
-				// 分析行：保持原跨度（其下的明细列已各自展开，
-				// 分析行的合并区按原比例扩展——直接用平移后的首末列）
-				endCol := mlShiftedCol(om.col+om.span-1+countShiftsBefore(om.col+om.span-1, expandedCols), expandedCols)
-				f.MergeCell(sheet, cellName(om.col, hStart), cellName(endCol, hStart))
-				if strings.TrimSpace(om.val) != "" {
-					f.SetCellValue(sheet, cellName(om.col, hStart), om.val)
-				}
-			case om.rowOff == 1:
-				// 明细科目名：12 列宽 × h2:h3
-				f.MergeCell(sheet, cellName(om.col, hStart+1), cellName(om.col+11, hStart+2))
-				if strings.TrimSpace(om.val) != "" {
-					f.SetCellValue(sheet, cellName(om.col, hStart+1), om.val)
-				}
-				writeDigitLabelsAt(f, sheet, om.col, h4, labelStyle)
-			case om.rowOff == 0 && om.span == 1:
-				// 借/贷/余额大标题：12×3 矩形
-				f.MergeCell(sheet, cellName(om.col, hStart), cellName(om.col+11, hStart+2))
-				if strings.TrimSpace(om.val) != "" {
-					f.SetCellValue(sheet, cellName(om.col, hStart), om.val)
-				}
-				writeDigitLabelsAt(f, sheet, om.col, h4, labelStyle)
-			default:
-				// 其他（如年份/凭证等非金额区合并）：按原样恢复
-				f.MergeCell(sheet,
-					cellName(om.col, hStart+om.rowOff),
-					cellName(mlShiftedCol(om.col, expandedCols)+0, hStart+om.rowOff))
+		// Step 2（主动构建）：按已知 ML 表头结构重建合并区。
+		// Back 侧列（非 Paper1）：借/贷/余额大标题 h1:h3 ×12、月日字号不动、
+		// 明细1-4 科目名 h2:h3 ×12；Front 侧：明细5-14 科目名 h2:h3 ×12。
+		rebuildDetail := func(col int) {
+			f.MergeCell(sheet, cellName(col, hStart+1), cellName(col+11, hStart+2))
+			writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
+		}
+		if !isPaper1 {
+			for _, off := range []int{mlOffDebit, mlOffCredit, mlOffBalance} {
+				col := mlShiftedCol(lay.BackStartCol+off, expandedCols)
+				f.MergeCell(sheet, cellName(col, hStart), cellName(col+11, hStart+2))
+				writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
+			}
+			for i := 0; i < 4; i++ {
+				rebuildDetail(mlShiftedCol(mlDetailCol(lay, i), expandedCols))
 			}
 		}
-
-		if isPaper1 {
-			continue
-		}
-		// Back 侧借/贷/余额与明细1-4 在上面的 olds 循环中已覆盖；
-		// 若某列原本无内容（空明细列无合并区），补写 h4 小列标签。
-		for i := 0; i < 4; i++ {
-			col := mlShiftedCol(mlDetailCol(lay, i), expandedCols)
-			writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
-		}
-		for _, off := range []int{mlOffDebit, mlOffCredit, mlOffBalance} {
-			col := mlShiftedCol(lay.BackStartCol+off, expandedCols)
-			writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
-		}
-		// Front 侧空明细列同样补标签
 		for i := 4; i < mlMaxDetails; i++ {
-			col := mlShiftedCol(mlDetailCol(lay, i), expandedCols)
-			writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
+			rebuildDetail(mlShiftedCol(mlDetailCol(lay, i), expandedCols))
+		}
+
+		// 分析行「( )方金 / 额 分析」：h1 行横跨该侧全部明细小列。
+		// Back 分析行原为明细1-4 四列（col11-14 原始）→ 平移后从明细1 首格到明细4 末格；
+		// Front 分析行原为明细5-14 十列 → 明细5 首格到明细14 末格。
+		if !isPaper1 {
+			l := mlShiftedCol(mlDetailCol(lay, 0), expandedCols)
+			r := mlShiftedCol(mlDetailCol(lay, 3), expandedCols) + 11
+			f.MergeCell(sheet, cellName(l, hStart), cellName(r, hStart))
+			if v, ok := texts[fmt.Sprintf("0:%d", l)]; ok {
+				f.SetCellValue(sheet, cellName(l, hStart), v)
+			} else if v, ok2 := texts[fmt.Sprintf("0:%d", mlShiftedCol(mlDetailCol(lay, 0), expandedCols))]; ok2 {
+				f.SetCellValue(sheet, cellName(l, hStart), v)
+			}
+		}
+		{
+			l := mlShiftedCol(mlDetailCol(lay, 4), expandedCols)
+			r := mlShiftedCol(mlDetailCol(lay, mlMaxDetails-1), expandedCols) + 11
+			f.MergeCell(sheet, cellName(l, hStart), cellName(r, hStart))
+			if v, ok := texts[fmt.Sprintf("0:%d", l)]; ok {
+				f.SetCellValue(sheet, cellName(l, hStart), v)
+			}
 		}
 	}
 	return nil
 }
 
-// countShiftsBefore 统计 expandedCols 中小于 col 的插入点数量（辅助分析行末端列计算）。
-func countShiftsBefore(col int, expandedCols []int) int {
-	n := 0
-	for _, at := range expandedCols {
-		if col > at {
-			n++
-		}
-	}
-	return n
-}
-
 // writeDigitLabelsAt 在指定行的 12 个小格写入小列标签。
+// 竖线按分组规则派生（与数据行一致）：组界绿粗、元|角红细、其余绿细。
 func writeDigitLabelsAt(f *excelize.File, sheet string, firstCol, row int, style int) {
 	for k, lbl := range digitColLabels {
 		c := cellName(firstCol+k, row)
 		f.SetCellValue(sheet, c, lbl)
-		f.SetCellStyle(sheet, c, c, style)
+
+		st := &excelize.Style{
+			Font:      &excelize.Font{Size: printDigitFontSize, Color: "006100"},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		}
+		// 左边框：首格无特殊语义用普通细线；其余 = 前一分隔线
+		if k == 0 {
+			st.Border = append(st.Border, excelize.Border{Type: "left", Color: "#006100", Style: 1})
+		} else {
+			dc, ds := dividerBorder(dividerStyles[k-1])
+			st.Border = append(st.Border, excelize.Border{Type: "left", Color: dc, Style: ds})
+		}
+		// 右边框：末格普通细线；其余 = 自身分隔线
+		if k == 11 {
+			st.Border = append(st.Border, excelize.Border{Type: "right", Color: "#006100", Style: 1})
+		} else {
+			dc, ds := dividerBorder(dividerStyles[k])
+			st.Border = append(st.Border, excelize.Border{Type: "right", Color: dc, Style: ds})
+		}
+		st.Border = append(st.Border,
+			excelize.Border{Type: "top", Color: "#006100", Style: 1},
+			excelize.Border{Type: "bottom", Color: "#006100", Style: 1},
+		)
+		sid, _ := f.NewStyle(st)
+		f.SetCellStyle(sheet, c, c, sid)
 	}
 }
 

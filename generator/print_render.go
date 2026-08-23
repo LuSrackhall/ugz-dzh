@@ -60,6 +60,7 @@ func RenderPrintVersion(viewPath, printDir, month string) error {
 
 // transformGLMoneyCols 将 GL Sheet 的金额列展开为 12 小列。
 // 处理 Front 和 Back 两侧，每侧 3 个金额列（借/贷/余额）。
+// 注意：GL 是多页结构（过次页后每页有自己的表头），表头处理需逐页执行。
 func transformGLMoneyCols(f *excelize.File, sheet string) error {
 	lay := glLayout()
 	rows, err := f.GetRows(sheet)
@@ -67,28 +68,72 @@ func transformGLMoneyCols(f *excelize.File, sheet string) error {
 		return nil
 	}
 
-	// 从右往左处理两侧的金额列，避免插入点偏移
-	// Back 侧先处理（列号更大），Front 侧后处理
-	for _, side := range []struct {
-		base   int
-		offsets []int
-	}{
-		{lay.BackStartCol, glPrintMoneyOffsets},
-		{lay.FrontStartCol, glPrintMoneyOffsets},
-	} {
-		// 从右往左处理每个金额列
-		for i := len(side.offsets) - 1; i >= 0; i-- {
-			off := side.offsets[i]
-			col := side.base + off
-			if err := expandMoneyColumn(f, sheet, col, len(rows)); err != nil {
-				return err
+	// 收集全部金额列（Front + Back），去重后从右往左展开
+	cols := make([]int, 0, 6)
+	seen := make(map[int]bool)
+	for _, side := range []int{lay.BackStartCol, lay.FrontStartCol} {
+		for _, off := range glPrintMoneyOffsets {
+			c := side + off
+			if !seen[c] {
+				seen[c] = true
+				cols = append(cols, c)
 			}
 		}
 	}
+	sortIntsDesc(cols)
+	for _, col := range cols {
+		if err := expandMoneyColumn(f, sheet, col, len(rows)); err != nil {
+			return err
+		}
+	}
 
-	// 重新设置金额列宽（12 小列均分原宽）
-	setExpandedColWidths(f, sheet, lay)
+	return updateGLHeadersForExpanded(f, sheet, cols)
+}
 
+// updateGLHeadersForExpanded 更新 GL 每一页的表头（GL 多页结构，每页过次页后有自己的两行表头）。
+func updateGLHeadersForExpanded(f *excelize.File, sheet string, expandedCols []int) error {
+	rows, _ := f.GetRows(sheet)
+	if len(rows) == 0 {
+		return nil
+	}
+	lay := glLayout()
+
+	labelStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: printDigitFontSize, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+
+	colSet := make(map[int]bool)
+	for _, c := range expandedCols {
+		colSet[c] = true
+	}
+
+	// 扫描每一行：找到「月」所在行 = SubHeaderRow，其上一行为 HeaderRow
+	for i, row := range rows {
+		r := i + 1
+		for _, base := range []int{lay.FrontStartCol, lay.BackStartCol} {
+			idx := base - 1 // GetRows 索引
+			if idx >= len(row) || strings.TrimSpace(row[idx]) != "月" {
+				continue
+			}
+			headerRow := r - 1
+			subRow := r
+			if headerRow < 1 {
+				continue
+			}
+			// 该页该侧的三个金额列（原始列号；插列后首格仍在原列位置）
+			for _, off := range glPrintMoneyOffsets {
+				col := base + off
+				if !colSet[col] {
+					continue
+				}
+				// 大标题跨 12 列合并
+				f.MergeCell(sheet, cellName(col, headerRow), cellName(col+11, headerRow))
+				// 小列标签写入 SubHeaderRow
+				writeDigitLabelsAt(f, sheet, col, subRow, labelStyle)
+			}
+		}
+	}
 	return nil
 }
 
@@ -144,42 +189,13 @@ func expandMoneyColumn(f *excelize.File, sheet string, col, lastRow int) error {
 		}
 	}
 
-	// 更新表头：大标题跨 12 列合并，小列标签写入 SubHeaderRow
-	updateGLHeaderForExpanded(f, sheet, col)
-
 	return nil
 }
 
-// updateGLHeaderForExpanded 更新 GL 表头以适应展开的金额列。
-func updateGLHeaderForExpanded(f *excelize.File, sheet string, col int) {
-	lay := glLayout()
-	headerRow := lay.HeaderRow + 1
-	subRow := lay.SubHeaderRow + 1
-
-	// 大标题跨 12 列合并（原文字在首格）
-	topLeft := cellName(col, headerRow)
-	bottomRight := cellName(col+11, headerRow)
-	f.MergeCell(sheet, topLeft, bottomRight)
-
-	// 小列标签写入 SubHeaderRow
-	labelStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Size: printDigitFontSize, Color: "006100"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	for k, lbl := range digitColLabels {
-		c := cellName(col+k, subRow)
-		f.SetCellValue(sheet, c, lbl)
-		f.SetCellStyle(sheet, c, c, labelStyle)
-	}
-}
-
-// setExpandedColWidths 重新设置展开后的金额列宽。
-func setExpandedColWidths(f *excelize.File, sheet string, lay layout.GLLayout) {
-	// 这个函数在 expandMoneyColumn 中已经处理了列宽
-	// 这里可以添加额外的列宽调整逻辑
-}
-
 // transformMLMoneyCols 将 ML Sheet 的金额列展开为 12 小列。
+// ML 布局按块（每块 blockRows 行）：Paper1 首块只有 Front 侧明细5-14；
+// 其余块 Back 侧（借/贷/余额+明细1-4）与 Front 侧都有。
+// mlDetailCol 返回绝对 Excel 列号，直接使用。
 func transformMLMoneyCols(f *excelize.File, sheet string) error {
 	lay := mlLayout()
 	rows, err := f.GetRows(sheet)
@@ -187,35 +203,123 @@ func transformMLMoneyCols(f *excelize.File, sheet string) error {
 		return nil
 	}
 
-	// Back 侧：借/贷/余额 + 明细1-4
-	backOffsets := []int{mlOffDebit, mlOffCredit, mlOffBalance}
-	for i := 0; i < 4; i++ {
-		backOffsets = append(backOffsets, mlDetailCol(lay, i))
-	}
+	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
+	_ = blockRows
 
-	// Front 侧：明细5-14
-	frontOffsets := make([]int, 0, 10)
+	// 逐块处理，从最后一块往前（右侧块的插列不影响左侧块的原始坐标——
+	// 但插列是全列生效的：在 col X 右侧插列影响所有行的该列之后内容。
+	// 因此按「从右往左」的全局列序处理一次即可，行无关。）
+
+	// 收集全部需要展开的绝对列号（去重）
+	cols := make([]int, 0, 17)
+	seen := make(map[int]bool)
+	addCol := func(c int) {
+		if !seen[c] {
+			seen[c] = true
+			cols = append(cols, c)
+		}
+	}
+	// Front 侧明细5-14（所有块都有）
 	for i := 4; i < mlMaxDetails; i++ {
-		frontOffsets = append(frontOffsets, mlDetailCol(lay, i))
+		addCol(mlDetailCol(lay, i))
+	}
+	// Back 侧借/贷/余额 + 明细1-4（Paper1 首块没有 Back 表结构，
+	// 但插列是列级操作——若首块 Back 区为空，展开这些列对空单元格无副作用，
+	// 且后续块需要。统一处理。）
+	for _, off := range []int{mlOffDebit, mlOffCredit, mlOffBalance} {
+		addCol(lay.BackStartCol + off)
+	}
+	for i := 0; i < 4; i++ {
+		addCol(mlDetailCol(lay, i))
 	}
 
-	// 从右往左处理
-	for _, side := range []struct {
-		base    int
-		offsets []int
-	}{
-		{0, frontOffsets}, // Front 侧（mlDetailCol 已含绝对列号）
-		{0, backOffsets},  // Back 侧
-	} {
-		for i := len(side.offsets) - 1; i >= 0; i-- {
-			col := side.offsets[i]
-			if err := expandMoneyColumn(f, sheet, col, len(rows)); err != nil {
-				return err
-			}
+	// 从右往左展开
+	sortIntsDesc(cols)
+	for _, col := range cols {
+		if err := expandMoneyColumn(f, sheet, col, len(rows)); err != nil {
+			return err
 		}
 	}
 
+	return updateMLHeadersForExpanded(f, sheet, lay, cols)
+}
+
+// mlShiftedCol 计算原始列号在全部展开完成后的实际列号。
+// inserts 为各插入点的原始列号（在其右侧插 11 列）；
+// 比较基于原始列号，避免级联重复位移。
+func mlShiftedCol(col int, inserts []int) int {
+	for _, at := range inserts {
+		if col > at {
+			col += 11
+		}
+	}
+	return col
+}
+
+// sortIntsDesc 降序排序。
+func sortIntsDesc(a []int) {
+	for i := 0; i < len(a); i++ {
+		for j := i + 1; j < len(a); j++ {
+			if a[j] > a[i] {
+				a[i], a[j] = a[j], a[i]
+			}
+		}
+	}
+}
+
+// updateMLHeadersForExpanded 更新 ML 四行表头以适应展开的金额列。
+func updateMLHeadersForExpanded(f *excelize.File, sheet string, lay layout.MLLayout, expandedCols []int) error {
+	rows, _ := f.GetRows(sheet)
+	if len(rows) == 0 {
+		return nil
+	}
+	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
+
+	labelStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: printDigitFontSize, Color: "006100"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+
+	for start := 1; start <= len(rows); start += blockRows {
+		isPaper1 := start == 1
+		hStart := start + 4 // h1
+		h4 := hStart + 3
+
+		if !isPaper1 {
+			// Back 侧借/贷/余额大标题 h1-h3 矩形合并扩展 + h4 标签
+			for _, off := range []int{mlOffDebit, mlOffCredit, mlOffBalance} {
+				col := mlShiftedCol(lay.BackStartCol+off, expandedCols)
+				topLeft := cellName(col, hStart)
+				f.MergeCell(sheet, topLeft, cellName(col+11, hStart+2))
+				writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
+			}
+			// 明细1-4：h2-h3 合并扩展 + h4 标签
+			for i := 0; i < 4; i++ {
+				col := mlShiftedCol(mlDetailCol(lay, i), expandedCols)
+				topLeft := cellName(col, hStart+1)
+				f.MergeCell(sheet, topLeft, cellName(col+11, hStart+2))
+				writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
+			}
+		}
+
+		// Front 侧明细5-14：h2-h3 合并扩展 + h4 标签
+		for i := 4; i < mlMaxDetails; i++ {
+			col := mlShiftedCol(mlDetailCol(lay, i), expandedCols)
+			topLeft := cellName(col, hStart+1)
+			f.MergeCell(sheet, topLeft, cellName(col+11, hStart+2))
+			writeDigitLabelsAt(f, sheet, col, h4, labelStyle)
+		}
+	}
 	return nil
+}
+
+// writeDigitLabelsAt 在指定行的 12 个小格写入小列标签。
+func writeDigitLabelsAt(f *excelize.File, sheet string, firstCol, row int, style int) {
+	for k, lbl := range digitColLabels {
+		c := cellName(firstCol+k, row)
+		f.SetCellValue(sheet, c, lbl)
+		f.SetCellStyle(sheet, c, c, style)
+	}
 }
 
 // copyFile 复制文件。

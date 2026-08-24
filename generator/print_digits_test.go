@@ -77,15 +77,15 @@ func TestSplitCNY(t *testing.T) {
 }
 
 func TestDividerStyles(t *testing.T) {
-	// 12 列：加粗（;）位于索引 0、3、6；红细（.）位于索引 9；其余细线。
+	// 12 列：从元(索引9)起每三位一组，组界加粗 = 6,3,0（百|千、十|百、亿|十亿）；元|角 红细 = 9。
 	ds12 := dividerStyles(12)
 	if len(ds12) != 11 {
 		t.Fatalf("dividerStyles(12) 长度 = %d, 期望 11", len(ds12))
 	}
-	wantThick := map[int]bool{0: true, 3: true, 6: true}
+	wantThick12 := map[int]bool{6: true, 3: true, 0: true}
 	for i := 0; i < 11; i++ {
 		switch {
-		case wantThick[i]:
+		case wantThick12[i]:
 			if ds12[i] != divThickGreen {
 				t.Errorf("12列 索引 %d: 期望加粗 divThickGreen, got %d", i, ds12[i])
 			}
@@ -99,7 +99,7 @@ func TestDividerStyles(t *testing.T) {
 			}
 		}
 	}
-	// 11 列：元在索引 8、角在索引 9 → 元|角 分隔符索引 8。
+	// 11 列：元在索引 8 → 组界加粗 = 5,2（千|百、百|十）；元|角 红细 = 8。
 	ds11 := dividerStyles(11)
 	if len(ds11) != 10 {
 		t.Fatalf("dividerStyles(11) 长度 = %d, 期望 10", len(ds11))
@@ -111,7 +111,13 @@ func TestDividerStyles(t *testing.T) {
 	if ds11[8] != divThinRed {
 		t.Errorf("11列 元|角(索引8)应为红细线, got %d", ds11[8])
 	}
-	// 10 列：元在索引 7、角在索引 8 → 元|角 分隔符索引 7。
+	if ds11[5] != divThickGreen || ds11[2] != divThickGreen {
+		t.Errorf("11列 组界加粗应位于 5(千|百) 和 2(百|十): got [5]=%d [2]=%d", ds11[5], ds11[2])
+	}
+	if ds11[0] != divThinGreen || ds11[3] != divThinGreen || ds11[6] != divThinGreen {
+		t.Errorf("11列 非组界位置不应加粗: [0]=%d [3]=%d [6]=%d", ds11[0], ds11[3], ds11[6])
+	}
+	// 10 列：元在索引 7 → 组界加粗 = 4,1（千|百、百|十）；元|角 红细 = 7。
 	ds10 := dividerStyles(10)
 	if len(ds10) != 9 {
 		t.Fatalf("dividerStyles(10) 长度 = %d, 期望 9", len(ds10))
@@ -122,6 +128,12 @@ func TestDividerStyles(t *testing.T) {
 	}
 	if ds10[7] != divThinRed {
 		t.Errorf("10列 元|角(索引7)应为红细线, got %d", ds10[7])
+	}
+	if ds10[4] != divThickGreen || ds10[1] != divThickGreen {
+		t.Errorf("10列 组界加粗应位于 4(千|百) 和 1(百|十): got [4]=%d [1]=%d", ds10[4], ds10[1])
+	}
+	if ds10[0] != divThinGreen || ds10[3] != divThinGreen || ds10[6] != divThinGreen {
+		t.Errorf("10列 非组界位置不应加粗: [0]=%d [3]=%d [6]=%d", ds10[0], ds10[3], ds10[6])
 	}
 }
 

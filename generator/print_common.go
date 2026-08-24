@@ -267,7 +267,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	}
 
 	// 单元格
-	digitCache := make(map[[2]int]int) // (styleID,k) → 金额小格样式（数据数字格/标签格共用）
+	digitCache := make(map[[3]int]int) // (styleID,k,n) → 金额小格样式（数据数字格/标签格共用）
 	var extraMerges []metaMerge        // 文本标签新建的 12 列合并
 	for _, cell := range meta.cells {
 		r, c, val, sid := cell.r, cell.c, cell.val, cell.style
@@ -387,8 +387,10 @@ func cellAxis(col, row int) string {
 // amountSubStyle 构建并缓存金额小格样式（数据数字格 / 标签格共用，按 (styleID,k) 缓存）。
 // 字体：7pt 居中，颜色取原样式（金额格无字体=默认黑；表头标签格=绿色）。
 // 边框：上/下继承原样式；左 = (k==0? 原左 : 分组线[k-1])；右 = (k==11? 原右 : 分组线[k])。
-func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int, n int) int {
-	key := [2]int{origStyleID, k}
+func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[3]int]int, n int) int {
+	// key 含 n：同一 styleID 在 GL(12列)/ML(11,10列) 下 k 相同但含义不同（元位置不同），
+	// 若不含 n 会缓存串用，导致红细线/加粗线错位、列内部出现不该有的红线。
+	key := [3]int{origStyleID, k, n}
 	if id, ok := cache[key]; ok {
 		return id
 	}
@@ -434,8 +436,8 @@ func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int, 
 // 与 amountSubStyle 的区别：中间格（k=1..10）左右**无边框**——不生成分组竖线
 // （避免溢出到标题区），也不复制原红双线（避免 12 条双线）。
 // 边框：上/下继承原样式（水平线铺满 12 格）；左 = k==0 ? 原左边框 : 无；右 = k==11 ? 原右边框 : 无。
-func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int, n int) int {
-	key := [2]int{origStyleID, k}
+func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[3]int]int, n int) int {
+	key := [3]int{origStyleID, k, n}
 	if id, ok := cache[key]; ok {
 		return id
 	}

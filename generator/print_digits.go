@@ -44,16 +44,14 @@ func digitColLabels(n int) []string {
 
 // dividerStyles 返回 n 列的分组竖线样式表（长度 n-1，第 i 小列与其右邻之间）。
 //
-// 需求分组串「十; 亿, 千, 百; 十, 万, 千; 百, 十, 元. 角, 分」：
-//   - ';'（加粗）位于 十|亿(0)、百万|十万(3)、千|百(6) —— 人民币分段组界，共 3 处
-//   - '.'（红色单细线）位于 元|角 —— 共 1 处
+// 规则（用户定义）：
+//   - 单红线（divThinRed）任何时候都在「元|角」之间（分隔符索引 = 元所在索引）
+//   - 从元开始每三位一组（元十百 | 千万十万 | 百万千万亿 | ...），组界加粗绿线：
+//     组界分隔符索引 = yuanIdx-3, yuanIdx-6, yuanIdx-9（≥0 时）
+//     （12列: 6,3,0 = 百|千、十|百、亿|十亿；11列: 5,2；10列: 4,1）
 //   - 其余为普通绿色细线
-//
-// 元|角 分隔符索引 = n-4（n=12→9、11→7？不对——见下）。
 func dividerStyles(n int) []int {
 	labels := digitColLabels(n)
-	// 定位 元|角 分隔符：元在 labels 中的索引为 yuanIdx，其右邻分隔符索引 = yuanIdx
-	// （分隔符 i 位于标签 i 与 i+1 之间）。
 	yuanIdx := -1
 	for i, lb := range labels {
 		if lb == "元" {
@@ -66,7 +64,7 @@ func dividerStyles(n int) []int {
 		switch {
 		case i == yuanIdx: // 元|角
 			out[i] = divThinRed
-		case i == 0 || i == 3 || i == 6: // 加粗组界（十|亿 / 百万|十万 / 千|百）
+		case i == yuanIdx-3 || i == yuanIdx-6 || i == yuanIdx-9: // 从元起每三位一组，组界加粗
 			out[i] = divThickGreen
 		default:
 			out[i] = divThinGreen

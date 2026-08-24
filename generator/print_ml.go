@@ -35,22 +35,23 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	for i := 0; i < mlMaxDetails; i++ {
 		split[mlDetailCol(lay, i)] = 10
 	}
-	// 用户定值（2026-08-24 八次调整）：基础列宽 14px；组内边缘列独立像素——
-	//   借/贷/余（Back 侧）：分列(k=n-1) 15px
-	//   明细1-4（Back 侧）：分列(k=n-1) 16px
-	//   明细5-14（Front 侧）：千列(k=0) 16px + 分列(k=n-1) 16px
+	// 用户定值（2026-08-24 十次调整）：基础列宽 14px；组内任意位置独立像素——
+	//   借/贷/余（Back 侧，n=11）：分列 k=10 15px
+	//   明细1-4（Back 侧，n=10）：分列 k=9 16px
+	//   明细5-14（Front 侧，n=10）：k=0(千万位千) 16、k=1(百万位百) 16、k=4(千位千) 16、k=9(分) 16
 	// 标签 6pt、数字 7pt。
-	edgeLastPixel := map[int]float64{}  // 金额列 → 分列像素
-	edgeFirstPixel := map[int]float64{} // 金额列 → 千列像素
+	edgePixel := map[[2]int]float64{}
 	for i, c := range amountCols {
 		switch {
 		case i < 3: // 借/贷/余
-			edgeLastPixel[c] = 15
+			edgePixel[[2]int{c, 10}] = 15
 		case i < 7: // 明1-4
-			edgeLastPixel[c] = 16
+			edgePixel[[2]int{c, 9}] = 16
 		default: // 明5-14
-			edgeFirstPixel[c] = 16
-			edgeLastPixel[c] = 16
+			edgePixel[[2]int{c, 0}] = 16 // 千万位千
+			edgePixel[[2]int{c, 1}] = 16 // 百万位百
+			edgePixel[[2]int{c, 4}] = 16 // 千位千
+			edgePixel[[2]int{c, 9}] = 16 // 分
 		}
 	}
 	cfg := printSheetConfig{
@@ -73,8 +74,7 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 		breakViewCol:    lay.PageGapStartCol + 2,
 		applyPageLayout: applyMLPrintPageLayout,
 		amountColPixel:  14,
-		edgeFirstPixel:  edgeFirstPixel,
-		edgeLastPixel:   edgeLastPixel,
+		edgePixel:       edgePixel,
 		labelFontSize:   6,
 	}
 	return transformSheet(f, sheet, cfg)

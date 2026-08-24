@@ -304,12 +304,12 @@ type printSheetConfig struct {
 	// amountColPixel 金额小列的目标渲染像素宽（>0 时启用，0 = 按查看版列宽均分/字符守恒）。
 	// 用户定值（ML）= 14：缓解 Excel 每列 +5px 像素取整导致的区域膨胀。
 	amountColPixel float64
-	// edgeLastPixel 金额列 → 组内末位列（k=n-1，"分"列）的像素宽；未覆盖用基础宽。
-	// 用户定值（ML）：借/贷/余 15、明细1-4 16、明细5-14 15。
-	edgeLastPixel map[int]float64
-	// edgeFirstPixel 金额列 → 组内首位列（k=0，"千"列/千万位）的像素宽；未覆盖用基础宽。
-	// 用户定值（ML）：明细5-14 16。
-	edgeFirstPixel map[int]float64
+	// edgePixel (金额列,k) → 该小列的像素宽（覆盖基础宽；k 为组内下标 0..n-1）。
+	// 用户定值（ML）：
+	//   借/贷/余（n=11）：分列 k=10 → 15px
+	//   明细1-4（n=10）：分列 k=9 → 16px
+	//   明细5-14（n=10）：千列 k=0(千万位)、百 k=1(百万位)、千 k=4(千位)、分 k=9 → 16px
+	edgePixel map[[2]int]float64
 	// labelFontSize 表头单位行标签字号（pt）。0 = 沿用 printDigitFontSize(7)。ML 设 6。
 	labelFontSize float64
 }
@@ -370,15 +370,9 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 			for k := 0; k < n; k++ {
 				sub := base
-				// 组内边缘列独立像素：末位列（"分"列 k=n-1）与首位列（"千"列 k=0）
-				if k == n-1 {
-					if v, ok := cfg.edgeLastPixel[c]; ok {
-						sub = (v - 5) / 7
-					}
-				} else if k == 0 {
-					if v, ok := cfg.edgeFirstPixel[c]; ok {
-						sub = (v - 5) / 7
-					}
+				// 组内任意位置独立像素（按 (金额列,k) 查表）
+				if v, ok := cfg.edgePixel[[2]int{c, k}]; ok {
+					sub = (v - 5) / 7
 				}
 				pc := cm.startCol(c) + k
 				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub)

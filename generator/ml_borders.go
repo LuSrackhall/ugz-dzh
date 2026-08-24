@@ -73,7 +73,7 @@ func mlBorderClear(f *excelize.File, sheet string, col, row int, side string) {
 //   - 表内区域（4行表头+数据+过次页，标题区在表外）全部绿色细框
 //   - 每页表格最上（表头顶）/最下（过次页底） 红色双线
 //   - 表头最下行下边框 与 每5数据行下边框 绿色加粗
-//   - 表头 月/字 右边框绿色加粗，日/号 右边框红色单线
+//   - 表头 月|日、字|号 之间绿色细线；表头+数据区 日/号 右边框红色细线
 //   - 金额栏（借方/贷方/余额/明细1-14）左右红色双线
 //   - Back 页最左空、最右红色双线；Front 页最左红色双线、最右空；红色双线溢出直达边距行
 func applyMLBorders(f *excelize.File, sheet string) {
@@ -147,14 +147,19 @@ func applyMLBorders(f *excelize.File, sheet string) {
 			}
 		}
 
-		// 3) 表头 月/日/字/号 右边框：月、字=绿色加粗；日、号=红色单线（仅 Back 侧有）
-		//    C=月, D=日, E=字, F=号；仅作用于 4 行表头区
+		// 3) 月/日/字/号 分隔与右边框（仅 Back 侧有）：
+		//    表头区：月|日、字|号 之间 = 绿色细线；日右、号右 = 红色细线
+		//    数据区+过次页：日右、号右 = 红色细线
 		if !isPaper1 {
 			for r := hStart; r <= hEnd; r++ {
-				mlBorderSet(f, sheet, backL, r, "right", mlGreen, mlBorderThick)   // 月
-				mlBorderSet(f, sheet, backL+1, r, "right", mlRed, mlBorderThin)    // 日
-				mlBorderSet(f, sheet, backL+2, r, "right", mlGreen, mlBorderThick) // 字
-				mlBorderSet(f, sheet, backL+3, r, "right", mlRed, mlBorderThin)    // 号
+				mlBorderSet(f, sheet, backL, r, "right", mlGreen, mlBorderThin) // 月|日 细线
+				mlBorderSet(f, sheet, backL+1, r, "right", mlRed, mlBorderThin) // 日右红细
+				mlBorderSet(f, sheet, backL+2, r, "right", mlGreen, mlBorderThin) // 字|号 细线
+				mlBorderSet(f, sheet, backL+3, r, "right", mlRed, mlBorderThin)   // 号右红细
+			}
+			for r := dataStart; r <= breakRow; r++ {
+				mlBorderSet(f, sheet, backL+1, r, "right", mlRed, mlBorderThin) // 日
+				mlBorderSet(f, sheet, backL+3, r, "right", mlRed, mlBorderThin) // 号
 			}
 		}
 

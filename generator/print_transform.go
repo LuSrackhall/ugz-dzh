@@ -41,10 +41,12 @@ func TransformToPrint(viewPath, printPath string) error {
 			if err := transformGLSheet(f, sheet); err != nil {
 				return fmt.Errorf("变换总分类账 %s: %w", sheet, err)
 			}
+			applyPrintFont(f, sheet) // 字体统一宋体加粗（在拆位样式生成后）
 		case strings.HasPrefix(sheet, sheetPrefixML):
 			if err := transformMLSheet(f, sheet); err != nil {
 				return fmt.Errorf("变换多科目明细账 %s: %w", sheet, err)
 			}
+			applyPrintFont(f, sheet)
 		}
 	}
 

@@ -84,9 +84,9 @@ type metaMerge struct{ r1, c1, r2, c2 int }
 type sheetMeta struct {
 	cells         []metaCell
 	merges        []metaMerge
-	colWidth      []float64     // [1..maxCol] 显式列宽（含 0 宽列）
-	zeroWidthCols map[int]bool  // 显式 width=0 的列（GL 分页列 c15 / ML 书口列 c29 等）
-	rowHeight     []float64     // [1..maxRow]
+	colWidth      []float64    // [1..maxCol] 显式列宽（含 0 宽列）
+	zeroWidthCols map[int]bool // 显式 width=0 的列（GL 分页列 c15 / ML 书口列 c29 等）
+	rowHeight     []float64    // [1..maxRow]
 	maxRow        int
 	maxCol        int
 }
@@ -294,23 +294,22 @@ func restoreSheetOrder(f *excelize.File, name string, origIdx int) {
 
 // printSheetConfig 描述一个 Sheet 的打印变换参数。
 type printSheetConfig struct {
-	totalViewCols   int                                      // 查看版总列数
-	amountCols      []int                                    // 金额列号（1-indexed）
-	splitCols       map[int]int                              // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
-	isLabelRow      func(r int) bool                         // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
-	isDataRow       func(r int) bool                         // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
-	breakViewCol    int                                      // 查看版垂直分页符所在列
+	totalViewCols   int              // 查看版总列数
+	amountCols      []int            // 金额列号（1-indexed）
+	splitCols       map[int]int      // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
+	isLabelRow      func(r int) bool // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
+	isDataRow       func(r int) bool // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
+	breakViewCol    int              // 查看版垂直分页符所在列
 	applyPageLayout func(f *excelize.File, sheet string, breakPrintCol, lastRow int)
 	// amountColPixel 金额小列的目标渲染像素宽（>0 时启用，0 = 按查看版列宽均分/字符守恒）。
 	// 用户定值（ML）= 14：缓解 Excel 每列 +5px 像素取整导致的区域膨胀。
 	amountColPixel float64
-	// amountColPixelEdge 装订边两侧列的加宽像素（>0 时启用）：Back 侧（装订边在右）每组金额列的
-	// "分"列（k=n-1）、Front 侧（装订边在左）每组金额列的"千"列（千万位 k=0）用此宽度（ML=15）。
-	amountColPixelEdge float64
-	// edgeLastCols Back 侧金额列集合：特殊列在组内末位（k=n-1，如借/贷/余/明细1-4 的分列）。
-	edgeLastCols map[int]bool
-	// edgeFirstCols Front 侧金额列集合：特殊列在组内首位（k=0，如明细5-14 的千万"千"列）。
-	edgeFirstCols map[int]bool
+	// edgeLastPixel 金额列 → 组内末位列（k=n-1，"分"列）的像素宽；未覆盖用基础宽。
+	// 用户定值（ML）：借/贷/余 15、明细1-4 16、明细5-14 15。
+	edgeLastPixel map[int]float64
+	// edgeFirstPixel 金额列 → 组内首位列（k=0，"千"列/千万位）的像素宽；未覆盖用基础宽。
+	// 用户定值（ML）：明细5-14 16。
+	edgeFirstPixel map[int]float64
 	// labelFontSize 表头单位行标签字号（pt）。0 = 沿用 printDigitFontSize(7)。ML 设 6。
 	labelFontSize float64
 }
@@ -369,16 +368,16 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			} else {
 				base = w / float64(n)
 			}
-			edge := 0.0
-			if cfg.amountColPixelEdge > 0 {
-				edge = (cfg.amountColPixelEdge - 5) / 7
-			}
 			for k := 0; k < n; k++ {
 				sub := base
-				// 装订边两侧列加宽：Back 侧（装订边在右）"分"列 k=n-1；Front 侧（装订边在左）"千"列 k=0
-				if cfg.amountColPixelEdge > 0 {
-					if (cfg.edgeLastCols[c] && k == n-1) || (cfg.edgeFirstCols[c] && k == 0) {
-						sub = edge
+				// 组内边缘列独立像素：末位列（"分"列 k=n-1）与首位列（"千"列 k=0）
+				if k == n-1 {
+					if v, ok := cfg.edgeLastPixel[c]; ok {
+						sub = (v - 5) / 7
+					}
+				} else if k == 0 {
+					if v, ok := cfg.edgeFirstPixel[c]; ok {
+						sub = (v - 5) / 7
 					}
 				}
 				pc := cm.startCol(c) + k
@@ -416,69 +415,69 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 			continue
 		}
-	// 金额列分类（按"内容+样式+行区"判定，仅标签行/数据区用行号）：
-	//   - 标签行 + 有样式：写 12 小列标签
-	//   - 文本（"借方"/明细名/标题，非数值）+ 非空：值写首格 + 12 列铺样式 + 合并
-	//   - 数值（任意行）或 数据区空值格：拆位填 12 格——有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
-	//   - 非数据区空值 + 有样式（表头/标题/下边距区）：12 子格铺"仅继承边界"样式——top/bottom 继承原样式铺满，
-	//     左右仅 k=0 继承原左边框、k=11 继承原右边框，中间格无边框（不生成分组竖线、不复制原红双线）
-	//   - 空 + 无样式：跳过
-	// 关键：数据区空值金额格（如某分录未涉及的明细列、月结空金额）必须拆位（12 空格+分组竖线），
-	// 而非铺原样式（否则原红双线左右边框污染所有小格，造成"双线溢出"）；而表头/标题/下边距区
-	// 空值金额格必须"仅继承边界"（既不能拆位生成分组竖线——溢出到标题区，也不能整体铺原样式——
-	// 会把原红双线复制 12 条）。
-	// 该金额列展开的小列数
-	n := cm.splitCols(c)
-	labels := digitColLabels(n)
-	switch {
-	case cfg.isLabelRow(r):
-		// n 小列标签行（仅对有样式格写入，未渲染侧如 ML Paper1 Back 跳过）。
-		// 标签用独立 labelCache（字体 5pt，与数据数字 7pt 区分，缓存互不串用）
-		if sid != 0 {
+		// 金额列分类（按"内容+样式+行区"判定，仅标签行/数据区用行号）：
+		//   - 标签行 + 有样式：写 12 小列标签
+		//   - 文本（"借方"/明细名/标题，非数值）+ 非空：值写首格 + 12 列铺样式 + 合并
+		//   - 数值（任意行）或 数据区空值格：拆位填 12 格——有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
+		//   - 非数据区空值 + 有样式（表头/标题/下边距区）：12 子格铺"仅继承边界"样式——top/bottom 继承原样式铺满，
+		//     左右仅 k=0 继承原左边框、k=11 继承原右边框，中间格无边框（不生成分组竖线、不复制原红双线）
+		//   - 空 + 无样式：跳过
+		// 关键：数据区空值金额格（如某分录未涉及的明细列、月结空金额）必须拆位（12 空格+分组竖线），
+		// 而非铺原样式（否则原红双线左右边框污染所有小格，造成"双线溢出"）；而表头/标题/下边距区
+		// 空值金额格必须"仅继承边界"（既不能拆位生成分组竖线——溢出到标题区，也不能整体铺原样式——
+		// 会把原红双线复制 12 条）。
+		// 该金额列展开的小列数
+		n := cm.splitCols(c)
+		labels := digitColLabels(n)
+		switch {
+		case cfg.isLabelRow(r):
+			// n 小列标签行（仅对有样式格写入，未渲染侧如 ML Paper1 Back 跳过）。
+			// 标签用独立 labelCache（字体 5pt，与数据数字 7pt 区分，缓存互不串用）
+			if sid != 0 {
+				for k := 0; k < n; k++ {
+					pc := cm.startCol(c) + k
+					lid := amountSubStyle(f, sid, k, labelCache, n, cfg.labelFontSize)
+					_ = f.SetCellValue(sheet, cellAxis(pc, r), labels[k])
+					_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
+				}
+			}
+		case val != "" && !isNumericAmount(val):
+			// 文本标签（"借方"/明细名/标题等）：值写首格 + n 列铺样式 + 不在已有合并区则新建合并
+			pc := cm.startCol(c)
+			_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
+			if sid != 0 {
+				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(cm.endCol(c), r), sid)
+			}
+			if !covered[[2]int{r, c}] {
+				extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
+			}
+		case (val != "" && isNumericAmount(val)) || (cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
+			// 金额格拆位（数值任意行 / 数据区空值格）：有值写数字、空值=n 空格，均带分组竖线+继承上下/左右边框
+			cents := int64(0)
+			if val != "" {
+				cents, _ = yuanStrToCents(val)
+			}
+			if cents < 0 {
+				cents = -cents
+			}
+			digits := splitCNY(cents, n)
 			for k := 0; k < n; k++ {
 				pc := cm.startCol(c) + k
-				lid := amountSubStyle(f, sid, k, labelCache, n, cfg.labelFontSize)
-				_ = f.SetCellValue(sheet, cellAxis(pc, r), labels[k])
-				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
+				did := amountSubStyle(f, sid, k, digitCache, n, 0)
+				if digits[k] != "" {
+					_ = f.SetCellValue(sheet, cellAxis(pc, r), digits[k])
+				}
+				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), did)
 			}
-		}
-	case val != "" && !isNumericAmount(val):
-		// 文本标签（"借方"/明细名/标题等）：值写首格 + n 列铺样式 + 不在已有合并区则新建合并
-		pc := cm.startCol(c)
-		_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
-		if sid != 0 {
-			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(cm.endCol(c), r), sid)
-		}
-		if !covered[[2]int{r, c}] {
-			extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
-		}
-	case (val != "" && isNumericAmount(val)) || (cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
-		// 金额格拆位（数值任意行 / 数据区空值格）：有值写数字、空值=n 空格，均带分组竖线+继承上下/左右边框
-		cents := int64(0)
-		if val != "" {
-			cents, _ = yuanStrToCents(val)
-		}
-		if cents < 0 {
-			cents = -cents
-		}
-		digits := splitCNY(cents, n)
-		for k := 0; k < n; k++ {
-			pc := cm.startCol(c) + k
-			did := amountSubStyle(f, sid, k, digitCache, n, 0)
-			if digits[k] != "" {
-				_ = f.SetCellValue(sheet, cellAxis(pc, r), digits[k])
+		case sid != 0:
+			// 非数据区空值金额格（表头/标题/下边距区）：仅继承边界样式（无分组竖线、无红双线复制）
+			for k := 0; k < n; k++ {
+				pc := cm.startCol(c) + k
+				eid := amountEdgeStyle(f, sid, k, digitCache, n)
+				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), eid)
 			}
-			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), did)
-		}
-	case sid != 0:
-		// 非数据区空值金额格（表头/标题/下边距区）：仅继承边界样式（无分组竖线、无红双线复制）
-		for k := 0; k < n; k++ {
-			pc := cm.startCol(c) + k
-			eid := amountEdgeStyle(f, sid, k, digitCache, n)
-			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), eid)
-		}
-	default:
-		// 空 + 无样式：跳过
+		default:
+			// 空 + 无样式：跳过
 		}
 	}
 

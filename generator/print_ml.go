@@ -35,17 +35,22 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	for i := 0; i < mlMaxDetails; i++ {
 		split[mlDetailCol(lay, i)] = 10
 	}
-	// 用户定值（2026-08-24 七次调整）：基础列宽 14px；装订边两侧列加宽 16px——
-	//   Back 侧（借/贷/余/明细1-4，装订边在右）每组金额列的"分"列（k=n-1）
-	//   Front 侧（明细5-14，装订边在左）每组金额列的"千"列（千万位 k=0）
+	// 用户定值（2026-08-24 八次调整）：基础列宽 14px；组内边缘列独立像素——
+	//   借/贷/余（Back 侧）：分列(k=n-1) 15px
+	//   明细1-4（Back 侧）：分列(k=n-1) 16px
+	//   明细5-14（Front 侧）：千列(k=0) 16px + 分列(k=n-1) 15px
 	// 标签 6pt、数字 7pt。
-	edgeLast := make(map[int]bool, 7)   // Back 侧：借/贷/余/明1-4
-	edgeFirst := make(map[int]bool, 10) // Front 侧：明5-14
+	edgeLastPixel := map[int]float64{}  // 金额列 → 分列像素
+	edgeFirstPixel := map[int]float64{} // 金额列 → 千列像素
 	for i, c := range amountCols {
-		if i < 7 {
-			edgeLast[c] = true
-		} else {
-			edgeFirst[c] = true
+		switch {
+		case i < 3: // 借/贷/余
+			edgeLastPixel[c] = 15
+		case i < 7: // 明1-4
+			edgeLastPixel[c] = 16
+		default: // 明5-14
+			edgeFirstPixel[c] = 16
+			edgeLastPixel[c] = 15
 		}
 	}
 	cfg := printSheetConfig{
@@ -65,13 +70,12 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 			}
 			return (r-dataFirst)%blockRows < pageSize+1
 		},
-		breakViewCol:       lay.PageGapStartCol + 2,
-		applyPageLayout:    applyMLPrintPageLayout,
-		amountColPixel:     14,
-		amountColPixelEdge: 16,
-		edgeFirstCols:      edgeFirst,
-		edgeLastCols:       edgeLast,
-		labelFontSize:      6,
+		breakViewCol:    lay.PageGapStartCol + 2,
+		applyPageLayout: applyMLPrintPageLayout,
+		amountColPixel:  14,
+		edgeFirstPixel:  edgeFirstPixel,
+		edgeLastPixel:   edgeLastPixel,
+		labelFontSize:   6,
 	}
 	return transformSheet(f, sheet, cfg)
 }

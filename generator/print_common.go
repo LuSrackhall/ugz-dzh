@@ -17,18 +17,28 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// colMap 把查看版列号映射到打印版列号。金额列占 12 列，其余 1:1。
+// colMap 把查看版列号映射到打印版列号。金额列占 split[viewCol] 列，其余 1:1。
 type colMap struct {
 	start      []int        // start[viewCol] = 打印版起始列（1-indexed）；长度 totalViewCols+1
+	split      map[int]int  // viewCol → 该金额列展开的小列数（如 12/11/10）
 	amount     map[int]bool // 金额列集合
 	totalPrint int          // 打印版总列数
 }
 
-// buildColMap 按"金额列展开 12、其余 1"构建列映射。
-func buildColMap(totalViewCols int, amountCols []int) colMap {
+// buildColMap 按"金额列展开 split[viewCol]、其余 1"构建列映射。
+// split 未覆盖的金额列默认 12。
+func buildColMap(totalViewCols int, amountCols []int, split map[int]int) colMap {
 	aset := make(map[int]bool, len(amountCols))
+	sp := make(map[int]int, len(amountCols))
 	for _, c := range amountCols {
 		aset[c] = true
+		n := 12
+		if split != nil {
+			if v, ok := split[c]; ok && v > 0 {
+				n = v
+			}
+		}
+		sp[c] = n
 	}
 	start := make([]int, totalViewCols+1)
 	pc := 0
@@ -36,15 +46,27 @@ func buildColMap(totalViewCols int, amountCols []int) colMap {
 		pc++
 		start[c] = pc
 		if aset[c] {
-			pc += 11
+			pc += sp[c] - 1
 		}
 	}
-	return colMap{start: start, amount: aset, totalPrint: pc}
+	return colMap{start: start, split: sp, amount: aset, totalPrint: pc}
 }
 
-func (m colMap) isAmount(viewCol int) bool   { return m.amount[viewCol] }
-func (m colMap) startCol(viewCol int) int    { return m.start[viewCol] }
-func (m colMap) endCol(viewCol int) int      { s := m.start[viewCol]; if m.amount[viewCol] { return s + 11 }; return s }
+func (m colMap) isAmount(viewCol int) bool { return m.amount[viewCol] }
+func (m colMap) startCol(viewCol int) int  { return m.start[viewCol] }
+func (m colMap) splitCols(viewCol int) int {
+	if n, ok := m.split[viewCol]; ok {
+		return n
+	}
+	return 1
+}
+func (m colMap) endCol(viewCol int) int {
+	s := m.start[viewCol]
+	if m.amount[viewCol] {
+		return s + m.splitCols(viewCol) - 1
+	}
+	return s
+}
 
 // metaCell 记录一个查看版单元格的值与样式 ID。
 type metaCell struct {
@@ -178,6 +200,7 @@ func restoreSheetOrder(f *excelize.File, name string, origIdx int) {
 type printSheetConfig struct {
 	totalViewCols   int                                      // 查看版总列数
 	amountCols      []int                                    // 金额列号（1-indexed）
+	splitCols       map[int]int                              // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
 	isLabelRow      func(r int) bool                         // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
 	isDataRow       func(r int) bool                         // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
 	breakViewCol    int                                      // 查看版垂直分页符所在列
@@ -200,7 +223,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	if err != nil {
 		return err
 	}
-	cm := buildColMap(cfg.totalViewCols, cfg.amountCols)
+	cm := buildColMap(cfg.totalViewCols, cfg.amountCols, cfg.splitCols)
 
 	// 预计算"被合并区覆盖"的单元格集合，用于判断文本标签是否需新建 12 列合并
 	covered := make(map[[2]int]bool, len(meta.merges)*4)
@@ -217,15 +240,16 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		return fmt.Errorf("重建 Sheet %s: %w", sheet, err)
 	}
 
-	// 列宽：金额列 ÷12，其余原宽
+	// 列宽：金额列 ÷n（n=该列展开数），其余原宽
 	for c := 1; c <= cfg.totalViewCols; c++ {
 		w := meta.colWidth[c]
 		if w <= 0 {
 			continue
 		}
 		if cm.isAmount(c) {
-			sub := w / 12.0
-			for k := 0; k < 12; k++ {
+			n := cm.splitCols(c)
+			sub := w / float64(n)
+			for k := 0; k < n; k++ {
 				pc := cm.startCol(c) + k
 				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub)
 			}
@@ -271,19 +295,22 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	// 而非铺原样式（否则原红双线左右边框污染所有小格，造成"双线溢出"）；而表头/标题/下边距区
 	// 空值金额格必须"仅继承边界"（既不能拆位生成分组竖线——溢出到标题区，也不能整体铺原样式——
 	// 会把原红双线复制 12 条）。
+	// 该金额列展开的小列数
+	n := cm.splitCols(c)
+	labels := digitColLabels(n)
 	switch {
 	case cfg.isLabelRow(r):
-		// 12 小列标签行（仅对有样式格写入，未渲染侧如 ML Paper1 Back 跳过）
+		// n 小列标签行（仅对有样式格写入，未渲染侧如 ML Paper1 Back 跳过）
 		if sid != 0 {
-			for k := 0; k < 12; k++ {
+			for k := 0; k < n; k++ {
 				pc := cm.startCol(c) + k
-				lid := amountSubStyle(f, sid, k, digitCache)
-				_ = f.SetCellValue(sheet, cellAxis(pc, r), digitColLabels[k])
+				lid := amountSubStyle(f, sid, k, digitCache, n)
+				_ = f.SetCellValue(sheet, cellAxis(pc, r), labels[k])
 				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
 			}
 		}
 	case val != "" && !isNumericAmount(val):
-		// 文本标签（"借方"/明细名/标题等）：值写首格 + 12 列铺样式 + 不在已有合并区则新建合并
+		// 文本标签（"借方"/明细名/标题等）：值写首格 + n 列铺样式 + 不在已有合并区则新建合并
 		pc := cm.startCol(c)
 		_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
 		if sid != 0 {
@@ -293,7 +320,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
 		}
 	case (val != "" && isNumericAmount(val)) || (cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
-		// 金额格拆位（数值任意行 / 数据区空值格）：有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
+		// 金额格拆位（数值任意行 / 数据区空值格）：有值写数字、空值=n 空格，均带分组竖线+继承上下/左右边框
 		cents := int64(0)
 		if val != "" {
 			cents, _ = yuanStrToCents(val)
@@ -301,10 +328,10 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		if cents < 0 {
 			cents = -cents
 		}
-		digits := splitCNY(cents)
-		for k := 0; k < 12; k++ {
+		digits := splitCNY(cents, n)
+		for k := 0; k < n; k++ {
 			pc := cm.startCol(c) + k
-			did := amountSubStyle(f, sid, k, digitCache)
+			did := amountSubStyle(f, sid, k, digitCache, n)
 			if digits[k] != "" {
 				_ = f.SetCellValue(sheet, cellAxis(pc, r), digits[k])
 			}
@@ -312,9 +339,9 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		}
 	case sid != 0:
 		// 非数据区空值金额格（表头/标题/下边距区）：仅继承边界样式（无分组竖线、无红双线复制）
-		for k := 0; k < 12; k++ {
+		for k := 0; k < n; k++ {
 			pc := cm.startCol(c) + k
-			eid := amountEdgeStyle(f, sid, k, digitCache)
+			eid := amountEdgeStyle(f, sid, k, digitCache, n)
 			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), eid)
 		}
 	default:
@@ -360,7 +387,7 @@ func cellAxis(col, row int) string {
 // amountSubStyle 构建并缓存金额小格样式（数据数字格 / 标签格共用，按 (styleID,k) 缓存）。
 // 字体：7pt 居中，颜色取原样式（金额格无字体=默认黑；表头标签格=绿色）。
 // 边框：上/下继承原样式；左 = (k==0? 原左 : 分组线[k-1])；右 = (k==11? 原右 : 分组线[k])。
-func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int) int {
+func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int, n int) int {
 	key := [2]int{origStyleID, k}
 	if id, ok := cache[key]; ok {
 		return id
@@ -381,20 +408,21 @@ func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int) 
 	if botB := borderOf(f, origStyleID, "bottom"); botB != nil {
 		st.Border = append(st.Border, *botB)
 	}
+	dv := dividerStyles(n)
 	if k == 0 {
 		if leftB := borderOf(f, origStyleID, "left"); leftB != nil {
 			st.Border = append(st.Border, *leftB)
 		}
 	} else {
-		dc, ds := dividerBorder(dividerStyles[k-1])
+		dc, ds := dividerBorder(dv[k-1])
 		st.Border = append(st.Border, excelize.Border{Type: "left", Color: dc, Style: ds})
 	}
-	if k == 11 {
+	if k == n-1 {
 		if rightB := borderOf(f, origStyleID, "right"); rightB != nil {
 			st.Border = append(st.Border, *rightB)
 		}
 	} else {
-		dc, ds := dividerBorder(dividerStyles[k])
+		dc, ds := dividerBorder(dv[k])
 		st.Border = append(st.Border, excelize.Border{Type: "right", Color: dc, Style: ds})
 	}
 	id, _ := f.NewStyle(st)
@@ -406,7 +434,7 @@ func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int) 
 // 与 amountSubStyle 的区别：中间格（k=1..10）左右**无边框**——不生成分组竖线
 // （避免溢出到标题区），也不复制原红双线（避免 12 条双线）。
 // 边框：上/下继承原样式（水平线铺满 12 格）；左 = k==0 ? 原左边框 : 无；右 = k==11 ? 原右边框 : 无。
-func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int) int {
+func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int, n int) int {
 	key := [2]int{origStyleID, k}
 	if id, ok := cache[key]; ok {
 		return id
@@ -431,7 +459,7 @@ func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int)
 			st.Border = append(st.Border, *leftB)
 		}
 	}
-	if k == 11 {
+	if k == n-1 {
 		if rightB := borderOf(f, origStyleID, "right"); rightB != nil {
 			st.Border = append(st.Border, *rightB)
 		}

@@ -1,14 +1,17 @@
 // Package generator — 打印版位格输出：金额拆位与分组边框常量。
 //
-// 本文件是打印版与查看版之间唯一的"样式知识"集合：人民币 12 位拆分规则、
+// 本文件是打印版与查看版之间唯一的"样式知识"集合：人民币位拆分规则、
 // 小列标签、分组竖线样式表。查看版生成代码不依赖本文件；打印变换器消费本文件。
+//
+// 列数参数化：
+//   - GL / ML 借贷余金额列：12 列（十亿…分）
+//   - ML 借贷余：11 列（亿…分，去十亿位）
+//   - ML 明细列：10 列（千万…分，去十亿/亿位）
+// 所有函数按列数 n 参数化：splitCNY(cents, n)、digitColLabels(n)、dividerStyles(n)。
+// 元在索引 n-3（n=12→9、11→8、10→7），元|角 红细线分隔符索引 = n-4。
 package generator
 
 import "github.com/xuri/excelize/v2"
-
-// digitColLabels 12 小列从左到右的标签（十亿 → 分）。
-// 索引：0=十亿 1=亿 2=千万 3=百万 4=十万 5=万 6=千 7=百 8=十 9=元 10=角 11=分
-var digitColLabels = [12]string{"十", "亿", "千", "百", "十", "万", "千", "百", "十", "元", "角", "分"}
 
 // printDigitFontSize 小格字号（pt）。打印缩放下 11pt 放不进小格，实机校准后可调。
 const printDigitFontSize = 7.0
@@ -20,43 +23,72 @@ const (
 	divThinRed    = 2 // 红色单细线（元|角）
 )
 
-// dividerStyles[i] = 第 i 小列与其右邻之间竖线的样式（i: 0..10）。
+// digitColLabels 返回 n 列的小列标签（从左到右，十亿/亿/千万…分）。
+//
+//	n=12: 十 亿 千 百 十 万 千 百 十 元 角 分 （十亿…分）
+//	n=11: 亿 千 百 十 万 千 百 十 元 角 分   （亿…分，去十亿）
+//	n=10: 千 百 十 万 千 百 十 元 角 分      （千万…分，去十亿/亿）
+//
+// 索引规则：i=0 最高位；元在 n-3；角 n-2；分 n-1。
+func digitColLabels(n int) []string {
+	switch n {
+	case 12:
+		return []string{"十", "亿", "千", "百", "十", "万", "千", "百", "十", "元", "角", "分"}
+	case 11:
+		return []string{"亿", "千", "百", "十", "万", "千", "百", "十", "元", "角", "分"}
+	case 10:
+		return []string{"千", "百", "十", "万", "千", "百", "十", "元", "角", "分"}
+	}
+	return nil
+}
+
+// dividerStyles 返回 n 列的分组竖线样式表（长度 n-1，第 i 小列与其右邻之间）。
 //
 // 需求分组串「十; 亿, 千, 百; 十, 万, 千; 百, 十, 元. 角, 分」：
 //   - ';'（加粗）位于 十|亿(0)、百万|十万(3)、千|百(6) —— 人民币分段组界，共 3 处
-//   - '.'（红色单细线）位于 元|角(9) —— 共 1 处
+//   - '.'（红色单细线）位于 元|角 —— 共 1 处
 //   - 其余为普通绿色细线
 //
-// 注意：元在索引 9、角在索引 10，故 元|角 分隔符索引为 9（非 8）。
-var dividerStyles = [11]int{
-	divThickGreen, // [0]  十|亿      ;
-	divThinGreen,  // [1]  亿|千万    ,
-	divThinGreen,  // [2]  千万|百万  ,
-	divThickGreen, // [3]  百万|十万  ;
-	divThinGreen,  // [4]  十万|万    ,
-	divThinGreen,  // [5]  万|千      ,
-	divThickGreen, // [6]  千|百      ;
-	divThinGreen,  // [7]  百|十      ,
-	divThinGreen,  // [8]  十|元      ,
-	divThinRed,    // [9]  元|角      .
-	divThinGreen,  // [10] 角|分      ,
+// 元|角 分隔符索引 = n-4（n=12→9、11→7？不对——见下）。
+func dividerStyles(n int) []int {
+	labels := digitColLabels(n)
+	// 定位 元|角 分隔符：元在 labels 中的索引为 yuanIdx，其右邻分隔符索引 = yuanIdx
+	// （分隔符 i 位于标签 i 与 i+1 之间）。
+	yuanIdx := -1
+	for i, lb := range labels {
+		if lb == "元" {
+			yuanIdx = i
+			break
+		}
+	}
+	out := make([]int, n-1)
+	for i := 0; i < n-1; i++ {
+		switch {
+		case i == yuanIdx: // 元|角
+			out[i] = divThinRed
+		case i == 0 || i == 3 || i == 6: // 加粗组界（十|亿 / 百万|十万 / 千|百）
+			out[i] = divThickGreen
+		default:
+			out[i] = divThinGreen
+		}
+	}
+	return out
 }
 
-// pow10 整数幂表（10^0 .. 10^11），供 splitCNY 使用。
-var pow10 = [12]int64{1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000, 100000000000}
+// pow10 整数幂表（10^0 .. 10^13），供 splitCNY 使用。
+var pow10 = [14]int64{1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000, 100000000000, 1000000000000, 10000000000000}
 
-// splitCNY 将分值拆为 12 个人民币位字符串（十亿…元角分）。
+// splitCNY 将分值拆为 n 个人民币位字符串（n=12 十亿…分 / n=11 亿…分 / n=10 千万…分）。
 //
 // 规则：
 //   - 负数取绝对值填格（金额恒按非负处理，正负由"借/贷"方向列表达）
-//   - 0 返回全空（金额为 0 时 12 格全部留空）
-//   - 高位无效零留空（前导零抑制）；个位对齐「元」列（索引 9）
+//   - 0 返回全空（金额为 0 时 n 格全部留空）
+//   - 高位无效零留空（前导零抑制）；个位对齐「元」列（索引 n-3）
 //
-// 索引 i 的位权 = 10^(9-i) 元 = 10^(11-i) 分（i=0..11）。即：
-//
-//	i=0 十亿(10^9)、…、i=9 元(10^0)、i=10 角(10^-1)、i=11 分(10^-2)
-func splitCNY(cents int64) [12]string {
-	var out [12]string
+// 索引 i 的位权 = 10^(n-3-i) 元（i=0..n-1）。即 n=12 时 i=0 十亿(10^9)、…、
+// i=9 元(10^0)、i=10 角(10^-1)、i=11 分(10^-2)。
+func splitCNY(cents int64, n int) []string {
+	out := make([]string, n)
 	if cents == 0 {
 		return out
 	}
@@ -65,8 +97,8 @@ func splitCNY(cents int64) [12]string {
 		v = -v
 	}
 	started := false
-	for i := 0; i < 12; i++ {
-		d := (v / pow10[11-i]) % 10
+	for i := 0; i < n; i++ {
+		d := (v / pow10[n-1-i]) % 10
 		if d != 0 {
 			started = true
 		}

@@ -26,9 +26,19 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	}
 
 	dataFirst := lay.DataStartRow + 1 // 首块数据首行（h4 标签行下一行）
+	// 列数：借/贷/余 11 列（去十亿位）；明细列 10 列（去十亿/亿位，最多千万）。
+	// 依据：9 个月数据最大金额 2418 万 < 明细 10 列上限 9999 万；借/贷/余 11 列上限 99.9 亿。
+	split := make(map[int]int, len(amountCols))
+	for _, c := range amountCols {
+		split[c] = 11
+	}
+	for i := 0; i < mlMaxDetails; i++ {
+		split[mlDetailCol(lay, i)] = 10
+	}
 	cfg := printSheetConfig{
 		totalViewCols: lay.TotalCols,
 		amountCols:    amountCols,
+		splitCols:     split,
 		isLabelRow: func(r int) bool {
 			if blockRows <= 0 || r < lay.DataStartRow {
 				return false

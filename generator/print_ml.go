@@ -35,9 +35,9 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	for i := 0; i < mlMaxDetails; i++ {
 		split[mlDetailCol(lay, i)] = 10
 	}
-	// 用户定值（2026-08-24 十一次调整）：基础列宽 14px；组内任意位置独立像素——
+	// 用户定值（2026-08-24 十二次调整）：基础列宽 14px；组内任意位置独立像素——
 	//   借/贷/余（Back 侧，n=11）：k=0(亿) 16px、k=10(分) 15px
-	//   明细1-4（Back 侧，n=10）：k=0(千万位千) 16、k=1(百万位百) 16、k=4(千位千) 16、k=9(分) 16
+	//   明细1-4（Back 侧，n=10）：k=0(千万位千) 16、k=1(百万位百) 15、k=4(千位千) 15、k=9(分) 16
 	//   明细5-14（Front 侧，n=10）：k=0(千万位千) 16、k=1(百万位百) 16、k=4(千位千) 16、k=9(分) 16
 	// 标签 6pt、数字 7pt。
 	edgePixel := map[[2]int]float64{}
@@ -48,8 +48,8 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 			edgePixel[[2]int{c, 10}] = 15 // 分
 		case i < 7: // 明1-4
 			edgePixel[[2]int{c, 0}] = 16 // 千万位千
-			edgePixel[[2]int{c, 1}] = 16 // 百万位百
-			edgePixel[[2]int{c, 4}] = 16 // 千位千
+			edgePixel[[2]int{c, 1}] = 15 // 百万位百
+			edgePixel[[2]int{c, 4}] = 15 // 千位千
 			edgePixel[[2]int{c, 9}] = 16 // 分
 		default: // 明5-14
 			edgePixel[[2]int{c, 0}] = 16 // 千万位千

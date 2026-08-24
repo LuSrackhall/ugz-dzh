@@ -54,10 +54,9 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 		},
 		breakViewCol:    lay.PageGapStartCol + 2,
 		applyPageLayout: applyMLPrintPageLayout,
-		// 用户定值（2026-08-24 三次调整）：金额小列目标渲染宽 15px（列宽 1.429 字符）——
-		// 借/贷/余区域≈165px(+63%)、明细区域≈150px(+49%)；表头标签 6pt（汉字≈8px < 列内 13px ✓）；
-		// 数字 7pt 不变。字符级金额区约 -8%（打印输出接近查看版，用户知情）。
-		amountColPixel: 15,
+		// 用户定值（2026-08-24 四次调整）：金额小列目标渲染宽 14.3px（列宽 1.329 字符）——
+		// 借/贷/余区域≈157px(+56%)、明细区域≈143px(+42%)；表头标签 6pt；数字 7pt。
+		amountColPixel: 14.3,
 		labelFontSize:  6,
 	}
 	return transformSheet(f, sheet, cfg)

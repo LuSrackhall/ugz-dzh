@@ -22,6 +22,7 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	}
 	labelRow1 := lay.SubHeaderRow + 1 // 首块标签行（绝对行号）
 	blockRows := (lay.SubHeaderRow + 1) + pageSize + 1 + lay.BottomMarginRows
+	dataFirst := labelRow1 + 1 // 首块数据首行（标签行下一行）
 	cfg := printSheetConfig{
 		totalViewCols: lay.TotalCols,
 		amountCols:    amountCols,
@@ -30,6 +31,13 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 				return false
 			}
 			return (r-labelRow1)%blockRows == 0
+		},
+		isDataRow: func(r int) bool {
+			// 数据区 = 数据行 + 过次页行（pageSize+1 行）；下边距行不含在内
+			if r < dataFirst || blockRows <= 0 {
+				return false
+			}
+			return (r-dataFirst)%blockRows < pageSize+1
 		},
 		breakViewCol:    lay.PageGapStartCol + 1,
 		applyPageLayout: applyGLPrintPageLayout,

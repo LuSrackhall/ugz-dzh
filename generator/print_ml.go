@@ -25,6 +25,7 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 		amountCols = append(amountCols, mlDetailCol(lay, i))
 	}
 
+	dataFirst := lay.DataStartRow + 1 // 首块数据首行（h4 标签行下一行）
 	cfg := printSheetConfig{
 		totalViewCols: lay.TotalCols,
 		amountCols:    amountCols,
@@ -33,6 +34,13 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 				return false
 			}
 			return (r-lay.DataStartRow)%blockRows == 0
+		},
+		isDataRow: func(r int) bool {
+			// 数据区 = 数据行 + 过次页行（pageSize+1 行）；下边距行不含在内
+			if r < dataFirst || blockRows <= 0 {
+				return false
+			}
+			return (r-dataFirst)%blockRows < pageSize+1
 		},
 		breakViewCol:    lay.PageGapStartCol + 2,
 		applyPageLayout: applyMLPrintPageLayout,

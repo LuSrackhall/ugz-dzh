@@ -162,6 +162,7 @@ type printSheetConfig struct {
 	totalViewCols   int                                      // 查看版总列数
 	amountCols      []int                                    // 金额列号（1-indexed）
 	isLabelRow      func(r int) bool                         // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
+	isDataRow       func(r int) bool                         // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
 	breakViewCol    int                                      // 查看版垂直分页符所在列
 	applyPageLayout func(f *excelize.File, sheet string, breakPrintCol, lastRow int)
 }
@@ -242,13 +243,17 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 			continue
 		}
-	// 金额列分类（按"内容+样式"判定，仅标签行用行号）：
+	// 金额列分类（按"内容+样式+行区"判定，仅标签行/数据区用行号）：
 	//   - 标签行 + 有样式：写 12 小列标签
 	//   - 文本（"借方"/明细名/标题，非数值）+ 非空：值写首格 + 12 列铺样式 + 合并
-	//   - 有样式（数值 或 空值）：拆位填 12 格——有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
+	//   - 数值（任意行）或 数据区空值格：拆位填 12 格——有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
+	//   - 非数据区空值 + 有样式（表头/标题/下边距区）：12 子格铺"仅继承边界"样式——top/bottom 继承原样式铺满，
+	//     左右仅 k=0 继承原左边框、k=11 继承原右边框，中间格无边框（不生成分组竖线、不复制原红双线）
 	//   - 空 + 无样式：跳过
-	// 关键：空值金额格（如某分录未涉及的明细列、月结空金额）也走拆位，生成 12 空格 + 分组竖线，
-	// 而非把原样式整体铺 12 格（否则原金额格的红双线左右边框会污染所有小格，造成"双线溢出"）。
+	// 关键：数据区空值金额格（如某分录未涉及的明细列、月结空金额）必须拆位（12 空格+分组竖线），
+	// 而非铺原样式（否则原红双线左右边框污染所有小格，造成"双线溢出"）；而表头/标题/下边距区
+	// 空值金额格必须"仅继承边界"（既不能拆位生成分组竖线——溢出到标题区，也不能整体铺原样式——
+	// 会把原红双线复制 12 条）。
 	switch {
 	case cfg.isLabelRow(r):
 		// 12 小列标签行（仅对有样式格写入，未渲染侧如 ML Paper1 Back 跳过）
@@ -270,8 +275,8 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		if !covered[[2]int{r, c}] {
 			extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
 		}
-	case sid != 0:
-		// 金额数据格拆位（有值数值写数字 / 空值=12 空格），均带分组竖线 + 继承上下/左右边框
+	case (val != "" && isNumericAmount(val)) || (cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
+		// 金额格拆位（数值任意行 / 数据区空值格）：有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
 		cents := int64(0)
 		if val != "" {
 			cents, _ = yuanStrToCents(val)
@@ -287,6 +292,13 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 				_ = f.SetCellValue(sheet, cellAxis(pc, r), digits[k])
 			}
 			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), did)
+		}
+	case sid != 0:
+		// 非数据区空值金额格（表头/标题/下边距区）：仅继承边界样式（无分组竖线、无红双线复制）
+		for k := 0; k < 12; k++ {
+			pc := cm.startCol(c) + k
+			eid := amountEdgeStyle(f, sid, k, digitCache)
+			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), eid)
 		}
 	default:
 		// 空 + 无样式：跳过
@@ -367,6 +379,45 @@ func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int) 
 	} else {
 		dc, ds := dividerBorder(dividerStyles[k])
 		st.Border = append(st.Border, excelize.Border{Type: "right", Color: dc, Style: ds})
+	}
+	id, _ := f.NewStyle(st)
+	cache[key] = id
+	return id
+}
+
+// amountEdgeStyle 构建并缓存"非数据区金额格"样式（表头/标题/下边距区，按 (styleID,k) 缓存）。
+// 与 amountSubStyle 的区别：中间格（k=1..10）左右**无边框**——不生成分组竖线
+// （避免溢出到标题区），也不复制原红双线（避免 12 条双线）。
+// 边框：上/下继承原样式（水平线铺满 12 格）；左 = k==0 ? 原左边框 : 无；右 = k==11 ? 原右边框 : 无。
+func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[2]int]int) int {
+	key := [2]int{origStyleID, k}
+	if id, ok := cache[key]; ok {
+		return id
+	}
+	st := &excelize.Style{
+		Font:      &excelize.Font{Size: printDigitFontSize},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	}
+	if def, err := f.GetStyle(origStyleID); err == nil && def.Font != nil {
+		if def.Font.Color != "" {
+			st.Font.Color = def.Font.Color
+		}
+	}
+	if topB := borderOf(f, origStyleID, "top"); topB != nil {
+		st.Border = append(st.Border, *topB)
+	}
+	if botB := borderOf(f, origStyleID, "bottom"); botB != nil {
+		st.Border = append(st.Border, *botB)
+	}
+	if k == 0 {
+		if leftB := borderOf(f, origStyleID, "left"); leftB != nil {
+			st.Border = append(st.Border, *leftB)
+		}
+	}
+	if k == 11 {
+		if rightB := borderOf(f, origStyleID, "right"); rightB != nil {
+			st.Border = append(st.Border, *rightB)
+		}
 	}
 	id, _ := f.NewStyle(st)
 	cache[key] = id

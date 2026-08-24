@@ -16,6 +16,11 @@ import "github.com/xuri/excelize/v2"
 // printDigitFontSize 小格字号（pt）。打印缩放下 11pt 放不进小格，实机校准后可调。
 const printDigitFontSize = 7.0
 
+// printLabelFontSize 表头单位行（十亿…分）标签字号（pt）。
+// 折中B：标签 7pt→5pt，配合金额列宽 10px（0.714 字符），使金额区域渲染宽度
+// 接近查看版（明细≈-1%、借/贷/余≈+9%），缓解 Excel 列宽像素取整导致的区域膨胀。
+const printLabelFontSize = 5.0
+
 // 分组竖线样式常量。
 const (
 	divThinGreen  = 0 // 普通绿色细线

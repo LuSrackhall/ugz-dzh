@@ -242,49 +242,54 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 			continue
 		}
-		// 金额列分类（数据区金额格恒非空——view 总写 centsToYuan，0 也写"0"；
-		// 故"值非空且为数值"=数据拆位，"值非空且非数值"=文本标签，"空"=表头/标题）
-		switch {
-		case cfg.isLabelRow(r):
-			// 12 小列标签行（仅对有样式格写入，未渲染侧如 ML Paper1 Back 跳过）
-			if sid != 0 {
-				for k := 0; k < 12; k++ {
-					pc := cm.startCol(c) + k
-					lid := amountSubStyle(f, sid, k, digitCache)
-					_ = f.SetCellValue(sheet, cellAxis(pc, r), digitColLabels[k])
-					_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
-				}
-			}
-		case val != "" && isNumericAmount(val):
-			// 数据行金额：拆位填 12 格（0=全空但保留分组竖线）
-			cents, _ := yuanStrToCents(val)
-			if cents < 0 {
-				cents = -cents
-			}
-			digits := splitCNY(cents)
+	// 金额列分类（按"内容+样式"判定，仅标签行用行号）：
+	//   - 标签行 + 有样式：写 12 小列标签
+	//   - 文本（"借方"/明细名/标题，非数值）+ 非空：值写首格 + 12 列铺样式 + 合并
+	//   - 有样式（数值 或 空值）：拆位填 12 格——有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
+	//   - 空 + 无样式：跳过
+	// 关键：空值金额格（如某分录未涉及的明细列、月结空金额）也走拆位，生成 12 空格 + 分组竖线，
+	// 而非把原样式整体铺 12 格（否则原金额格的红双线左右边框会污染所有小格，造成"双线溢出"）。
+	switch {
+	case cfg.isLabelRow(r):
+		// 12 小列标签行（仅对有样式格写入，未渲染侧如 ML Paper1 Back 跳过）
+		if sid != 0 {
 			for k := 0; k < 12; k++ {
 				pc := cm.startCol(c) + k
-				did := amountSubStyle(f, sid, k, digitCache)
-				if digits[k] != "" {
-					_ = f.SetCellValue(sheet, cellAxis(pc, r), digits[k])
-				}
-				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), did)
+				lid := amountSubStyle(f, sid, k, digitCache)
+				_ = f.SetCellValue(sheet, cellAxis(pc, r), digitColLabels[k])
+				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
 			}
-		case val != "":
-			// 文本标签（"借方"/明细名/标题等）：值写首格 + 12 列铺样式 + 不在已有合并区则新建合并
-			pc := cm.startCol(c)
-			_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
-			if sid != 0 {
-				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(cm.endCol(c), r), sid)
+		}
+	case val != "" && !isNumericAmount(val):
+		// 文本标签（"借方"/明细名/标题等）：值写首格 + 12 列铺样式 + 不在已有合并区则新建合并
+		pc := cm.startCol(c)
+		_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
+		if sid != 0 {
+			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(cm.endCol(c), r), sid)
+		}
+		if !covered[[2]int{r, c}] {
+			extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
+		}
+	case sid != 0:
+		// 金额数据格拆位（有值数值写数字 / 空值=12 空格），均带分组竖线 + 继承上下/左右边框
+		cents := int64(0)
+		if val != "" {
+			cents, _ = yuanStrToCents(val)
+		}
+		if cents < 0 {
+			cents = -cents
+		}
+		digits := splitCNY(cents)
+		for k := 0; k < 12; k++ {
+			pc := cm.startCol(c) + k
+			did := amountSubStyle(f, sid, k, digitCache)
+			if digits[k] != "" {
+				_ = f.SetCellValue(sheet, cellAxis(pc, r), digits[k])
 			}
-			if !covered[[2]int{r, c}] {
-				extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
-			}
-		case sid != 0:
-			// 空 + 表头样式（合并区内部 / 空表头格）：12 子格铺样式
-			_ = f.SetCellStyle(sheet, cellAxis(cm.startCol(c), r), cellAxis(cm.endCol(c), r), sid)
-		default:
-			// 空 + 无样式：跳过
+			_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), did)
+		}
+	default:
+		// 空 + 无样式：跳过
 		}
 	}
 

@@ -12,7 +12,9 @@
 package generator
 
 import (
+	"encoding/xml"
 	"fmt"
+	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -80,12 +82,13 @@ type metaMerge struct{ r1, c1, r2, c2 int }
 
 // sheetMeta 记录重建所需的全部查看版 Sheet 元数据。
 type sheetMeta struct {
-	cells     []metaCell
-	merges    []metaMerge
-	colWidth  []float64 // [1..maxCol]
-	rowHeight []float64 // [1..maxRow]
-	maxRow    int
-	maxCol    int
+	cells         []metaCell
+	merges        []metaMerge
+	colWidth      []float64     // [1..maxCol] 显式列宽（含 0 宽列）
+	zeroWidthCols map[int]bool  // 显式 width=0 的列（GL 分页列 c15 / ML 书口列 c29 等）
+	rowHeight     []float64     // [1..maxRow]
+	maxRow        int
+	maxCol        int
 }
 
 // readSheetMeta 读取查看版 Sheet 的全部单元格（值+样式）、合并区、列宽、行高。
@@ -138,9 +141,14 @@ func readSheetMeta(f *excelize.File, sheet string, maxCol int) (*sheetMeta, erro
 			meta.rowHeight[r] = h
 		}
 	}
-	for c := 1; c <= maxCol; c++ {
-		if w, err := f.GetColWidth(sheet, colLetter(c)); err == nil {
-			meta.colWidth[c] = w
+	// 列宽：raw XML 解析（GetColWidth 把 width=0 的零宽列返回为默认 9.140625，
+	// 无法区分"零宽列"与"未定义列"；零宽列必须保持 0 宽，否则打印版总宽多出默认列宽）
+	if rawW, zeroCols, err := rawSheetColWidths(f, sheet); err == nil {
+		meta.zeroWidthCols = zeroCols
+		for c := 1; c <= maxCol; c++ {
+			if w, ok := rawW[c]; ok {
+				meta.colWidth[c] = w
+			}
 		}
 	}
 	mcs, err := f.GetMergeCells(sheet)
@@ -154,6 +162,94 @@ func readSheetMeta(f *excelize.File, sheet string, maxCol int) (*sheetMeta, erro
 		}
 	}
 	return meta, nil
+}
+
+// rawSheetColWidths 解析查看版 sheet XML 的 <cols>，返回显式列宽表与零宽列集合。
+// excelize GetColWidth 把 width=0 的列返回为默认宽 9.140625（无法区分"零宽"与"未定义"），
+// 而零宽列（GL c15 分页列 / ML c29 书口列等）必须保持 0 宽，否则打印版总宽多出默认列宽。
+func rawSheetColWidths(f *excelize.File, sheet string) (map[int]float64, map[int]bool, error) {
+	widths := map[int]float64{}
+	zero := map[int]bool{}
+	path, err := sheetXMLPath(f, sheet)
+	if err != nil {
+		return nil, nil, err
+	}
+	v, ok := f.Pkg.Load(path)
+	if !ok {
+		return nil, nil, fmt.Errorf("找不到 %s 的 XML %s", sheet, path)
+	}
+	data, _ := v.([]byte)
+	var cols struct {
+		Cols []struct {
+			Min   int     `xml:"min,attr"`
+			Max   int     `xml:"max,attr"`
+			Width float64 `xml:"width,attr"`
+		} `xml:"cols>col"`
+	}
+	if err := xml.Unmarshal(data, &cols); err != nil {
+		return nil, nil, fmt.Errorf("解析 %s 列宽: %w", sheet, err)
+	}
+	for _, c := range cols.Cols {
+		for i := c.Min; i <= c.Max; i++ {
+			widths[i] = c.Width
+			if c.Width <= 0 {
+				zero[i] = true
+			}
+		}
+	}
+	return widths, zero, nil
+}
+
+// sheetXMLPath 返回 sheet 对应的 worksheet XML 路径（xl/worksheets/sheetN.xml）。
+func sheetXMLPath(f *excelize.File, sheet string) (string, error) {
+	var wb struct {
+		Sheets []struct {
+			Name string `xml:"name,attr"`
+			// r:id 的真实命名空间是完整 URI；Go 的 xml 包 tag 语法为 "URI local,attr"（空格分隔），
+			// 用 "r:id" 前缀形式无法匹配（RID 解析为空）。
+			RID string `xml:"http://schemas.openxmlformats.org/officeDocument/2006/relationships id,attr"`
+		} `xml:"sheets>sheet"`
+	}
+	wbData, _ := f.Pkg.Load("xl/workbook.xml")
+	if wbData == nil {
+		return "", fmt.Errorf("无法读取 xl/workbook.xml")
+	}
+	if err := xml.Unmarshal(wbData.([]byte), &wb); err != nil {
+		return "", fmt.Errorf("解析 workbook.xml: %w", err)
+	}
+	rid := ""
+	for _, s := range wb.Sheets {
+		if s.Name == sheet {
+			rid = s.RID
+			break
+		}
+	}
+	if rid == "" {
+		return "", fmt.Errorf("workbook.xml 找不到 sheet %q", sheet)
+	}
+	var rels struct {
+		Rels []struct {
+			ID     string `xml:"Id,attr"`
+			Target string `xml:"Target,attr"`
+		} `xml:"Relationship"`
+	}
+	relsData, _ := f.Pkg.Load("xl/_rels/workbook.xml.rels")
+	if relsData == nil {
+		return "", fmt.Errorf("无法读取 xl/_rels/workbook.xml.rels")
+	}
+	if err := xml.Unmarshal(relsData.([]byte), &rels); err != nil {
+		return "", fmt.Errorf("解析 workbook.xml.rels: %w", err)
+	}
+	for _, r := range rels.Rels {
+		if r.ID == rid {
+			t := r.Target
+			if !strings.HasPrefix(t, "xl/") {
+				t = "xl/" + t
+			}
+			return t, nil
+		}
+	}
+	return "", fmt.Errorf("rels 找不到 rId %s", rid)
 }
 
 // colLetter 返回列号对应的 Excel 列字母（1→A）。
@@ -240,10 +336,16 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		return fmt.Errorf("重建 Sheet %s: %w", sheet, err)
 	}
 
-	// 列宽：金额列 ÷n（n=该列展开数），其余原宽
+	// 列宽：金额列 ÷n（n=该列展开数），其余原宽；零宽列显式设置 0（保持总宽守恒）
 	for c := 1; c <= cfg.totalViewCols; c++ {
 		w := meta.colWidth[c]
 		if w <= 0 {
+			// 查看版显式 width=0 的列（GL 分页列 / ML 书口列）：打印版同样设 0，
+			// 否则该列未设置宽度 → Excel 用默认 9.14，总宽多出 ~9.14
+			if meta.zeroWidthCols[c] {
+				pc := cm.startCol(c)
+				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), 0)
+			}
 			continue
 		}
 		if cm.isAmount(c) {

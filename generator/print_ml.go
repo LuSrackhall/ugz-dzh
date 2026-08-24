@@ -38,7 +38,7 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	// 用户定值（2026-08-24 八次调整）：基础列宽 14px；组内边缘列独立像素——
 	//   借/贷/余（Back 侧）：分列(k=n-1) 15px
 	//   明细1-4（Back 侧）：分列(k=n-1) 16px
-	//   明细5-14（Front 侧）：千列(k=0) 16px + 分列(k=n-1) 15px
+	//   明细5-14（Front 侧）：千列(k=0) 16px + 分列(k=n-1) 16px
 	// 标签 6pt、数字 7pt。
 	edgeLastPixel := map[int]float64{}  // 金额列 → 分列像素
 	edgeFirstPixel := map[int]float64{} // 金额列 → 千列像素
@@ -50,7 +50,7 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 			edgeLastPixel[c] = 16
 		default: // 明5-14
 			edgeFirstPixel[c] = 16
-			edgeLastPixel[c] = 15
+			edgeLastPixel[c] = 16
 		}
 	}
 	cfg := printSheetConfig{

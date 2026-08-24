@@ -302,11 +302,16 @@ type printSheetConfig struct {
 	breakViewCol    int                                      // 查看版垂直分页符所在列
 	applyPageLayout func(f *excelize.File, sheet string, breakPrintCol, lastRow int)
 	// amountColPixel 金额小列的目标渲染像素宽（>0 时启用，0 = 按查看版列宽均分/字符守恒）。
-	// 折中B（ML）：设 10px（列宽 0.714 字符）→ 借/贷/余区域≈101+9%、明细区域≈100px(-1%)，
-	// 缓解 Excel 每列 +5px 像素取整导致的区域膨胀。配合 labelFontSize=5 使标签放得下。
+	// 用户定值（ML）= 14：缓解 Excel 每列 +5px 像素取整导致的区域膨胀。
 	amountColPixel float64
-	// labelFontSize 表头单位行标签字号（pt）。0 = 沿用 printDigitFontSize(7)。
-	// 折中B（ML）设 5：列宽 10px 时 7pt 汉字(≈9.3px)贴边，5pt(≈6.7px)才放得下。
+	// amountColPixelEdge 装订边两侧列的加宽像素（>0 时启用）：Back 侧（装订边在右）每组金额列的
+	// "分"列（k=n-1）、Front 侧（装订边在左）每组金额列的"千"列（千万位 k=0）用此宽度（ML=15）。
+	amountColPixelEdge float64
+	// edgeLastCols Back 侧金额列集合：特殊列在组内末位（k=n-1，如借/贷/余/明细1-4 的分列）。
+	edgeLastCols map[int]bool
+	// edgeFirstCols Front 侧金额列集合：特殊列在组内首位（k=0，如明细5-14 的千万"千"列）。
+	edgeFirstCols map[int]bool
+	// labelFontSize 表头单位行标签字号（pt）。0 = 沿用 printDigitFontSize(7)。ML 设 6。
 	labelFontSize float64
 }
 
@@ -357,15 +362,25 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		}
 		if cm.isAmount(c) {
 			n := cm.splitCols(c)
-			var sub float64
+			var base float64
 			if cfg.amountColPixel > 0 {
-				// 折中B：按目标像素宽反推列宽（像素 = 字符×7+5 → 字符 = (px-5)/7），
-				// 使金额区域渲染宽度接近查看版（缓解 Excel 每列 +5px 像素取整的膨胀）
-				sub = (cfg.amountColPixel - 5) / 7
+				// 按目标像素宽反推列宽（像素 = 字符×7+5 → 字符 = (px-5)/7）
+				base = (cfg.amountColPixel - 5) / 7
 			} else {
-				sub = w / float64(n)
+				base = w / float64(n)
+			}
+			edge := 0.0
+			if cfg.amountColPixelEdge > 0 {
+				edge = (cfg.amountColPixelEdge - 5) / 7
 			}
 			for k := 0; k < n; k++ {
+				sub := base
+				// 装订边两侧列加宽：Back 侧（装订边在右）"分"列 k=n-1；Front 侧（装订边在左）"千"列 k=0
+				if cfg.amountColPixelEdge > 0 {
+					if (cfg.edgeLastCols[c] && k == n-1) || (cfg.edgeFirstCols[c] && k == 0) {
+						sub = edge
+					}
+				}
 				pc := cm.startCol(c) + k
 				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub)
 			}

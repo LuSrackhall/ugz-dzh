@@ -35,6 +35,19 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	for i := 0; i < mlMaxDetails; i++ {
 		split[mlDetailCol(lay, i)] = 10
 	}
+	// 用户定值（2026-08-24 六次调整）：基础列宽 14px；装订边两侧列加宽 15px——
+	//   Back 侧（借/贷/余/明细1-4，装订边在右）每组金额列的"分"列（k=n-1）
+	//   Front 侧（明细5-14，装订边在左）每组金额列的"千"列（千万位 k=0）
+	// 标签 6pt、数字 7pt。
+	edgeLast := make(map[int]bool, 7)   // Back 侧：借/贷/余/明1-4
+	edgeFirst := make(map[int]bool, 10) // Front 侧：明5-14
+	for i, c := range amountCols {
+		if i < 7 {
+			edgeLast[c] = true
+		} else {
+			edgeFirst[c] = true
+		}
+	}
 	cfg := printSheetConfig{
 		totalViewCols: lay.TotalCols,
 		amountCols:    amountCols,
@@ -52,13 +65,13 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 			}
 			return (r-dataFirst)%blockRows < pageSize+1
 		},
-		breakViewCol:    lay.PageGapStartCol + 2,
-		applyPageLayout: applyMLPrintPageLayout,
-		// 用户定值（2026-08-24 五次调整）：金额小列目标渲染宽 14.5px（列宽 1.357 字符）——
-		// 借/贷/余区域≈160px(+58%)、明细区域≈145px(+44%)；表头标签 6pt；数字 7pt。
-		// 字符级金额区最接近查看版（借 +8.8%、明细 -0.1%）。
-		amountColPixel: 14.5,
-		labelFontSize:  6,
+		breakViewCol:       lay.PageGapStartCol + 2,
+		applyPageLayout:    applyMLPrintPageLayout,
+		amountColPixel:     14,
+		amountColPixelEdge: 15,
+		edgeFirstCols:      edgeFirst,
+		edgeLastCols:       edgeLast,
+		labelFontSize:      6,
 	}
 	return transformSheet(f, sheet, cfg)
 }

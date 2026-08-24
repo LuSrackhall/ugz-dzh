@@ -75,6 +75,23 @@ func readSheetMeta(f *excelize.File, sheet string, maxCol int) (*sheetMeta, erro
 		return nil, fmt.Errorf("读取 %s 行: %w", sheet, err)
 	}
 	maxRow := len(rows)
+	// excelize GetRows 会裁剪末尾"仅有样式、无值"的行（如末块下边距行——只有红双线
+	// 边框没有文字）。这些行的样式/行高不能丢，否则打印版末块下边距行整行缺失
+	// （"装订侧红双线未延伸至下边距行"，且只在最后一张逻辑表出现）。
+	for r := maxRow + 1; r <= maxRow+5; r++ {
+		hasStyle := false
+		for c := 1; c <= maxCol; c++ {
+			axis, _ := excelize.CoordinatesToCellName(c, r)
+			if sid, _ := f.GetCellStyle(sheet, axis); sid != 0 {
+				hasStyle = true
+				break
+			}
+		}
+		if !hasStyle {
+			break
+		}
+		maxRow = r
+	}
 	meta := &sheetMeta{
 		colWidth:  make([]float64, maxCol+1),
 		rowHeight: make([]float64, maxRow+1),

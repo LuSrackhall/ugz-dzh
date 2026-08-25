@@ -38,17 +38,17 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 			}
 		}
 	}
-	// 非金额列 +0.5px：月/日/字/号、借或贷、借方旁对号、贷方旁对号（正反面）。
+	// 非金额列加宽：月/日/字/号 +0.5px；借或贷、借方旁对号、贷方旁对号 +1px（正反面）。
 	// 列号：正面 FrontStartCol=3（月3 日4 字5 号6 借✓9 贷✓11 借或贷12）；
-	// 反面 BackStartCol=17（+14）。
+	// 反面 BackStartCol=17（+14）。借或贷+两对号初始 +0.5px（5b517f6），用户再 +0.5px（合计 +1px）。
 	nonAmountPixelDelta := map[int]float64{}
 	apply := func(base int) {
 		for _, c := range []int{base, base + 1, base + 2, base + 3} { // 月/日/字/号
 			nonAmountPixelDelta[c] = 0.5
 		}
-		nonAmountPixelDelta[base+6] = 0.5  // 借方旁对号
-		nonAmountPixelDelta[base+8] = 0.5  // 贷方旁对号
-		nonAmountPixelDelta[base+9] = 0.5  // 借或贷
+		nonAmountPixelDelta[base+6] = 1.0 // 借方旁对号
+		nonAmountPixelDelta[base+8] = 1.0 // 贷方旁对号
+		nonAmountPixelDelta[base+9] = 1.0 // 借或贷
 	}
 	apply(lay.FrontStartCol)
 	apply(lay.BackStartCol)
@@ -89,8 +89,9 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 }
 
 // applyGLTitleArea 打印版 GL 标题区后处理（对每个页面块的标题行与科目行）：
-//  1. 总分类账：仿宋 22pt、右对齐，合并自月列延伸至贷方金额列亿位（表头"亿"所在列）；
-//     字体双下划线取消，改为"双线底边框"——自摘要列 3/4 处（第 4 子格）至标题右缘；
+//  1. 总分类账：仿宋 22pt、居中，合并 = 边框起止（摘要列 3/4 处 → 贷方金额列亿位"亿"所在列），
+//     底部双线边框自 3/4 处至右缘；3/4 之前的旧合并（月列起）拆分不再使用、区域留空，
+//     正面首列仍保留装订边左红双线；
 //  2. 分第：移到"借或贷"列 → 余额金额列十亿位（表头"十"所在列），右对齐；
 //  3. 页码数字 n：右移至余额亿位 → 余额分，居中（与分第/页 构成"分第 n 页"）；
 //  4. 会计科目（科目行）：移到贷方千位 → 贷方分（表头"千"/"分"所在列），右对齐；
@@ -100,29 +101,21 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 	lay := glLayout()
 	blockRows := (lay.SubHeaderRow + 1) + pageSize + 1 + lay.BottomMarginRows
 	// 标题行 2, 2+blockRows, …；科目行 = 标题行+1
-	// 总分类账样式：仿宋 22pt、绿、粗体、右/底对齐（字体双下划线已取消，改为标题行底部双线边框）
-	titleStyle, err := f.NewStyle(&excelize.Style{
+	// 总分类账样式（居中）：仿宋 22pt、绿、粗体、居中+底对齐，底部双线边框
+	// （自摘要列 3/4 处到标题右缘，合并范围=边框起止）。
+	titleStyleCenter, err := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Family: "仿宋", Size: 22, Color: "006100", Bold: true},
-		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
-	})
-	if err != nil {
-		return
-	}
-	// 双线底边框变体：titleStyle + bottom=double#006100（自摘要列 3/4 处到标题右缘）
-	titleStyleBorder, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: "仿宋", Size: 22, Color: "006100", Bold: true},
-		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "bottom"},
 		Border:    []excelize.Border{{Type: "bottom", Color: "006100", Style: 6}},
 	})
 	if err != nil {
 		return
 	}
 	// 装订边红双线：正面标题行首列（月列）是装订边，需保留 left=double#CC0000。
-	// 整块 titleStyle 无边框，若直接覆盖会把该列红双线清掉（55746bb 回归），
-	// 故正面首列单独用 titleStyleEdge（titleStyle + 左红双线）。
+	// 该列已不在标题合并内（合并=边框起止），单独用 titleStyleEdge（左红双线）。
 	titleStyleEdge, err := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Family: "仿宋", Size: 22, Color: "006100", Bold: true},
-		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "bottom"},
 		Border:    []excelize.Border{{Type: "left", Color: "CC0000", Style: 6}},
 	})
 	if err != nil {
@@ -192,17 +185,20 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 		_ = f.SetCellValue(sheet, cellAxis(accOld, accRow), "")
 		_ = f.SetCellValue(sheet, cellAxis(nameOld, accRow), "")
 		// ── 标题行：总分类账 / 分第 / 数字 / 页 ──
-		_ = f.SetCellValue(sheet, cellAxis(tStart, titleRow), "总    分    类    账")
-		// 双线底边框：从摘要列第 4 子格（3/4 处）到标题右缘；摘要列 3/4 之前（月日字号+摘要前 3 子格）无底边框。
-		// 摘要列（view half+4）已拆 4 格，第 4 子格 = 3/4 处。
+		// 摘要列（view half+4）已拆 4 格，第 4 子格 = 3/4 处 = 双线底边框起点。
 		sumSub4 := cm.startCol(half+4) + 3
-		_ = f.SetCellStyle(sheet, cellAxis(tStart, titleRow), cellAxis(sumSub4-1, titleRow), titleStyle)
-		_ = f.SetCellStyle(sheet, cellAxis(sumSub4, titleRow), cellAxis(tEnd, titleRow), titleStyleBorder)
+		// 总分类账：合并 = 边框起止（摘要列 3/4 处 → 标题右缘），居中；3/4 之前的
+		// 旧合并（月列起）拆分不再使用，该区域清空为无边框（正面首列保留装订边左红双线）。
+		_ = f.SetCellStyle(sheet, cellAxis(tStart, titleRow), cellAxis(sumSub4-1, titleRow), plainStyle)
+		// 清掉旧标题文本（合并已不再覆盖该格，查看版标题值残留在月列）
+		_ = f.SetCellValue(sheet, cellAxis(tStart, titleRow), "")
 		if half == lay.FrontStartCol {
 			// 正面标题行首列 = 装订边红双线左框
 			_ = f.SetCellStyle(sheet, cellAxis(tStart, titleRow), cellAxis(tStart, titleRow), titleStyleEdge)
 		}
-		_ = f.MergeCell(sheet, cellAxis(tStart, titleRow), cellAxis(tEnd, titleRow))
+		_ = f.SetCellValue(sheet, cellAxis(sumSub4, titleRow), "总  分  类  账")
+		_ = f.SetCellStyle(sheet, cellAxis(sumSub4, titleRow), cellAxis(tEnd, titleRow), titleStyleCenter)
+		_ = f.MergeCell(sheet, cellAxis(sumSub4, titleRow), cellAxis(tEnd, titleRow))
 		_ = f.SetCellValue(sheet, cellAxis(fenStart, titleRow), "分第 ")
 		_ = f.SetCellStyle(sheet, cellAxis(fenStart, titleRow), cellAxis(fenEnd, titleRow), pnLabelSid)
 		_ = f.MergeCell(sheet, cellAxis(fenStart, titleRow), cellAxis(fenEnd, titleRow))

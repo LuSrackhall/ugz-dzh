@@ -64,7 +64,7 @@ func TestAppendMergeEntries_Basic(t *testing.T) {
 		t.Fatalf("expected at least 8 rows, got %d", len(rows))
 	}
 	// Title at GetRows[1], col C (FrontStartCol=3 → GetRows index 2)
-	if len(rows[1]) < 3 || !strings.Contains(rows[1][2], "总    分    类    账") {
+	if len(rows[1]) < 3 || !strings.Contains(rows[1][2], "总  分  类  账") {
 		t.Errorf("row 1 title = %v", rows[1])
 	}
 	// Top header at GetRows[4]: 摘要 at col F (FrontStartCol+3=6, GetRows index 5)

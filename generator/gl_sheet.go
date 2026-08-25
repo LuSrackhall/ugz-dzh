@@ -135,7 +135,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	tl := cellName(lay.TitleColLeft, lay.TitleRow+1)
 	tr := cellName(lay.TitleColRight, lay.TitleRow+1)
 	wb.File.MergeCell(sheet, tl, tr)
-	wb.File.SetCellValue(sheet, tl, "   总    分    类    账   ")
+	wb.File.SetCellValue(sheet, tl, "   总  分  类  账   ")
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
@@ -958,7 +958,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	tl := cellName(lay.TitleColLeft+colOffset, row)
 	tr := cellName(lay.TitleColRight+colOffset, row)
 	wb.File.MergeCell(sheet, tl, tr)
-	wb.File.SetCellValue(sheet, tl, "   总    分    类    账   ")
+	wb.File.SetCellValue(sheet, tl, "   总  分  类  账   ")
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},

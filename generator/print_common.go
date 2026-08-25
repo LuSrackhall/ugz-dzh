@@ -27,11 +27,12 @@ type colMap struct {
 	totalPrint int          // 打印版总列数
 }
 
-// buildColMap 按"金额列展开 split[viewCol]、其余 1"构建列映射。
-// split 未覆盖的金额列默认 12。
-func buildColMap(totalViewCols int, amountCols []int, split map[int]int) colMap {
+// buildColMap 按"金额列/拆分列展开 split[viewCol]、其余 1"构建列映射。
+// split 未覆盖的金额列默认 12；splitNA 为非金额列的拆分（如 GL 摘要列 4 格），
+// 拆分后文本行"首格+合并回单格"、空值行"仅继承边界"，为标题行局部边框提供列粒度。
+func buildColMap(totalViewCols int, amountCols []int, split map[int]int, splitNA map[int]int) colMap {
 	aset := make(map[int]bool, len(amountCols))
-	sp := make(map[int]int, len(amountCols))
+	sp := make(map[int]int, len(amountCols)+len(splitNA))
 	for _, c := range amountCols {
 		aset[c] = true
 		n := 12
@@ -42,13 +43,18 @@ func buildColMap(totalViewCols int, amountCols []int, split map[int]int) colMap 
 		}
 		sp[c] = n
 	}
+	for c, n := range splitNA {
+		if n > 0 {
+			sp[c] = n
+		}
+	}
 	start := make([]int, totalViewCols+1)
 	pc := 0
 	for c := 1; c <= totalViewCols; c++ {
 		pc++
 		start[c] = pc
-		if aset[c] {
-			pc += sp[c] - 1
+		if n, ok := sp[c]; ok {
+			pc += n - 1
 		}
 	}
 	return colMap{start: start, split: sp, amount: aset, totalPrint: pc}
@@ -64,8 +70,8 @@ func (m colMap) splitCols(viewCol int) int {
 }
 func (m colMap) endCol(viewCol int) int {
 	s := m.start[viewCol]
-	if m.amount[viewCol] {
-		return s + m.splitCols(viewCol) - 1
+	if n, ok := m.split[viewCol]; ok {
+		return s + n - 1
 	}
 	return s
 }
@@ -312,6 +318,7 @@ type printSheetConfig struct {
 	totalViewCols   int              // 查看版总列数
 	amountCols      []int            // 金额列号（1-indexed）
 	splitCols       map[int]int      // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
+	splitNA         map[int]int      // 非金额列 → 展开列数（如 GL 摘要列 4 格；文本合并回单格、空值仅继承边界）
 	isLabelRow      func(r int) bool // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
 	isDataRow       func(r int) bool // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
 	breakViewCol    int              // 查看版垂直分页符所在列
@@ -365,7 +372,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	if err != nil {
 		return err
 	}
-	cm := buildColMap(cfg.totalViewCols, cfg.amountCols, cfg.splitCols)
+	cm := buildColMap(cfg.totalViewCols, cfg.amountCols, cfg.splitCols, cfg.splitNA)
 
 	// 预计算"被合并区覆盖"的单元格集合，用于判断文本标签是否需新建 12 列合并
 	covered := make(map[[2]int]bool, len(meta.merges)*4)
@@ -417,6 +424,14 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub)
 			}
 		} else {
+			// 拆分非金额列（如 GL 摘要列 4 格）：n 子列等分原宽（总像素守恒，为 3/4 处起线提供列粒度）
+			if n := cm.splitCols(c); n > 1 {
+				subW := ((w*7+5)/float64(n) - 5) / 7
+				for k := 0; k < n; k++ {
+					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW)
+				}
+				continue
+			}
 			pc := cm.startCol(c)
 			// 非金额列特例：命中 nonAmountPixel 时按目标像素覆盖查看版原始宽度
 			if px, ok := cfg.nonAmountPixel[c]; ok {
@@ -445,6 +460,35 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		r, c, val, sid := cell.r, cell.c, cell.val, cell.style
 		if !cm.isAmount(c) {
 			if val == "" && sid == 0 {
+				continue
+			}
+			n := cm.splitCols(c)
+			if n > 1 {
+				// 拆分非金额列（GL 摘要列 4 格，为标题行"双线底边框从摘要列 3/4 处开始"提供列粒度）：
+				//   - 文本（摘要内容/表头"摘要"标签）：值写首格 + 整段铺原样式 + 合并 n 格（外观=单格，内部边框被合并隐藏）
+				//   - 空值 + 有样式（数据行空摘要）：n 子格铺"仅继承边界"（top/bottom 铺满、k=0 继承左、k=n-1 继承右），不合并
+				pc := cm.startCol(c)
+				if val != "" {
+					// 富文本优先（与 1:1 非金额分支一致）
+					if len(cell.rich) > 0 {
+						_ = f.SetCellRichText(sheet, cellAxis(pc, r), cell.rich)
+					} else {
+						_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
+					}
+				}
+				if sid != 0 {
+					if val != "" {
+						_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc+n-1, r), sid)
+						if !covered[[2]int{r, c}] {
+							extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
+						}
+					} else {
+						for k := 0; k < n; k++ {
+							eid := amountEdgeStyle(f, sid, k, digitCache, n)
+							_ = f.SetCellStyle(sheet, cellAxis(pc+k, r), cellAxis(pc+k, r), eid)
+						}
+					}
+				}
 				continue
 			}
 			pc := cm.startCol(c)

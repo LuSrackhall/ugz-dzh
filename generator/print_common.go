@@ -468,8 +468,12 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if !covered[[2]int{r, c}] {
 				extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
 			}
-		case (val == "" && cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
-			// 数据区空值金额格拆位：n 空格，带分组竖线+继承上下/左右边框
+		case (val != "" && isNumericAmount(val) && cfg.isDataRow != nil && cfg.isDataRow(r)) ||
+			(val == "" && cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
+			// 数据区金额格拆位（数值或空值）：有值写数字、空值=n 空格，均带分组竖线+继承上下/左右边框。
+			// ⚠️ 仅限数据区（isDataRow）：非数据区数值（如 Front 侧逻辑页码"1"/"2"）必须走文本标签分支，
+			// 否则会被当金额拆位成"100"/"200"。上一版(8af3cf0)误把"数值任意行"整体删掉，导致数据区有值金额
+			// 格落入下方 sid!=0 的"仅继承边界"分支——既不写数字、也不生成分组竖线，整片数据区边框/数字异常。
 			cents := int64(0)
 			if val != "" {
 				cents, _ = yuanStrToCents(val)

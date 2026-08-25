@@ -23,9 +23,18 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	labelRow1 := lay.SubHeaderRow + 1 // 首块标签行（绝对行号）
 	blockRows := (lay.SubHeaderRow + 1) + pageSize + 1 + lay.BottomMarginRows
 	dataFirst := labelRow1 + 1 // 首块数据首行（标签行下一行）
+	// 借/贷/余额 12 小列（十亿…分）中，除十亿位 k=0（表头"十"）外，
+	// 其余 k=1..11 各减 1px（用户定值，缓解小列总宽膨胀）。
+	edgePixelDelta := map[[2]int]float64{}
+	for _, c := range amountCols {
+		for k := 1; k < 12; k++ {
+			edgePixelDelta[[2]int{c, k}] = -1
+		}
+	}
 	cfg := printSheetConfig{
-		totalViewCols: lay.TotalCols,
-		amountCols:    amountCols,
+		totalViewCols:   lay.TotalCols,
+		amountCols:      amountCols,
+		edgePixelDelta:  edgePixelDelta,
 		isLabelRow: func(r int) bool {
 			if r < labelRow1 || blockRows <= 0 {
 				return false

@@ -325,6 +325,11 @@ type printSheetConfig struct {
 	//   明细1-4（n=10）：分列 k=9 → 16px
 	//   明细5-14（n=10）：千列 k=0(千万位)、百 k=1(百万位)、千 k=4(千位)、分 k=9 → 16px
 	edgePixel map[[2]int]float64
+	// edgePixelDelta (金额列,k) → 该小列的像素宽**增量**（叠加在基础宽上，可为负）。
+	// 与 edgePixel 的区别：edgePixel 是绝对值覆盖，delta 是相对基础宽的加减（px）。
+	// 应用：sub = base + delta/7。用户定值（GL）：借/贷/余额 12 小列中，除十亿位 k=0
+	// （表头"十"）外，其余 k=1..11 各减 1px。
+	edgePixelDelta map[[2]int]float64
 	// nonAmountPixel 非金额列 → 目标像素宽（覆盖查看版原始列宽；key=查看版列号）。
 	// 用户定值（ML）：借或贷列（查看版 col9）28.1px → 26.1px（减 2px）。
 	nonAmountPixel map[int]float64
@@ -396,9 +401,13 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 			for k := 0; k < n; k++ {
 				sub := base
-				// 组内任意位置独立像素（按 (金额列,k) 查表）
+				// 组内任意位置独立像素（按 (金额列,k) 查表，绝对值覆盖）
 				if v, ok := cfg.edgePixel[[2]int{c, k}]; ok {
 					sub = (v - 5) / 7
+				}
+				// 像素增量（叠加在基础宽上，可为负；如 GL 除十亿位外各减 1px）
+				if d, ok := cfg.edgePixelDelta[[2]int{c, k}]; ok {
+					sub = base + d/7
 				}
 				pc := cm.startCol(c) + k
 				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub)

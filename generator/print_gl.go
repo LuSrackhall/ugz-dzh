@@ -24,7 +24,7 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	blockRows := (lay.SubHeaderRow + 1) + pageSize + 1 + lay.BottomMarginRows
 	dataFirst := labelRow1 + 1 // 首块数据首行（标签行下一行）
 	// 借/贷/余额 12 小列（十亿…分）：十亿位 k=0（表头"十"）+2px、百万位 k=3（"百"）
-	// 与千位 k=6（"千"）+1px；其余 k 各减 0.27px（用户定值）。
+	// 与千位 k=6（"千"）+1.5px；其余 k 各减 0.27px（用户定值）。
 	edgePixelDelta := map[[2]int]float64{}
 	for _, c := range amountCols {
 		for k := 0; k < 12; k++ {
@@ -32,7 +32,7 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 			case 0: // 十亿位 表头"十"
 				edgePixelDelta[[2]int{c, k}] = 2
 			case 3, 6: // 百万位"百"、千位"千"
-				edgePixelDelta[[2]int{c, k}] = 1
+				edgePixelDelta[[2]int{c, k}] = 1.5
 			default:
 				edgePixelDelta[[2]int{c, k}] = -0.27
 			}

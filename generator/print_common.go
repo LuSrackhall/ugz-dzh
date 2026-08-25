@@ -456,8 +456,10 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 					_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
 				}
 			}
-		case val != "" && !isNumericAmount(val):
-			// 文本标签（"借方"/明细名/标题等）：值写首格 + n 列铺样式 + 不在已有合并区则新建合并
+		case val != "" && (!isNumericAmount(val) || (cfg.isDataRow != nil && !cfg.isDataRow(r))):
+			// 文本标签（"借方"/明细名/标题等）+ 非数据区数值（如"分第 n 页"的页码数字）：
+			// 值写首格 + n 列铺样式 + 不在已有合并区则新建合并
+			// ⚠️ 非数据区数值不能拆位——拆位会把页码"1"当 1 元拆成 元1角0分0（显示"100"）
 			pc := cm.startCol(c)
 			_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
 			if sid != 0 {
@@ -466,8 +468,8 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if !covered[[2]int{r, c}] {
 				extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
 			}
-		case (val != "" && isNumericAmount(val)) || (cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
-			// 金额格拆位（数值任意行 / 数据区空值格）：有值写数字、空值=n 空格，均带分组竖线+继承上下/左右边框
+		case (val == "" && cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
+			// 数据区空值金额格拆位：n 空格，带分组竖线+继承上下/左右边框
 			cents := int64(0)
 			if val != "" {
 				cents, _ = yuanStrToCents(val)

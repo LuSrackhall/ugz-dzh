@@ -23,12 +23,16 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	labelRow1 := lay.SubHeaderRow + 1 // 首块标签行（绝对行号）
 	blockRows := (lay.SubHeaderRow + 1) + pageSize + 1 + lay.BottomMarginRows
 	dataFirst := labelRow1 + 1 // 首块数据首行（标签行下一行）
-	// 借/贷/余额 12 小列（十亿…分）中，除十亿位 k=0（表头"十"）外，
-	// 其余 k=1..11 各减 0.3px（用户定值，缓解小列总宽膨胀；1px/0.5px 太宽、0.2px 太少）。
+	// 借/贷/余额 12 小列（十亿…分）中，不减少的列 = 十亿位 k=0（表头"十"）、
+	// 百万位 k=3（表头"百"）、千位 k=6（表头"千"）；其余 k 各减 0.3px（用户定值）。
 	edgePixelDelta := map[[2]int]float64{}
 	for _, c := range amountCols {
-		for k := 1; k < 12; k++ {
-			edgePixelDelta[[2]int{c, k}] = -0.3
+		for k := 0; k < 12; k++ {
+			switch k {
+			case 0, 3, 6: // 十亿位/百万位/千位 表头列不减少
+			default:
+				edgePixelDelta[[2]int{c, k}] = -0.3
+			}
 		}
 	}
 	cfg := printSheetConfig{

@@ -774,13 +774,14 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 
 	// ── 计算逻辑页号──
 	// logicalPageNum = 已有真实过次页数 + 1（跳过结构预写）
+	// ⚠️ 此前用裸偏移 BindingLeftCols+2/+3（=日/凭证号列），永远匹配不到摘要列的
+	// "过次页"标签，导致每次跨月追加时 logicalPageNum 都从 1 重新算——多页科目
+	// 页码变成 1,2,3,4,2,2 等错乱。改用与 mlHasPageBreakAt/mlIsStructuralBreak
+	// 一致的偏移（mlOffSummary=摘要、mlOffBalance=余额），与 GL getPageNum 对齐。
 	logicalPageNum := 1
 	for _, r := range rows {
-		if len(r) > lay.BindingLeftCols+2 && r[lay.BindingLeftCols+2] == pageBreakLabel {
-			debIdx := lay.BindingLeftCols + 3
-			if len(r) > debIdx && strings.TrimSpace(r[debIdx]) != "" {
-				logicalPageNum++
-			}
+		if mlHasPageBreakAt(r, lay) && !mlIsStructuralBreak(r, lay) {
+			logicalPageNum++
 		}
 	}
 

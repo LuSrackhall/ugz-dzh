@@ -75,6 +75,7 @@ type metaCell struct {
 	r, c  int
 	val   string
 	style int
+	rich  []excelize.RichTextRun // 富文本 runs（重建 sheet 前读取，否则原格已删读不到）
 }
 
 // metaMerge 记录一个合并区（含起止行列）。
@@ -135,7 +136,14 @@ func readSheetMeta(f *excelize.File, sheet string, maxCol int) (*sheetMeta, erro
 			}
 			cell, _ := excelize.CoordinatesToCellName(c, r)
 			sid, _ := f.GetCellStyle(sheet, cell)
-			meta.cells = append(meta.cells, metaCell{r: r, c: c, val: val, style: sid})
+			mc := metaCell{r: r, c: c, val: val, style: sid}
+			if val != "" {
+				// 富文本必须在重建 sheet 前读取（重建后原格已删）
+				if runs, err := f.GetCellRichText(sheet, cell); err == nil && len(runs) > 0 {
+					mc.rich = runs
+				}
+			}
+			meta.cells = append(meta.cells, mc)
 		}
 		if h, err := f.GetRowHeight(sheet, r); err == nil {
 			meta.rowHeight[r] = h
@@ -409,7 +417,13 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 			pc := cm.startCol(c)
 			if val != "" {
-				_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
+				// 富文本优先：查看版年份"2026年"等是富文本（分段字体），SetCellValue 会
+				// 用纯文本覆盖导致颜色丢失。meta.cells 已在重建前缓存 runs。
+				if len(cell.rich) > 0 {
+					_ = f.SetCellRichText(sheet, cellAxis(pc, r), cell.rich)
+				} else {
+					_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
+				}
 			}
 			if sid != 0 {
 				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), sid)
@@ -483,7 +497,13 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	}
 
 	// 合并区：重映射现有合并 + 文本标签新建合并
+	// 注意：跳过单格"合并区"（r1==r2 && c1==c2）——excelize 允许这种无意义合并，
+	// 但重映射会把金额列的单格合并展开为 n 格大合并，合并时左上角之外的值被清空，
+	// 导致拆位写在元位小格的内容丢失（如 Front 侧逻辑页码数字）。
 	for _, mg := range meta.merges {
+		if mg.r1 == mg.r2 && mg.c1 == mg.c2 {
+			continue
+		}
 		nc1 := cm.startCol(mg.c1)
 		nc2 := cm.endCol(mg.c2)
 		_ = f.MergeCell(sheet, cellAxis(nc1, mg.r1), cellAxis(nc2, mg.r2))

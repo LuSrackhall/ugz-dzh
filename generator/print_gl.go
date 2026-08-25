@@ -38,19 +38,18 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 			}
 		}
 	}
-	// 非金额列加宽：月/日/字/号 +0.5px；借或贷、借方旁对号、贷方旁对号 +1.5px；
-	// 余额旁对号（第三个对号）同步加入 → +1.5px（正反面）。
+	// 非金额列加宽：月/日/字/号 +0.5px；借或贷、借方旁对号、贷方旁对号、余额旁对号 +2px（正反面）。
 	// 列号：正面 FrontStartCol=3（月3 日4 字5 号6 借✓9 贷✓11 借或贷12 余✓14）；
-	// 反面 BackStartCol=17（+14）。借或贷+两对号 0.5→1→1.5px 逐步上调（5b517f6/3a91202/本次）。
+	// 反面 BackStartCol=17（+14）。借或贷+对号列 0.5→1→1.5→2px 逐步上调（5b517f6/3a91202/598e8b0/本次）。
 	nonAmountPixelDelta := map[int]float64{}
 	apply := func(base int) {
 		for _, c := range []int{base, base + 1, base + 2, base + 3} { // 月/日/字/号
 			nonAmountPixelDelta[c] = 0.5
 		}
-		nonAmountPixelDelta[base+6] = 1.5  // 借方旁对号
-		nonAmountPixelDelta[base+8] = 1.5  // 贷方旁对号
-		nonAmountPixelDelta[base+9] = 1.5  // 借或贷
-		nonAmountPixelDelta[base+11] = 1.5 // 余额旁对号
+		nonAmountPixelDelta[base+6] = 2.0  // 借方旁对号
+		nonAmountPixelDelta[base+8] = 2.0  // 贷方旁对号
+		nonAmountPixelDelta[base+9] = 2.0  // 借或贷
+		nonAmountPixelDelta[base+11] = 2.0 // 余额旁对号
 	}
 	apply(lay.FrontStartCol)
 	apply(lay.BackStartCol)

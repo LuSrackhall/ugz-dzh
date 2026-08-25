@@ -70,11 +70,12 @@ func (m colMap) endCol(viewCol int) int {
 	return s
 }
 
-// metaCell 记录一个查看版单元格的值与样式 ID。
+// metaCell 记录一个查看版单元格的值、类型与样式 ID。
 type metaCell struct {
 	r, c  int
 	val   string
 	style int
+	isStr bool                   // 单元格是否为字符串类型（金额列中字符串=标签/页码，不能拆位）
 	rich  []excelize.RichTextRun // 富文本 runs（重建 sheet 前读取，否则原格已删读不到）
 }
 
@@ -138,6 +139,12 @@ func readSheetMeta(f *excelize.File, sheet string, maxCol int) (*sheetMeta, erro
 			sid, _ := f.GetCellStyle(sheet, cell)
 			mc := metaCell{r: r, c: c, val: val, style: sid}
 			if val != "" {
+				// 单元格类型：数值=CellTypeUnset（无 t 属性），字符串=SharedString/InlineString/Formula。
+				// 金额列里的"字符串数值"（如 ML Front 逻辑页码 "1"）必须整段保留不能拆位——
+				// 拆位会把 "1" 当 1 元拆成 元1角0分0（显示"100"）。判别用类型而非"长得像数字"。
+				if t, err := f.GetCellType(sheet, cell); err == nil {
+					mc.isStr = t == excelize.CellTypeSharedString || t == excelize.CellTypeInlineString || t == excelize.CellTypeFormula
+				}
 				// 富文本必须在重建 sheet 前读取（重建后原格已删）
 				if runs, err := f.GetCellRichText(sheet, cell); err == nil && len(runs) > 0 {
 					mc.rich = runs
@@ -328,13 +335,14 @@ type printSheetConfig struct {
 // transformSheet 对单个 Sheet 执行列展开变换。
 //
 // 流程：读取元数据 → 构建列映射 → 删除+重建 Sheet → 写列宽/行高/单元格/合并区 → 重应用页布局。
-// 单元格处理（金额列按"内容+样式"统一分类，仅标签行用行号）：
+// 单元格处理（金额列按"值类型+行区+样式"分类，仅标签行/空值用行号）：
 //   - 非金额：原样复制（值 + styleID）到新列位置；空且无样式则跳过
-//   - 金额 + 标签行 + 有样式：写 12 小列标签（分组竖线 + 继承原上下边框）
+//   - 金额 + 标签行 + 有样式：写 n 小列标签（分组竖线 + 继承原上下边框）
 //   - 金额 + 标签行 + 无样式：跳过（如 ML Paper1 未渲染的 Back 侧）
-//   - 金额 + money 样式（#,##0.00）：数据行——拆位填 12 格（空值=12 空格，仍带分组竖线）
-//   - 金额 + 文本标签（"借方"等）：值写首格 + 12 列铺样式 + 不在已有合并区则新建 12 列合并
-//   - 金额 + 空 + 表头样式：12 子格铺样式（合并区内部由重映射合并）
+//   - 金额 + 数值型（查看版金额=数值存储）：拆位填 n 格（分组竖线 + 继承上下/左右边框）
+//   - 金额 + 字符串型（"借方"/明细名/标题/页码"1"）：值写首格 + n 列铺样式 + 不在已有合并区则新建合并
+//   - 金额 + 空 + 数据行 + 有样式：拆位填 n 空格（分组竖线 + 继承边框）
+//   - 金额 + 空 + 非数据行 + 有样式：n 子格铺"仅继承边界"样式（不生成分组竖线、不复制红双线）
 //   - 金额 + 空 + 无样式：跳过
 func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error {
 	meta, err := readSheetMeta(f, sheet, cfg.totalViewCols)
@@ -430,17 +438,22 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 			continue
 		}
-		// 金额列分类（按"内容+样式+行区"判定，仅标签行/数据区用行号）：
-		//   - 标签行 + 有样式：写 12 小列标签
-		//   - 文本（"借方"/明细名/标题，非数值）+ 非空：值写首格 + 12 列铺样式 + 合并
-		//   - 数值（任意行）或 数据区空值格：拆位填 12 格——有值写数字、空值=12 空格，均带分组竖线+继承上下/左右边框
-		//   - 非数据区空值 + 有样式（表头/标题/下边距区）：12 子格铺"仅继承边界"样式——top/bottom 继承原样式铺满，
-		//     左右仅 k=0 继承原左边框、k=11 继承原右边框，中间格无边框（不生成分组竖线、不复制原红双线）
+		// 金额列分类（按"值类型+行区+样式"判定，仅标签行/空值用行号）：
+		//   - 标签行 + 有样式：写 n 小列标签
+		//   - 字符串型 + 非空（"借方"/明细名/标题/页码"1"）：值写首格 + n 列铺样式 + 合并
+		//   - 数值型（查看版金额=数值存储，任意行）或 数据区空值格：拆位填 n 格——有值写数字、
+		//     空值=n 空格，均带分组竖线+继承上下/左右边框
+		//   - 非数据区空值 + 有样式（表头/标题/下边距区）：n 子格铺"仅继承边界"样式——top/bottom 继承
+		//     原样式铺满，左右仅 k=0 继承原左边框、k=n-1 继承原右边框，中间格无边框（不生成分组竖线、
+		//     不复制原红双线）
 		//   - 空 + 无样式：跳过
-		// 关键：数据区空值金额格（如某分录未涉及的明细列、月结空金额）必须拆位（12 空格+分组竖线），
+		// 关键1：金额列里"字符串型数值"（ML Front 逻辑页码 "1"/"2"）绝不能拆位——拆位会把 "1" 当
+		// 1 元拆成 元1角0分0（显示"100"）。判别用单元格类型（数值=CellTypeUnset、字符串=SharedString），
+		// 与行区/金额格式（GL=General、ML=#,##0.00）无关，GL/ML 通吃。
+		// 关键2：数据区空值金额格（如某分录未涉及的明细列、月结空金额）必须拆位（n 空格+分组竖线），
 		// 而非铺原样式（否则原红双线左右边框污染所有小格，造成"双线溢出"）；而表头/标题/下边距区
 		// 空值金额格必须"仅继承边界"（既不能拆位生成分组竖线——溢出到标题区，也不能整体铺原样式——
-		// 会把原红双线复制 12 条）。
+		// 会把原红双线复制 n 条）。
 		// 该金额列展开的小列数
 		n := cm.splitCols(c)
 		labels := digitColLabels(n)
@@ -456,8 +469,9 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 					_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
 				}
 			}
-		case val != "" && !isNumericAmount(val):
-			// 文本标签（"借方"/明细名/标题等）：值写首格 + n 列铺样式 + 不在已有合并区则新建合并
+		case val != "" && cell.isStr:
+			// 字符串型（"借方"/明细名/标题/页码"1"等）：值写首格 + n 列铺样式 + 不在已有合并区则新建合并
+			// ⚠️ 字符串数值（Front 逻辑页码"1"）不能拆位——拆位会把页码"1"当 1 元拆成"100"
 			pc := cm.startCol(c)
 			_ = f.SetCellValue(sheet, cellAxis(pc, r), val)
 			if sid != 0 {
@@ -466,8 +480,8 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if !covered[[2]int{r, c}] {
 				extraMerges = append(extraMerges, metaMerge{r1: r, c1: c, r2: r, c2: c})
 			}
-		case (val != "" && isNumericAmount(val)) || (cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
-			// 金额格拆位（数值任意行 / 数据区空值格）：有值写数字、空值=n 空格，均带分组竖线+继承上下/左右边框
+		case (val != "" && !cell.isStr) || (val == "" && cfg.isDataRow != nil && cfg.isDataRow(r) && sid != 0):
+			// 金额格拆位（数值=金额 任意行 / 数据区空值格）：有值写数字、空值=n 空格，均带分组竖线+继承上下/左右边框
 			cents := int64(0)
 			if val != "" {
 				cents, _ = yuanStrToCents(val)
@@ -521,14 +535,6 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 
 	restoreSheetOrder(f, sheet, origIdx)
 	return nil
-}
-
-// isNumericAmount 判断字符串是否可解析为金额（分）。
-// 数据行金额格恒为数值（含 "0"）；表头文本标签（"借方"/明细名/标题）非数值。
-// 空串由调用方先行排除（空串属表头/标题区）。
-func isNumericAmount(val string) bool {
-	_, err := yuanStrToCents(val)
-	return err == nil
 }
 
 // cellAxis 返回 (col,row) 的单元格地址。

@@ -333,6 +333,10 @@ type printSheetConfig struct {
 	// nonAmountPixel 非金额列 → 目标像素宽（覆盖查看版原始列宽；key=查看版列号）。
 	// 用户定值（ML）：借或贷列（查看版 col9）28.1px → 26.1px（减 2px）。
 	nonAmountPixel map[int]float64
+	// nonAmountPixelDelta 非金额列 → 像素宽**增量**（叠加在查看版原始宽上，可为负）。
+	// 应用：w = w + delta/7。用户定值（GL）：月/日/字/号、借或贷、借方旁/贷方旁对号
+	// 各 +0.5px（正反面 14 列）。
+	nonAmountPixelDelta map[int]float64
 	// labelFontSize 表头单位行标签字号（pt）。0 = 沿用 printDigitFontSize(7)。ML 设 6。
 	labelFontSize float64
 	// dataFontFamily/dataFontSize 数据区金额数字字体（仅数据格，不含表头标签）。
@@ -417,6 +421,10 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			// 非金额列特例：命中 nonAmountPixel 时按目标像素覆盖查看版原始宽度
 			if px, ok := cfg.nonAmountPixel[c]; ok {
 				w = (px - 5) / 7
+			}
+			// 非金额列像素增量（叠加在查看版/覆盖宽上，可为负；如 GL 月日字号等 +0.5px）
+			if d, ok := cfg.nonAmountPixelDelta[c]; ok {
+				w = w + d/7
 			}
 			_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), w)
 		}

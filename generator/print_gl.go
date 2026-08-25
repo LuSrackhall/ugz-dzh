@@ -38,10 +38,25 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 			}
 		}
 	}
+	// 非金额列 +0.5px：月/日/字/号、借或贷、借方旁对号、贷方旁对号（正反面）。
+	// 列号：正面 FrontStartCol=3（月3 日4 字5 号6 借✓9 贷✓11 借或贷12）；
+	// 反面 BackStartCol=17（+14）。
+	nonAmountPixelDelta := map[int]float64{}
+	apply := func(base int) {
+		for _, c := range []int{base, base + 1, base + 2, base + 3} { // 月/日/字/号
+			nonAmountPixelDelta[c] = 0.5
+		}
+		nonAmountPixelDelta[base+6] = 0.5  // 借方旁对号
+		nonAmountPixelDelta[base+8] = 0.5  // 贷方旁对号
+		nonAmountPixelDelta[base+9] = 0.5  // 借或贷
+	}
+	apply(lay.FrontStartCol)
+	apply(lay.BackStartCol)
 	cfg := printSheetConfig{
-		totalViewCols:   lay.TotalCols,
-		amountCols:      amountCols,
-		edgePixelDelta:  edgePixelDelta,
+		totalViewCols:       lay.TotalCols,
+		amountCols:          amountCols,
+		edgePixelDelta:      edgePixelDelta,
+		nonAmountPixelDelta: nonAmountPixelDelta,
 		isLabelRow: func(r int) bool {
 			if r < labelRow1 || blockRows <= 0 {
 				return false

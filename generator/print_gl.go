@@ -66,11 +66,19 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		lay.FrontStartCol + 4: -3,
 		lay.BackStartCol + 4:  -3,
 	}
+	// 数据区横向居中（不含表头）：凭证号列（view 6/20）与借或贷列（view 12/26）的数据内容区
+	dataAlignCols := map[int]string{
+		lay.FrontStartCol + 3: "center", // 号
+		lay.BackStartCol + 3:  "center",
+		lay.FrontStartCol + 9: "center", // 借或贷
+		lay.BackStartCol + 9:  "center",
+	}
 	cfg := printSheetConfig{
 		totalViewCols:       lay.TotalCols,
 		amountCols:          amountCols,
 		splitNA:             splitNA,
 		splitNAPixelDelta:   splitNAPixelDelta,
+		dataAlignCols:       dataAlignCols,
 		edgePixelDelta:      edgePixelDelta,
 		nonAmountPixelDelta: nonAmountPixelDelta,
 		// 数据区金额数字（借方/贷方/余额）：字体 Noteworthy（字号保持 7pt）

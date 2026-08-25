@@ -320,6 +320,7 @@ type printSheetConfig struct {
 	splitCols       map[int]int      // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
 	splitNA         map[int]int      // 非金额列 → 展开列数（如 GL 摘要列 4 格；文本合并回单格、空值仅继承边界）
 	splitNAPixelDelta map[int]float64 // 拆分非金额列的总像素增量（可为负；如 GL 摘要列 -3px）
+	dataAlignCols   map[int]string   // 非金额列 → 数据区（isDataRow，不含表头）横向对齐覆盖（如 GL 号列/借或贷列 "center"）
 	isLabelRow      func(r int) bool // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
 	isDataRow       func(r int) bool // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
 	breakViewCol    int              // 查看版垂直分页符所在列
@@ -459,6 +460,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	// 单元格
 	digitCache := make(map[[3]int]int) // (styleID,k,n) → 数据数字格样式（7pt）
 	labelCache := make(map[[3]int]int) // (styleID,k,n) → 表头单位行标签格样式（5pt，折中B）
+	alignCache := make(map[string]int) // "sid|对齐" → 数据区横向对齐覆盖样式
 	var extraMerges []metaMerge        // 文本标签新建的 12 列合并
 	for _, cell := range meta.cells {
 		r, c, val, sid := cell.r, cell.c, cell.val, cell.style
@@ -506,7 +508,12 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 				}
 			}
 			if sid != 0 {
-				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), sid)
+				nid := sid
+				if ha, ok := cfg.dataAlignCols[c]; ok && cfg.isDataRow != nil && cfg.isDataRow(r) {
+					// 数据区横向对齐覆盖（如 GL 号列/借或贷列 → 居中，不含表头）
+					nid = dataAlignStyle(f, sid, ha, alignCache)
+				}
+				_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), nid)
 			}
 			continue
 		}
@@ -715,6 +722,29 @@ func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[3]int]int,
 		}
 	}
 	id, _ := f.NewStyle(st)
+	cache[key] = id
+	return id
+}
+
+// dataAlignStyle 返回 origStyleID 的"横向对齐覆盖"变体：仅改 Alignment.Horizontal，
+// 保留字体/边框/竖对齐等其余属性；按 (sid,ha) 缓存。
+func dataAlignStyle(f *excelize.File, origStyleID int, ha string, cache map[string]int) int {
+	key := fmt.Sprintf("%d|%s", origStyleID, ha)
+	if id, ok := cache[key]; ok {
+		return id
+	}
+	st, err := f.GetStyle(origStyleID)
+	if err != nil {
+		return origStyleID
+	}
+	if st.Alignment == nil {
+		st.Alignment = &excelize.Alignment{}
+	}
+	st.Alignment.Horizontal = ha
+	id, err := f.NewStyle(st)
+	if err != nil {
+		return origStyleID
+	}
 	cache[key] = id
 	return id
 }

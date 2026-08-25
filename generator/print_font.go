@@ -46,6 +46,11 @@ func applyPrintFont(f *excelize.File, sheet string) {
 				if font == nil {
 					font = &excelize.Font{}
 				}
+				// 已显式指定字体族（如 ML 数据数字 Noteworthy、Front 标题仿宋）→ 保持原字体，
+				// 不统一宋体。查看版从不设 Family，故不会误伤查看版样式。
+				if font.Family != "" {
+					continue
+				}
 				font.Family = printFontName
 				font.Bold = true
 				st.Font = font

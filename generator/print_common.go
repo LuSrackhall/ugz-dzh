@@ -424,9 +424,11 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub)
 			}
 		} else {
-			// 拆分非金额列（如 GL 摘要列 4 格）：n 子列等分原宽（总像素守恒，为 3/4 处起线提供列粒度）
+			// 拆分非金额列（如 GL 摘要列 4 格）：n 子列按"原字符数 ÷ n"等分——
+			// 字符数显示与未拆列时一致（每列仍自带 5px 内边距，总像素比原列略宽，
+			// 用户确认按此口径，避免"摘要列变窄"的观感）。
 			if n := cm.splitCols(c); n > 1 {
-				subW := ((w*7+5)/float64(n) - 5) / 7
+				subW := w / float64(n)
 				for k := 0; k < n; k++ {
 					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW)
 				}

@@ -123,6 +123,19 @@ func applyMLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 	if err != nil {
 		return
 	}
+	// 明细5 块首列（装订边）需保留红色双线左框——标题行原样式含该边框，
+	// 若用 titleStyle 整体覆盖会把它抹掉（用户反馈过此回归）。
+	titleStyleLeft, err := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Family: "仿宋", Size: 18, Color: "006100", Bold: true},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "bottom"},
+		Border: []excelize.Border{
+			{Type: "bottom", Color: "006100", Style: 6},
+			{Type: "left", Color: mlRed, Style: mlBorderDouble},
+		},
+	})
+	if err != nil {
+		return
+	}
 
 	// 标题行：Paper1 = 行 2；数据页块首行 = 1 + blockRows*k（k≥1），标题行 = 块首+1
 	titleRows := []int{2}
@@ -134,7 +147,9 @@ func applyMLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 		a1 := cellAxis(d5, r)
 		_ = f.UnmergeCell(sheet, a1, cellAxis(d5+9, r))
 		_ = f.SetCellValue(sheet, a1, " 明      细      帐")
-		_ = f.SetCellStyle(sheet, a1, cellAxis(d8ShiWan, r), titleStyle)
+		// 首列用 titleStyleLeft（含装订边红色双线左框），其余列用 titleStyle（仅底双边）
+		_ = f.SetCellStyle(sheet, a1, a1, titleStyleLeft)
+		_ = f.SetCellStyle(sheet, cellAxis(d5+1, r), cellAxis(d8ShiWan, r), titleStyle)
 		_ = f.MergeCell(sheet, a1, cellAxis(d8ShiWan, r))
 		// 2) 页码：分第 合并明细12整块右对齐（样式已右对齐）；数字 合并明细13整块居中
 		_ = f.MergeCell(sheet, cellAxis(d12, r), cellAxis(d12+9, r))

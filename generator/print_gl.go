@@ -98,6 +98,17 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 	if err != nil {
 		return
 	}
+	// 装订边红双线：正面标题行首列（月列）是装订边，需保留 left=double#CC0000。
+	// 整块 titleStyle 无边框，若直接覆盖会把该列红双线清掉（55746bb 回归），
+	// 故正面首列单独用 titleStyleEdge（titleStyle + 左红双线）。
+	titleStyleEdge, err := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Family: "仿宋", Size: 22, Color: "006100", Bold: true, Underline: "double"},
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
+		Border:    []excelize.Border{{Type: "left", Color: "CC0000", Style: 6}},
+	})
+	if err != nil {
+		return
+	}
 	// 清理用无边框样式（搬走后残留的虚线底/样式）
 	plainStyle, err := f.NewStyle(&excelize.Style{Alignment: &excelize.Alignment{Vertical: "bottom"}})
 	if err != nil {
@@ -135,6 +146,21 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 		accVal, _ := f.GetCellValue(sheet, cellAxis(accOld, accRow))
 		nameSid, _ := f.GetCellStyle(sheet, cellAxis(nameOld, accRow))
 		nameVal, _ := f.GetCellValue(sheet, cellAxis(nameOld, accRow))
+		// 装订边红双线（反面）：科目名旧合并的右端格（查看版 AB 列）带 right=double#CC0000，
+		// 但 nameSid 取自旧合并左上角（无右框），整段覆盖会把右端红双线清掉（55746bb 回归）。
+		// 反面 nameEnd 格单独克隆 nameSid + 右红双线。
+		nameSidEdge := nameSid
+		if half == lay.BackStartCol {
+			if st, gerr := f.GetStyle(nameSid); gerr == nil {
+				if st.Border == nil {
+					st.Border = []excelize.Border{}
+				}
+				st.Border = append(st.Border, excelize.Border{Type: "right", Color: "CC0000", Style: 6})
+				if nid, nerr := f.NewStyle(st); nerr == nil {
+					nameSidEdge = nid
+				}
+			}
+		}
 		// 解除旧合并（必须先全部解除再建新合并，避免重叠）
 		_ = f.UnmergeCell(sheet, cellAxis(tStart, titleRow), cellAxis(cm.endCol(half+glColDebit), titleRow))
 		_ = f.UnmergeCell(sheet, cellAxis(fenOld, titleRow), cellAxis(cm.endCol(half+glColCredit), titleRow))
@@ -149,6 +175,10 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 		// ── 标题行：总分类账 / 分第 / 数字 / 页 ──
 		_ = f.SetCellValue(sheet, cellAxis(tStart, titleRow), "总    分    类    账")
 		_ = f.SetCellStyle(sheet, cellAxis(tStart, titleRow), cellAxis(tEnd, titleRow), titleStyle)
+		if half == lay.FrontStartCol {
+			// 正面标题行首列 = 装订边红双线左框
+			_ = f.SetCellStyle(sheet, cellAxis(tStart, titleRow), cellAxis(tStart, titleRow), titleStyleEdge)
+		}
 		_ = f.MergeCell(sheet, cellAxis(tStart, titleRow), cellAxis(tEnd, titleRow))
 		_ = f.SetCellValue(sheet, cellAxis(fenStart, titleRow), "分第 ")
 		_ = f.SetCellStyle(sheet, cellAxis(fenStart, titleRow), cellAxis(fenEnd, titleRow), pnLabelSid)
@@ -166,6 +196,10 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 		_ = f.MergeCell(sheet, cellAxis(accStart, accRow), cellAxis(accEnd, accRow))
 		_ = f.SetCellValue(sheet, cellAxis(nameStart, accRow), nameVal)
 		_ = f.SetCellStyle(sheet, cellAxis(nameStart, accRow), cellAxis(nameEnd, accRow), nameSid)
+		if half == lay.BackStartCol && nameSidEdge != nameSid {
+			// 反面科目名右端格 = 装订边红双线右框
+			_ = f.SetCellStyle(sheet, cellAxis(nameEnd, accRow), cellAxis(nameEnd, accRow), nameSidEdge)
+		}
 		_ = f.MergeCell(sheet, cellAxis(nameStart, accRow), cellAxis(nameEnd, accRow))
 		// 清理：旧科目名残留的绿色虚线底（accOld..accStart-1）
 		if accOld < accStart {

@@ -319,6 +319,7 @@ type printSheetConfig struct {
 	amountCols      []int            // 金额列号（1-indexed）
 	splitCols       map[int]int      // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
 	splitNA         map[int]int      // 非金额列 → 展开列数（如 GL 摘要列 4 格；文本合并回单格、空值仅继承边界）
+	splitNAPixelDelta map[int]float64 // 拆分非金额列的总像素增量（可为负；如 GL 摘要列 -3px）
 	isLabelRow      func(r int) bool // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
 	isDataRow       func(r int) bool // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
 	breakViewCol    int              // 查看版垂直分页符所在列
@@ -425,10 +426,11 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			}
 		} else {
 			// 拆分非金额列（如 GL 摘要列 4 格）：n 子列按"原字符数 ÷ n"等分——
-			// 字符数显示与未拆列时一致（每列仍自带 5px 内边距，总像素比原列略宽，
-			// 用户确认按此口径，避免"摘要列变窄"的观感）。
+			// 字符数显示与未拆列时一致（每列仍自带 5px 内边距，总像素比原列略宽）。
+			// 总像素增量 splitNAPixelDelta 施加在真实总量（w×7+5n，含 n 份内边距）上：
+			// subW = (w×7 + delta) / (7n)，delta=0 时即 w/n（字符等分）。
 			if n := cm.splitCols(c); n > 1 {
-				subW := w / float64(n)
+				subW := (w*7 + cfg.splitNAPixelDelta[c]) / (7 * float64(n))
 				for k := 0; k < n; k++ {
 					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW)
 				}

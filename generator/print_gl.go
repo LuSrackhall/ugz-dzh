@@ -61,10 +61,16 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		lay.FrontStartCol + 4: 4,
 		lay.BackStartCol + 4:  4,
 	}
+	// 摘要列整体缩短约 3px（正反面；用户定值，配合"字符数等分"口径微调）
+	splitNAPixelDelta := map[int]float64{
+		lay.FrontStartCol + 4: -3,
+		lay.BackStartCol + 4:  -3,
+	}
 	cfg := printSheetConfig{
 		totalViewCols:       lay.TotalCols,
 		amountCols:          amountCols,
 		splitNA:             splitNA,
+		splitNAPixelDelta:   splitNAPixelDelta,
 		edgePixelDelta:      edgePixelDelta,
 		nonAmountPixelDelta: nonAmountPixelDelta,
 		// 数据区金额数字（借方/贷方/余额）：字体 Noteworthy（字号保持 7pt）

@@ -57,6 +57,9 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		amountCols:          amountCols,
 		edgePixelDelta:      edgePixelDelta,
 		nonAmountPixelDelta: nonAmountPixelDelta,
+		// 数据区金额数字（借方/贷方/余额）：字体 Noteworthy（字号保持 7pt）
+		dataFontFamily: "Noteworthy",
+		postProcess:    applyGLTitleArea,
 		isLabelRow: func(r int) bool {
 			if r < labelRow1 || blockRows <= 0 {
 				return false
@@ -74,4 +77,99 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		applyPageLayout: applyGLPrintPageLayout,
 	}
 	return transformSheet(f, sheet, cfg)
+}
+
+// applyGLTitleArea 打印版 GL 标题区后处理（对每个页面块的标题行与科目行）：
+//  1. 总分类账：仿宋 22pt、右对齐，合并自月列延伸至贷方金额列亿位（表头"亿"所在列）；
+//  2. 分第：移到"借或贷"列 → 余额金额列十亿位（表头"十"所在列），右对齐；
+//  3. 页码数字 n：右移至余额亿位 → 余额分，居中（与分第/页 构成"分第 n 页"）；
+//  4. 会计科目（科目行）：移到贷方千位 → 贷方分（表头"千"/"分"所在列），右对齐；
+//  5. 科目名：右移至贷方旁对号列 → 余额旁对号列。
+// 活动半侧：奇页→Front、偶页→Back（与 dataCol 规则一致），仅处理活动半侧。
+func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
+	lay := glLayout()
+	blockRows := (lay.SubHeaderRow + 1) + pageSize + 1 + lay.BottomMarginRows
+	// 标题行 2, 2+blockRows, …；科目行 = 标题行+1
+	// 总分类账样式：仿宋 22pt、绿、粗体、双下划线、右/底对齐
+	titleStyle, err := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Family: "仿宋", Size: 22, Color: "006100", Bold: true, Underline: "double"},
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "bottom"},
+	})
+	if err != nil {
+		return
+	}
+	// 清理用无边框样式（搬走后残留的虚线底/样式）
+	plainStyle, err := f.NewStyle(&excelize.Style{Alignment: &excelize.Alignment{Vertical: "bottom"}})
+	if err != nil {
+		return
+	}
+	for titleRow := 2; titleRow <= maxRow-1; titleRow += blockRows {
+		half := lay.FrontStartCol
+		if ((titleRow-2)/blockRows)%2 == 1 {
+			half = lay.BackStartCol
+		}
+		accRow := titleRow + 1
+		creditStart := cm.startCol(half + glColCredit) // 贷方金额列（12 小列起）
+		balanceStart := cm.startCol(half + glColBalance)
+		// 新布局打印列
+		tStart := cm.startCol(half)                // 月列
+		tEnd := creditStart + 1                    // 贷方亿位 k1
+		fenStart := cm.startCol(half + glColDir)   // 借或贷
+		fenEnd := balanceStart                     // 余额十亿位 k0
+		numStart := balanceStart + 1               // 余额亿位 k1
+		numEnd := balanceStart + 11                // 余额分 k11
+		accStart := creditStart + 6                // 贷方千位 k6
+		accEnd := creditStart + 11                 // 贷方分 k11
+		nameStart := cm.startCol(half + 8)         // 贷方旁对号
+		nameEnd := cm.startCol(half + 11)          // 余额旁对号（页列）
+		// 旧布局打印列
+		fenOld := cm.startCol(half + 6)            // 借方旁对号（旧分第起点）
+		numOld := cm.startCol(half + 8)            // 贷方旁对号（旧数字起点）
+		accOld := cm.startCol(half + 6)            // 旧会计科目
+		nameOld := cm.startCol(half + glColCredit) // 旧科目名起点
+		// 读取旧值/样式（解除合并前）
+		pnLabelSid, _ := f.GetCellStyle(sheet, cellAxis(fenOld, titleRow))
+		pnNumSid, _ := f.GetCellStyle(sheet, cellAxis(numOld, titleRow))
+		numVal, _ := f.GetCellValue(sheet, cellAxis(numOld, titleRow))
+		labelSid, _ := f.GetCellStyle(sheet, cellAxis(accOld, accRow))
+		accVal, _ := f.GetCellValue(sheet, cellAxis(accOld, accRow))
+		nameSid, _ := f.GetCellStyle(sheet, cellAxis(nameOld, accRow))
+		nameVal, _ := f.GetCellValue(sheet, cellAxis(nameOld, accRow))
+		// 解除旧合并（必须先全部解除再建新合并，避免重叠）
+		_ = f.UnmergeCell(sheet, cellAxis(tStart, titleRow), cellAxis(cm.endCol(half+glColDebit), titleRow))
+		_ = f.UnmergeCell(sheet, cellAxis(fenOld, titleRow), cellAxis(cm.endCol(half+glColCredit), titleRow))
+		_ = f.UnmergeCell(sheet, cellAxis(numOld, titleRow), cellAxis(cm.endCol(half+glColBalance), titleRow))
+		_ = f.UnmergeCell(sheet, cellAxis(nameOld, accRow), cellAxis(cm.endCol(half+11), accRow))
+		// 清空旧值：必须在新合并创建**之前**（excelize SetCellValue 对合并区内部格
+		// 会重定向到左上角——若先建新合并再清旧值，会把新合并左上角的值误清）
+		_ = f.SetCellValue(sheet, cellAxis(fenOld, titleRow), "")
+		_ = f.SetCellValue(sheet, cellAxis(numOld, titleRow), "")
+		_ = f.SetCellValue(sheet, cellAxis(accOld, accRow), "")
+		_ = f.SetCellValue(sheet, cellAxis(nameOld, accRow), "")
+		// ── 标题行：总分类账 / 分第 / 数字 / 页 ──
+		_ = f.SetCellValue(sheet, cellAxis(tStart, titleRow), "总    分    类    账")
+		_ = f.SetCellStyle(sheet, cellAxis(tStart, titleRow), cellAxis(tEnd, titleRow), titleStyle)
+		_ = f.MergeCell(sheet, cellAxis(tStart, titleRow), cellAxis(tEnd, titleRow))
+		_ = f.SetCellValue(sheet, cellAxis(fenStart, titleRow), "分第 ")
+		_ = f.SetCellStyle(sheet, cellAxis(fenStart, titleRow), cellAxis(fenEnd, titleRow), pnLabelSid)
+		_ = f.MergeCell(sheet, cellAxis(fenStart, titleRow), cellAxis(fenEnd, titleRow))
+		_ = f.SetCellValue(sheet, cellAxis(numStart, titleRow), numVal)
+		_ = f.SetCellStyle(sheet, cellAxis(numStart, titleRow), cellAxis(numEnd, titleRow), pnNumSid)
+		_ = f.MergeCell(sheet, cellAxis(numStart, titleRow), cellAxis(numEnd, titleRow))
+		// 清理：旧数字起点残留的绿色虚线底
+		if numOld != numStart {
+			_ = f.SetCellStyle(sheet, cellAxis(numOld, titleRow), cellAxis(numOld, titleRow), plainStyle)
+		}
+		// ── 科目行：会计科目 / 科目名 ──
+		_ = f.SetCellValue(sheet, cellAxis(accStart, accRow), accVal)
+		_ = f.SetCellStyle(sheet, cellAxis(accStart, accRow), cellAxis(accEnd, accRow), labelSid)
+		_ = f.MergeCell(sheet, cellAxis(accStart, accRow), cellAxis(accEnd, accRow))
+		_ = f.SetCellValue(sheet, cellAxis(nameStart, accRow), nameVal)
+		_ = f.SetCellStyle(sheet, cellAxis(nameStart, accRow), cellAxis(nameEnd, accRow), nameSid)
+		_ = f.MergeCell(sheet, cellAxis(nameStart, accRow), cellAxis(nameEnd, accRow))
+		// 清理：旧科目名残留的绿色虚线底（accOld..accStart-1）
+		if accOld < accStart {
+			_ = f.SetCellStyle(sheet, cellAxis(accOld, accRow), cellAxis(accStart-1, accRow), plainStyle)
+		}
+	}
 }

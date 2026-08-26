@@ -14,8 +14,11 @@
 # 输出目录：test/e2e/out/（gitignored）
 #
 # 用法：
-#   bash scripts/test-e2e.sh              # 生成 + 测试 + 打开
-#   bash scripts/test-e2e.sh --skip-test  # 只生成不测试
+#   bash scripts/test-e2e.sh                  # 生成 + 测试 + 打开（rm -rf + init 全流程）
+#   bash scripts/test-e2e.sh --skip-test      # 只生成不测试
+#   bash scripts/test-e2e.sh --keep-json      # 跳过 rm -rf + init，从已有 JSON 续跑（两阶段工作流：
+#                                             #   init→生成→完善 JSON→重新生成；可配合 test/e2e/mappings.json
+#                                             #   与 adjustments.json 自动执行科目映射与期初调整，幂等）
 
 set -euo pipefail
 
@@ -54,16 +57,78 @@ ML_SUPPRESS='[
 ]'
 
 SKIP_TEST=false
-for arg in "$@"; do case "$arg" in --skip-test) SKIP_TEST=true ;; esac; done
+KEEP_JSON=false
+for arg in "$@"; do
+  case "$arg" in
+    --skip-test) SKIP_TEST=true ;;
+    --keep-json) KEEP_JSON=true ;;
+  esac
+done
 
 echo "=== 1. 编译 ==="
 go build -o "$LEDGER" .
 
 echo "=== 2. 初始化（2025-10）==="
-rm -rf "$OUT"
-"$LEDGER" init -s "2025-10" -o "$OUT"
+if [ "$KEEP_JSON" = true ]; then
+  if [ ! -f "$OUT/2025/2025.json" ]; then
+    echo "错误：$OUT/2025/2025.json 不存在，请先运行完整流程（不带 --keep-json）" >&2
+    exit 1
+  fi
+  echo "  --keep-json：跳过 rm -rf 与 init，使用已有 JSON 续跑"
 
-python3 -c "
+  # 配置化"人工完善"：科目映射（OCR 纠错，幂等——已存在则跳过）
+  if [ -f "test/e2e/mappings.json" ]; then
+    python3 - "$OUT/2025/2025.json" "test/e2e/mappings.json" <<'PYEOF'
+import json, subprocess, sys
+cfg_path, map_path = sys.argv[1], sys.argv[2]
+with open(cfg_path) as f:
+    cfg = json.load(f)
+with open(map_path) as f:
+    mappings = json.load(f)
+existing = cfg.get('全局设置', {}).get('科目映射表', {})
+for src, dst in mappings.items():
+    if existing.get(src) == dst:
+        print(f"  映射已存在，跳过: {src} -> {dst}")
+        continue
+    r = subprocess.run(['./ledger', 'map', 'add', '-j', cfg_path, '-f', src, '-t', dst],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(r.stderr.strip(), file=sys.stderr)
+        sys.exit(1)
+    print(f"  映射: {src} -> {dst}")
+PYEOF
+  fi
+
+  # 配置化"人工完善"：期初调整（幂等——已存在则跳过）
+  if [ -f "test/e2e/adjustments.json" ]; then
+    python3 - "$OUT/2025/2025.json" "test/e2e/adjustments.json" <<'PYEOF'
+import json, subprocess, sys
+cfg_path, adj_path = sys.argv[1], sys.argv[2]
+with open(cfg_path) as f:
+    cfg = json.load(f)
+with open(adj_path) as f:
+    adjustments = json.load(f)
+manual = cfg.get('手动调整科目', [])
+existing = {(m.get('科目'), m.get('生效月')) for m in manual}
+for a in adjustments:
+    key = (a['科目'], a['生效月'])
+    if key in existing:
+        print(f"  期初调整已存在，跳过: {a['科目']} {a['生效月']}")
+        continue
+    r = subprocess.run(['./ledger', 'add-manual', '-a', a['科目'], '-m', a['生效月'],
+                        '-n', str(a['金额']), '-t', a.get('说明', ''), '-j', cfg_path],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(r.stderr.strip(), file=sys.stderr)
+        sys.exit(1)
+    print(f"  期初调整: {a['科目']} {a['生效月']} {a['金额']}")
+PYEOF
+  fi
+else
+  rm -rf "$OUT"
+  "$LEDGER" init -s "2025-10" -o "$OUT"
+
+  python3 -c "
 import json
 with open('$OUT/2025/2025.json') as f:
     cfg = json.load(f)
@@ -72,6 +137,7 @@ with open('$OUT/2025/2025.json', 'w') as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)
 print('  MLSuppressAccounts 已写入')
 "
+fi
 
 echo "=== 3. 生成 2025-10 ~ 2025-12 ==="
 for m in 10 11 12; do

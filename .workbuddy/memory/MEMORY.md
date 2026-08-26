@@ -22,7 +22,7 @@
 
 ## 工作树约定
 - 打印版相关工作树：`worktree-print-fresh`（本次全新实现，已提交未 push）。旧 `worktree-print-digit-columns`（locked，记录器架构，未采用）。
-- 审计修复：`change/audit-fix` 分支（9 commit）**已于 2026-08-26 经用户批准 ff 合并 main**（2d1cd91）；**push 未执行待批准**；archive/cleanup 待确认。遗留：打印版 worktree-print-fresh 的 push（799c374）同样待用户批准。
+- 审计修复：`change/audit-fix` 分支（9 commit）**已于 2026-08-26 经用户批准 ff 合并 main 并 push**（main 现为 1ba3655，含打印版全部提交）；5 个 audit change 已 archive；`.worktrees/change/audit-fix` **保留未清理**（用户要求）。
 
 ## 项目原则：CLI 是绝对安全对象（2026-08-26 用户明确）
 - **CLI 产物（ledger 各子命令，尤其 generate）才是需要"绝对安全"的核心**；`scripts/test-e2e.sh` 只是开发测试工具，其便利（如 --keep-json 续跑）不能替代 CLI 内建的安全机制。

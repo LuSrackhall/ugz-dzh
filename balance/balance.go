@@ -591,6 +591,12 @@ func IsUnknownType(general string) bool {
 	return !ok
 }
 
+// AccountTypeOf 返回总账科目类别（资产/负债/权益/收入/费用），未知返回 ("", false)。
+func AccountTypeOf(general string) (string, bool) {
+	t, ok := accountTypes[general]
+	return t, ok
+}
+
 // --- 月份辅助 ---
 
 func prevMonth(m string) string {

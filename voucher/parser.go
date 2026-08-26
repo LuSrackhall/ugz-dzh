@@ -216,9 +216,12 @@ func parseAmountToCents(s string) (int64, bool) {
 	s = strings.ReplaceAll(s, " ", "")
 	s = strings.ReplaceAll(s, "　", "")
 
-	// 红字（负数）格式归一（审计二审 H2）：
+	// 红字（负数）格式归一（审计二审 H2 + 三轮 N2）：
+	//   - 全角括号（500）转半角 (500)（三轮 N2）
 	//   - 括号 (500) → 负数（剥括号后若内容无负号则取反）
 	//   - 全角减号 － / Unicode 减号 − → ASCII '-'
+	s = strings.ReplaceAll(s, "（", "(")
+	s = strings.ReplaceAll(s, "）", ")")
 	neg := false
 	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") && strings.Contains(s, ")") {
 		neg = true

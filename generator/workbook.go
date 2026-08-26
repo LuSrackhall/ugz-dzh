@@ -199,11 +199,22 @@ func (wb *Workbook) Save() error {
 func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 	lay := glLayout()
 	finals := make(map[string]int64)
+	// 第三轮审查 D1b：合并总账科目的 sheet 是合并视图（非账页），不参与上月期末提取，
+	// 否则父级期初被合并期末污染（实测 2026-02 银行存款期初 8000，应为 5000）。
+	mergeSet := make(map[string]bool)
+	if wb.Config != nil {
+		for _, g := range wb.Config.Settings.MergeGLAccounts {
+			mergeSet[g] = true
+		}
+	}
 	for _, name := range wb.File.GetSheetList() {
 		if !strings.HasPrefix(name, sheetPrefixGL) {
 			continue
 		}
 		account := strings.TrimPrefix(name, sheetPrefixGL)
+		if mergeSet[account] {
+			continue
+		}
 		rows, err := wb.File.GetRows(name)
 		if err != nil {
 			continue

@@ -25,6 +25,16 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	// 期初机制修复：清理历史幻影期初（幂等，自动科目 FirstRecord 置 0 + 删除回填记录）
 	balance.PurgePhantomInitials(cfg)
 
+	// 第三轮审查 D1a：合并总账科目禁止直接记账（无明细分录）——
+	// 否则 GL 与 MergeGL 共用同名 sheet 月结两遍、期初被合并视图污染。
+	for _, general := range cfg.Settings.MergeGLAccounts {
+		for _, e := range entries {
+			if e.GeneralAccount == general && e.DetailAccount == "" {
+				return fmt.Errorf("科目 %s 配置为合并总账科目，不能直接记账，请使用子科目（如 %s-明细）", general, general)
+			}
+		}
+	}
+
 	// 4. 提取上月期末作为本月期初
 	prevFinals, err := wb.ExtractLastMonthFinals()
 	if err != nil {

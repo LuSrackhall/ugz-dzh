@@ -247,14 +247,14 @@ func (wb *Workbook) WriteMergeGLClosings(activity map[string]Activity, ytdDebit,
 			mtdCredit += a.Credit
 		}
 
-		// 汇总期初
+		// 汇总期初（第三轮审查 D1c：仅由子科目期初聚合；父级自身 initials 不再叠加——
+		// 合并父级不作叶子记账，叠加会虚增（initials[general] 可能来自合并视图污染或父级自身期初））
 		var parentInitial int64
 		for k, v := range initials {
 			if isChildOf(k, general) {
 				parentInitial += v
 			}
 		}
-		parentInitial += initials[general]
 
 		// 汇总本年累计 = 截至上月的 ytd + 当月 activity
 		// 遍历 activity ∪ Tree 全部叶子——审计二审 H3 两处缺口：

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"ledger/balance"
 
@@ -43,6 +44,27 @@ var yearCloseCmd = &cobra.Command{
 
 		if lastMonth == "" {
 			return fmt.Errorf("科目树中无余额记录，无法结转")
+		}
+
+		// 第三轮审查 F1：跨年结转校验（告警不阻断，结转是用户主动操作）
+		if lastMonth[5:] != "12" {
+			fmt.Printf("警告: 最近余额月为 %s，不是 12 月——跨年结转将按 %s 期末结转，请确认\n", lastMonth, lastMonth)
+		}
+		if diff := balance.CheckInitialBalanceAt(cfg, lastMonth); diff != 0 {
+			fmt.Printf("警告: 期初借贷不平衡（%s 快照），差额 %.2f 元（借正贷负），请核对期初设置\n", lastMonth, float64(diff)/100)
+		}
+		for account, node := range cfg.Tree {
+			mb, ok := node.Balances[lastMonth]
+			if !ok || mb.Final == 0 {
+				continue
+			}
+			gen := account
+			if idx := strings.IndexByte(gen, '-'); idx > 0 {
+				gen = gen[:idx]
+			}
+			if t, ok := balance.AccountTypeOf(gen); ok && (t == "收入" || t == "费用") {
+				fmt.Printf("警告: 损益类科目 %s 年末余额 %.2f 元非 0，疑似漏结转（收入/费用应结转归零）\n", account, float64(mb.Final)/100)
+			}
 		}
 
 		yy, _ := strconv.Atoi(lastMonth[:4])

@@ -23,6 +23,10 @@ func ValidateVoucherBalance(entries []Entry) (warnings []string, err error) {
 		if e.CreditCents < 0 {
 			warnings = append(warnings, fmt.Sprintf("凭证 %s 记字第%d号 贷方为负数（红字）%.2f 元，将显示为负金额", e.Date, e.VoucherNum, float64(-e.CreditCents)/100))
 		}
+		// 第三轮审查 N1：同行借贷双非零提示（可能是红字冲销表达，也可能录错——本月合计会虚增）
+		if e.DebitCents != 0 && e.CreditCents != 0 {
+			warnings = append(warnings, fmt.Sprintf("凭证 %s 记字第%d号 某行借贷双填（借 %.2f / 贷 %.2f），请确认（双填会使本月合计虚增）", e.Date, e.VoucherNum, float64(e.DebitCents)/100, float64(e.CreditCents)/100))
+		}
 	}
 
 	// 按（日期, 凭证号）分组

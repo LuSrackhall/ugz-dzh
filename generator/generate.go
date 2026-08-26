@@ -33,6 +33,18 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 				return fmt.Errorf("科目 %s 配置为合并总账科目，不能直接记账，请使用子科目（如 %s-明细）", general, general)
 			}
 		}
+		// D1a 扩展（子 agent 验收发现）：合并父级禁止设置期初调整额——
+		// 否则 appendCarryForwardOnly 会为父级创建同名 sheet（结转行），与合并月结写两个月结块。
+		for _, m := range cfg.ManualItems {
+			if m.Account == general && m.Adjustment != 0 {
+				return fmt.Errorf("科目 %s 配置为合并总账科目，不能设置期初调整额，请设置到子科目（如 %s-明细）", general, general)
+			}
+		}
+		for _, a := range cfg.AutoItems {
+			if a.Account == general && a.Adjustment != 0 {
+				return fmt.Errorf("科目 %s 配置为合并总账科目，不能设置期初调整额，请设置到子科目（如 %s-明细）", general, general)
+			}
+		}
 	}
 
 	// 4. 提取上月期末作为本月期初

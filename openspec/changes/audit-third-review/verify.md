@@ -53,3 +53,4 @@
 - [x] ✅ PASS
 - [ ] ⚠️ PASS WITH WARNINGS: `<note>`
 - [ ] ❌ FAIL: `<reason>`
+8. **子 agent 验收 PASS WITH WARNINGS（已解决）**：D1a 只拦直接分录，add-manual 给合并父级设期初仍会触发双重月结 → 扩展校验 ManualItems/AutoItems 合并父级调整额≠0 报错；实测父级期初被拒 ✓

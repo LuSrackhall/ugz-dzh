@@ -3,6 +3,7 @@ package generator
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"ledger/voucher"
 
@@ -101,7 +102,11 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 	}
 
 	if isNew && parentInitial != 0 {
-		if err := wb.insertCarryForward(sheet, parentInitial, pageNum); err != nil {
+		label := "期初余额"
+		if !wb.InitialAdjust[general] && strings.HasSuffix(wb.Month, "-01") {
+			label = "上年结转"
+		}
+		if err := wb.insertCarryForward(sheet, parentInitial, pageNum, label); err != nil {
 			return err
 		}
 	}
@@ -163,7 +168,7 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 			summary = fmt.Sprintf("[%s] %s", e.DetailAccount, e.Summary)
 		}
 
-				month := e.Date[5:7]
+		month := e.Date[5:7]
 		day := e.Date[8:10]
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), month)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), day)
@@ -182,7 +187,7 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 		// 摘要列自动换行 + 9号加粗
 		summaryCell := cellName(dataCol(lay, pageNum, 4), row)
 		summaryStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font: &excelize.Font{Size: 9, Bold: true},
+			Font:      &excelize.Font{Size: 9, Bold: true},
 			Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
 			Border: []excelize.Border{
 				{Type: "top", Color: "#006100", Style: 1},

@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"ledger/generator/layout"
-	"strings"
 	"ledger/voucher"
+	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -15,19 +15,19 @@ var glHeaders = []string{"日期", "凭证号", "摘                            
 
 // GL 数据区列偏移（相对于 FrontStartCol/BackStartCol）
 const (
-	glColMonth    = 0 // 月
-	glColDay      = 1 // 日
-	glColWord     = 2 // 字
-	glColNum      = 3 // 号
-	glColSummary  = 4 // 摘要
-	glColDebit    = 5 // 借方金额
-	glColTick1    = 6 // ✓
-	glColCredit   = 7 // 贷方金额
-	glColTick2    = 8 // ✓
-	glColDir      = 9 // 方向
-	glColBalance  = 10 // 余额
-	glColTick3    = 11 // ✓
-	glColCount    = 12 // 总列数
+	glColMonth   = 0  // 月
+	glColDay     = 1  // 日
+	glColWord    = 2  // 字
+	glColNum     = 3  // 号
+	glColSummary = 4  // 摘要
+	glColDebit   = 5  // 借方金额
+	glColTick1   = 6  // ✓
+	glColCredit  = 7  // 贷方金额
+	glColTick2   = 8  // ✓
+	glColDir     = 9  // 方向
+	glColBalance = 10 // 余额
+	glColTick3   = 11 // ✓
+	glColCount   = 12 // 总列数
 
 	// GetRows 索引（BindingLeftCols=2, BackStartCol=17）：
 	// Front 摘要=BindingLeftCols+glColSummary(6)、余额=BindingLeftCols+glColBalance(12)、方向=BindingLeftCols+glColDir(11)
@@ -175,7 +175,6 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.SetCellStyle(sheet, pnSuffix, pnSuffix, pnSuffixStyle)
 	wb.File.SetRowHeight(sheet, lay.TitleRow+1, 28)
 
-
 	// ── Row 2: 会计科目（绿色，右对齐）+ 科目名称（红色，绿色虚线下划线） ──
 	// 会计科目 (col 6 only, right-aligned), 科目名称 (cols 7-9, green dotted)
 	labelLeft := cellName(lay.AccountColLeft, lay.PageNumRow+1)
@@ -216,7 +215,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
 	// 写列标题：摘要 | 借                         方 | ✓ | 贷                         方 | ✓ | 借或贷 | 余                         额 | ✓
-		headerCols := []string{"摘                                        要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
+	headerCols := []string{"摘                                        要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i, lay.HeaderRow+1)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -265,7 +264,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 
 	// 摘要列字体放大
 	summaryStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 12, Color: "006100"},
+		Font:      &excelize.Font{Bold: true, Size: 12, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "top", Color: "CC0000", Style: 6},
@@ -347,12 +346,12 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	for i := 1; i <= lay.TopMarginRows; i++ {
 		wb.File.SetRowHeight(sheet, i, 16)
 	}
-	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)  // 表头行1
-	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 26)  // 表头行2
+	wb.File.SetRowHeight(sheet, lay.HeaderRow+1, 30)    // 表头行1
+	wb.File.SetRowHeight(sheet, lay.SubHeaderRow+1, 26) // 表头行2
 	// 数据区默认行高 27
 	dataStart := lay.DataStartRow + 1 + lay.TopMarginRows
 	for row := dataStart; row <= dataStart+pageSize; row++ {
-			wb.File.SetRowHeight(sheet, row, 25)
+		wb.File.SetRowHeight(sheet, row, 25)
 	}
 
 	// ── 列宽（按比例分配） ──
@@ -456,7 +455,6 @@ func dataCol(lay layout.GLLayout, pageNum, offset int) int {
 	}
 	return lay.BackStartCol + offset
 }
-
 
 // hasPageBreakAt 检查 row 中是否有完整过次页标记（标签 + 余额数据）。
 // 仅标签无金额（模板站位）不算真断页。
@@ -573,14 +571,23 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 	// 计算页码：从文件"过次页"标签数（含模板和真断页）
 	pageNum := wb.getPageNum(sheet)
 
-	if isNew && initial != 0 {
-		if err := wb.insertCarryForward(sheet, initial, pageNum); err != nil {
-			return err
-		}
-	} else if !isNew && initial != 0 && strings.HasSuffix(wb.Month, "-01") {
-		// 仅 1 月的 Sheet 有跨年期初余额时，在数据区首行插入上年结转
-		if err := wb.insertCarryForwardAtRow(sheet, initial, pageNum); err != nil {
-			return err
+	// 期初行：新 Sheet 期初≠0 → 数据区首行插入；已有 Sheet 期初≠0 且（1 月跨年延续 或 当月调整额生效）→ 数据区首行插入
+	// 摘要按来源：调整额生效 → "期初余额"；延续且 1 月 → "上年结转"；其余 → "期初余额"
+	if initial != 0 {
+		if isNew || strings.HasSuffix(wb.Month, "-01") || wb.InitialAdjust[account] {
+			label := "期初余额"
+			if !wb.InitialAdjust[account] && strings.HasSuffix(wb.Month, "-01") {
+				label = "上年结转"
+			}
+			if isNew {
+				if err := wb.insertCarryForward(sheet, initial, pageNum, label); err != nil {
+					return err
+				}
+			} else {
+				if err := wb.insertCarryForwardAtRow(sheet, initial, pageNum, label); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -613,14 +620,14 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 			row++
 			pageNum = wb.getPageNum(sheet)
 			row += lay.BottomMarginRows + lay.TopMarginRows
-				marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
-				for d := marginStart; d < row; d++ {
-					h := 19.0 // 下边距
-					if d >= row-lay.TopMarginRows {
-						h = 16.0 // 下页上边距
-					}
-					wb.File.SetRowHeight(sheet, d, h)
+			marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
+			for d := marginStart; d < row; d++ {
+				h := 19.0 // 下边距
+				if d >= row-lay.TopMarginRows {
+					h = 16.0 // 下页上边距
 				}
+				wb.File.SetRowHeight(sheet, d, h)
+			}
 			wb.writePageHeader(sheet, row, pageNum, account)
 			row += lay.DataStartRow
 
@@ -635,9 +642,9 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 		pageCredit += e.CreditCents
 
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), e.Date[5:7])
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), e.Date[8:10])
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), e.Date[8:10])
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 2), row), "")
-			wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), fmt.Sprintf("%d", e.VoucherNum))
+		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 3), row), fmt.Sprintf("%d", e.VoucherNum))
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), e.Summary)
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), centsToYuan(e.DebitCents))
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(e.CreditCents))
@@ -682,14 +689,14 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 	return nil
 }
 
-// insertCarryForward 在新科目首行插入"上年结转"。
-func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int) error {
+// insertCarryForward 在新科目首行插入期初行（摘要由 label 指定："上年结转"或"期初余额"）。
+func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int, label string) error {
 	lay := glLayout()
 	row := lay.DataStartRow + 1
 	dir, dispBal := directionFor(amount, 0)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "上年结转")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), label)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
@@ -711,8 +718,8 @@ func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int) 
 	return nil
 }
 
-// insertCarryForwardAtRow 在已有数据的 Sheet 中，于数据区首行追加"上年结转"行。
-func (wb *Workbook) insertCarryForwardAtRow(sheet string, amount int64, pageNum int) error {
+// insertCarryForwardAtRow 在已有数据的 Sheet 中，于数据区首行追加期初行（摘要由 label 指定）。
+func (wb *Workbook) insertCarryForwardAtRow(sheet string, amount int64, pageNum int, label string) error {
 	lay := glLayout()
 	row, err := wb.nextDataRow(sheet)
 	if err != nil {
@@ -721,7 +728,7 @@ func (wb *Workbook) insertCarryForwardAtRow(sheet string, amount int64, pageNum 
 	dir, dispBal := directionFor(amount, 0)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "上年结转")
+	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), label)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDebit), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), dir)
@@ -805,7 +812,7 @@ func (wb *Workbook) lastBreakTotals(sheet string) (debit, credit int64) {
 		}
 		// 过次页在 Back 区
 		if len(rows[i]) > lay.BackStartCol+3 && rows[i][lay.BackStartCol+3] == pageBreakLabel {
-			debIdx := lay.BackStartCol + glColDebit - 1 // GetRows index for debit
+			debIdx := lay.BackStartCol + glColDebit - 1  // GetRows index for debit
 			crdIdx := lay.BackStartCol + glColCredit - 1 // GetRows index for credit
 			if len(rows[i]) > crdIdx {
 				if v, err := yuanStrToCents(rows[i][debIdx]); err == nil {
@@ -936,12 +943,14 @@ func (wb *Workbook) writeCarryForwardRow(sheet string, row int, balance int64, p
 
 // writePageHeader 写入后续页标题行（过次页之后、承前页之前调用），包含页码、总分类账、科目名称、列标题。
 // 行结构（4 行，与 writeGLTitle 相同）：
-//   Row N+0: 总    分    类    账（居中，绿色+双下划线）| 分第 n 页（"分第"/"页"绿色，数字红色+绿色虚线下划线）
-//   Row N+1: 会计科目（绿色，右对齐）+ 科目名称（印章红，绿色虚线下划线）
-//   Row N+2: [空行]
-//   Row N+3: 年（合并两列）│凭证号│摘要│借方金额│贷方金额│方向│余额
-//   Row N+4: 月│日
-	// Row N+0 ~ N+2: 上边距（3 行）
+//
+//	Row N+0: 总    分    类    账（居中，绿色+双下划线）| 分第 n 页（"分第"/"页"绿色，数字红色+绿色虚线下划线）
+//	Row N+1: 会计科目（绿色，右对齐）+ 科目名称（印章红，绿色虚线下划线）
+//	Row N+2: [空行]
+//	Row N+3: 年（合并两列）│凭证号│摘要│借方金额│贷方金额│方向│余额
+//	Row N+4: 月│日
+//
+// Row N+0 ~ N+2: 上边距（3 行）
 func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account string) error {
 	lay := glLayout()
 
@@ -949,7 +958,6 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	if pageNum%2 == 0 {
 		colOffset = lay.BackStartCol - lay.FrontStartCol
 	}
-
 
 	darkGreen := "006100"
 	sealRed := "CC0000"
@@ -1044,7 +1052,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	wb.File.MergeCell(sheet, vouchLeft, vouchRight)
 	wb.File.SetCellValue(sheet, vouchLeft, "凭证")
 	// 写列标题：摘要 | 借方金额 | ✓ | 贷方金额 | ✓ | 借或贷 | 余额 | ✓
-		headerCols := []string{"摘                                        要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
+	headerCols := []string{"摘                                        要", "借                    方", "✓", "贷                    方", "✓", "借或贷", "余                    额", "✓"}
 	for i, h := range headerCols {
 		cell := cellName(lay.FrontStartCol+4+i+colOffset, row)
 		wb.File.SetCellValue(sheet, cell, h)
@@ -1093,7 +1101,7 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 
 	// 摘要列字体放大
 	summaryStyle2, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 12, Color: "006100"},
+		Font:      &excelize.Font{Bold: true, Size: 12, Color: "006100"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "top", Color: "CC0000", Style: 6},
@@ -1175,15 +1183,11 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 
 	// 数据区行高 23（Row N+5 起，共 pageSize 行）
 	for i := 1; i <= pageSize+1; i++ {
-			wb.File.SetRowHeight(sheet, row+i, 25)
+		wb.File.SetRowHeight(sheet, row+i, 25)
 	}
 
 	return nil
 }
-
-
-
-
 
 // finalizeGLSheet 在每页第 21 行写入红色过次页标签（不写金额，满行时由 writePageBreakRow 覆盖）。
 func (wb *Workbook) finalizeGLSheet(sheet string) error {
@@ -1301,8 +1305,8 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		// 逐页扫描：找过次页行作为页面边界
 		// 首页表头在 Row 4-5，后续页表头在过次页后 5 行
 		pageNum := 1
-			pageStart := lay.DataStartRow - 1 + lay.TopMarginRows // 首页表头行+上边距
-			pageTop := 1                     // 首页顶部行（上边距首行）
+		pageStart := lay.DataStartRow - 1 + lay.TopMarginRows // 首页表头行+上边距
+		pageTop := 1                                          // 首页顶部行（上边距首行）
 
 		for i, r := range rows {
 			row := i + 1
@@ -1344,9 +1348,9 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 				outerTop = 1
 			}
 			outerBottom := row + lay.BottomMarginRows
-				for d := len(rows) + 1; d <= outerBottom; d++ {
-					wb.File.SetRowHeight(sheet, d, 19)
-				}
+			for d := len(rows) + 1; d <= outerBottom; d++ {
+				wb.File.SetRowHeight(sheet, d, 19)
+			}
 			if pageNum%2 == 1 {
 				// 正面页（奇数）：左侧红色双线，右侧无边框
 				for d := outerTop; d <= outerBottom; d++ {
@@ -1363,12 +1367,12 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 
 			// 下一页：跳过过次页、标题、会计科目、空行（共4行），直接到列标题行
 			pageNum++
-				pageStart = row + 4 + lay.TopMarginRows + lay.BottomMarginRows // 过次页行+边距 = 列标题行
-				pageTop = row + 1 + lay.BottomMarginRows // 过次页下一行 = 下页上边距
-				// 显式水平分页符：下一页对上边距前分页（每页对 28 行固定）
-				if pageTop <= len(rows) {
-					wb.File.InsertPageBreak(sheet, fmt.Sprintf("A%d", pageTop))
-				}
+			pageStart = row + 4 + lay.TopMarginRows + lay.BottomMarginRows // 过次页行+边距 = 列标题行
+			pageTop = row + 1 + lay.BottomMarginRows                       // 过次页下一行 = 下页上边距
+			// 显式水平分页符：下一页对上边距前分页（每页对 28 行固定）
+			if pageTop <= len(rows) {
+				wb.File.InsertPageBreak(sheet, fmt.Sprintf("A%d", pageTop))
+			}
 		}
 
 		// 最后一页（无过次页标记）：从 pageStart 到 sheet 末尾
@@ -1396,10 +1400,10 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 			outerTop = 1
 		}
 		outerBottom := len(rows)
-			for d := len(rows) + 1; d <= len(rows)+lay.BottomMarginRows; d++ {
-				wb.File.SetRowHeight(sheet, d, 19)
-				outerBottom = d
-			}
+		for d := len(rows) + 1; d <= len(rows)+lay.BottomMarginRows; d++ {
+			wb.File.SetRowHeight(sheet, d, 19)
+			outerBottom = d
+		}
 		if pageNum%2 == 1 {
 			for d := outerTop; d <= outerBottom; d++ {
 				wb.setRedDoubleLeft(sheet, dataColStart+0, d)
@@ -1414,23 +1418,39 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 	}
 	// 摘要列数据行：9号加粗+自动换行+左对齐（最后统一应用，保留边框）
 	for _, s := range wb.File.GetSheetList() {
-		if !strings.HasPrefix(s, sheetPrefixGL) { continue }
+		if !strings.HasPrefix(s, sheetPrefixGL) {
+			continue
+		}
 		lay := glLayout()
 		rows, _ := wb.File.GetRows(s)
 		minRow := lay.DataStartRow + 1 + lay.TopMarginRows
 		for i := range rows {
 			row := i + 1
-			if row < minRow { continue }
+			if row < minRow {
+				continue
+			}
 			// 跳过断页行、承前页行、表头行
-			if len(rows[i]) > lay.BindingLeftCols+4 && (rows[i][lay.BindingLeftCols+4] == pageBreakLabel || rows[i][lay.BindingLeftCols+4] == carryForwardLabel) { continue }
-			if len(rows[i]) > lay.BackStartCol+3 && (rows[i][lay.BackStartCol+3] == pageBreakLabel || rows[i][lay.BackStartCol+3] == carryForwardLabel) { continue }
+			if len(rows[i]) > lay.BindingLeftCols+4 && (rows[i][lay.BindingLeftCols+4] == pageBreakLabel || rows[i][lay.BindingLeftCols+4] == carryForwardLabel) {
+				continue
+			}
+			if len(rows[i]) > lay.BackStartCol+3 && (rows[i][lay.BackStartCol+3] == pageBreakLabel || rows[i][lay.BackStartCol+3] == carryForwardLabel) {
+				continue
+			}
 			fi := lay.BindingLeftCols
-			if len(rows[i]) > fi && (rows[i][fi] == "月" || rows[i][fi] == "年") { continue }
+			if len(rows[i]) > fi && (rows[i][fi] == "月" || rows[i][fi] == "年") {
+				continue
+			}
 			bi := lay.BackStartCol - 1
-			if len(rows[i]) > bi && (rows[i][bi] == "月" || rows[i][bi] == "年") { continue }
+			if len(rows[i]) > bi && (rows[i][bi] == "月" || rows[i][bi] == "年") {
+				continue
+			}
 			// 跳过摘要表头行（摘字开头）
-			if len(rows[i]) > lay.BindingLeftCols+4 && strings.HasPrefix(rows[i][lay.BindingLeftCols+4], "摘") { continue }
-			if len(rows[i]) > lay.BackStartCol+3 && strings.HasPrefix(rows[i][lay.BackStartCol+3], "摘") { continue }
+			if len(rows[i]) > lay.BindingLeftCols+4 && strings.HasPrefix(rows[i][lay.BindingLeftCols+4], "摘") {
+				continue
+			}
+			if len(rows[i]) > lay.BackStartCol+3 && strings.HasPrefix(rows[i][lay.BackStartCol+3], "摘") {
+				continue
+			}
 			for _, colOff := range []int{0, lay.BackStartCol - lay.FrontStartCol} {
 				cell := cellName(lay.FrontStartCol+4+colOff, row)
 				if sid, err := wb.File.GetCellStyle(s, cell); err == nil && sid > 0 {
@@ -1525,11 +1545,15 @@ func (wb *Workbook) setRedDoubleBorder(sheet string, col, row int) {
 func (wb *Workbook) setRedDoubleLeft(sheet string, col, row int) {
 	cell := cellName(col, row)
 	styleID, err := wb.File.GetCellStyle(sheet, cell)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	var style *excelize.Style
 	if styleID != 0 {
 		style, err = wb.File.GetStyle(styleID)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 	} else {
 		style = &excelize.Style{}
 	}
@@ -1542,11 +1566,15 @@ func (wb *Workbook) setRedDoubleLeft(sheet string, col, row int) {
 func (wb *Workbook) setRedDoubleRight(sheet string, col, row int) {
 	cell := cellName(col, row)
 	styleID, err := wb.File.GetCellStyle(sheet, cell)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	var style *excelize.Style
 	if styleID != 0 {
 		style, err = wb.File.GetStyle(styleID)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 	} else {
 		style = &excelize.Style{}
 	}

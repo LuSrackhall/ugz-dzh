@@ -22,6 +22,9 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	}
 	cfg := wb.Config
 
+	// 期初机制修复：清理历史幻影期初（幂等，自动科目 FirstRecord 置 0 + 删除回填记录）
+	balance.PurgePhantomInitials(cfg)
+
 	// 4. 提取上月期末作为本月期初
 	prevFinals, err := wb.ExtractLastMonthFinals()
 	if err != nil {
@@ -39,6 +42,19 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		if _, exists := initials[k]; !exists {
 			initials[k] = balance.GetInitBalanceForGenerate(cfg, k, month, prevFinals)
 		}
+	}
+
+	// 记录当月期初来自调整额的科目（账页期初行摘要用：调整额→"期初余额"）
+	wb.InitialAdjust = make(map[string]bool)
+	for account := range initials {
+		if balance.HasInitialAdjustment(cfg, account, month) {
+			wb.InitialAdjust[account] = true
+		}
+	}
+
+	// 期初试算平衡校验（借正贷负求和，不平告警不阻断，避免历史数据卡死）
+	if diff := balance.InitialBalanceDiff(initials); diff != 0 {
+		fmt.Printf("⚠ 期初借贷不平衡（%s），差额 %.2f 元（借正贷负）。请核对期初设置\n", month, float64(diff)/100)
 	}
 
 	// 5. 生成本月期初表
@@ -155,9 +171,9 @@ func (wb *Workbook) appendCarryForwardOnly(entries []voucher.Entry, initials map
 		}
 		hasEntries[path] = true
 	}
-	// 对仅期初非零但无分录的科目，写入上年结转
+	// 对仅期初非零但无分录的科目，写入期初行（1 月跨年延续 或 当月调整额生效）
 	for account, initial := range initials {
-		if initial != 0 && !hasEntries[account] && strings.HasSuffix(wb.Month, "-01") {
+		if initial != 0 && !hasEntries[account] && (strings.HasSuffix(wb.Month, "-01") || wb.InitialAdjust[account]) {
 			if err := wb.appendToGLSheet(account, nil, initial); err != nil {
 				return fmt.Errorf("追加上年结转 %s: %w", account, err)
 			}

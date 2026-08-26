@@ -15,14 +15,15 @@ import (
 
 // Workbook 持有 excelize.File 和当月生成上下文。
 type Workbook struct {
-	File         *excelize.File
-	Config       *balance.GlobalConfig
-	Month        string // YYYY-MM
-	OutputDir    string
-	ConfigPath   string
-	moneyStyleID int
-MLSheetBalances map[string]int64 // sheet名 → 最近期末余额
-	moneyStyleThickID int // 金额样式（底边加粗）
+	File              *excelize.File
+	Config            *balance.GlobalConfig
+	Month             string // YYYY-MM
+	OutputDir         string
+	ConfigPath        string
+	moneyStyleID      int
+	MLSheetBalances   map[string]int64 // sheet名 → 最近期末余额
+	moneyStyleThickID int              // 金额样式（底边加粗）
+	InitialAdjust     map[string]bool  // 当月期初来自期初调整额的科目（摘要"期初余额"）
 }
 
 // NewWorkbook 创建或加载工作薄。若上月 xlsx 存在则复制之，否则新建。
@@ -50,15 +51,18 @@ func NewWorkbook(configPath, month, outputDir string) (*Workbook, error) {
 	}
 
 	prevPath := wb.prevMonthPath()
-	if _, err := os.Stat(prevPath); err == nil {
-		src, err := excelize.OpenFile(prevPath)
-		if err != nil {
-			return nil, fmt.Errorf("打开上月 xlsx %s: %w", prevPath, err)
+	wb.File = excelize.NewFile()
+	// "Sheet1" 作为唯一 sheet 时无法删除，延迟到 Save() 处理
+	// 跨年安全：仅当上月 xlsx 与当前月同一年度时才复制（year-close 语义：新年首月从空开始，
+	// 期初取自 JSON 上年末余额；若复制旧年 12 月会把旧年明细带进新年账本）
+	if prevPath != "" && strings.HasPrefix(filepath.Base(prevPath), wb.Month[:5]) {
+		if _, err := os.Stat(prevPath); err == nil {
+			src, err := excelize.OpenFile(prevPath)
+			if err != nil {
+				return nil, fmt.Errorf("打开上月 xlsx %s: %w", prevPath, err)
+			}
+			wb.File = src
 		}
-		wb.File = src
-	} else {
-		wb.File = excelize.NewFile()
-		// "Sheet1" 作为唯一 sheet 时无法删除，延迟到 Save() 处理
 	}
 
 	moneyStyle, err := wb.File.NewStyle(&excelize.Style{
@@ -210,8 +214,8 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 
 // sheet naming constants
 const (
-	sheetPrefixGL = "总分类账-"
-	sheetPrefixML = "多科目明细账-"
+	sheetPrefixGL  = "总分类账-"
+	sheetPrefixML  = "多科目明细账-"
 	pageBreakLabel = "过    次    页"
 	periodEndLabel = "期末余额"
 )

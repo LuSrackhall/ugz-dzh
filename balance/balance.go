@@ -286,12 +286,14 @@ func UpdateBalancesAfterGenerate(cfg *GlobalConfig, month string, activity map[s
 	for account, act := range activity {
 		node, exists := cfg.Tree[account]
 		if !exists {
+			gen, _ := splitPath(account)
 			node = AccountNode{
-				Property: InferAccountProperty(act.Debit - act.Credit),
+				Property: inferPropertyByType(gen),
 				FirstRecord: FirstRecord{
 					Method: "自动识别",
 					Month:  month,
-					Amount: act.Debit - act.Credit,
+					// 首月净额不进入期初链路（审计 M2/M1）：期初只来自调整额或余额链
+					Amount: 0,
 				},
 				Balances: make(map[string]MonthBalance),
 			}
@@ -334,12 +336,32 @@ func UpdateBalancesAfterGenerate(cfg *GlobalConfig, month string, activity map[s
 
 // GetInitBalanceForGenerate 获取某科目在某月的期初余额（分）。
 // prevMonthEnd 为上月各科目的期末余额。
+// 期初来源优先级（铁律二：除生效月当月外，一律走连续链）：
+//  1. 手动调整科目：生效月==month 且 调整额≠0 → 调整额
+//  2. 自动识别科目：首次月==month 且 调整额≠0 → 调整额
+//  3. 上月期末 prevMonthEnd
+//  4. 科目树中最近月份的期末余额（m < month）
+//  5. 0
 func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMonthEnd map[string]int64) int64 {
+	// 1. 手动调整科目：仅生效月当月直取调整额（不覆盖后续月份，保证余额链连续）
+	for _, m := range cfg.ManualItems {
+		if m.Account == account && m.EffectiveMonth == month && m.Adjustment != 0 {
+			return YuanToCents(m.Adjustment)
+		}
+	}
+	// 2. 自动识别科目：仅首次月当月直取调整额
+	for _, a := range cfg.AutoItems {
+		if a.Account == account && a.FirstMonth == month && a.Adjustment != 0 {
+			return YuanToCents(a.Adjustment)
+		}
+	}
+
+	// 3. 上月期末
 	if end, ok := prevMonthEnd[account]; ok {
 		return end
 	}
 
-	// 从 JSON 科目树中取最近月份的期末余额作为期初
+	// 4. 从 JSON 科目树中取最近月份的期末余额作为期初
 	node, ok := cfg.Tree[account]
 	if ok {
 		// 找最新的有余额的月份
@@ -356,11 +378,22 @@ func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMon
 		}
 	}
 
-	if node.FirstRecord.Month == month {
-		return node.FirstRecord.Amount
-	}
-
 	return 0
+}
+
+// HasInitialAdjustment 判断某科目在某月的期初是否来自期初调整额（生效月/首次月==当前月且调整额≠0）。
+func HasInitialAdjustment(cfg *GlobalConfig, account, month string) bool {
+	for _, m := range cfg.ManualItems {
+		if m.Account == account && m.EffectiveMonth == month && m.Adjustment != 0 {
+			return true
+		}
+	}
+	for _, a := range cfg.AutoItems {
+		if a.Account == account && a.FirstMonth == month && a.Adjustment != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // AddManualAdjustment 添加手动调整科目到配置。
@@ -384,9 +417,10 @@ func AddManualAdjustment(cfg *GlobalConfig, account, effectiveMonth string, adju
 		cfg.Tree = make(map[string]AccountNode)
 	}
 	node, exists := cfg.Tree[account]
+	gen, _ := splitPath(account)
 	if !exists {
 		node = AccountNode{
-			Property: InferAccountProperty(amount),
+			Property: inferPropertyByType(gen),
 			FirstRecord: FirstRecord{
 				Method: "手动调整",
 				Month:  effectiveMonth,
@@ -448,38 +482,118 @@ func ValidateAccountTree(cfg *GlobalConfig) error {
 
 // --- 期初前推 ---
 
-// ensureBackfillForAll 遍历所有科目，若调整额 ≠ 0，则从启动月到首次记录月-1 补齐余额记录。
+// ensureBackfillForAll 只对"手动调整科目"（调整额≠0）回填余额记录：从启动月到生效月-1。
+// 自动识别科目一律不回填（审计 M2：避免首月净额被误当期初调整回填产生幻影期初）。
 func ensureBackfillForAll(cfg *GlobalConfig, currentMonth string) {
 	start := cfg.Settings.StartMonth
 	if start == "" {
 		return
 	}
 
-	for account, node := range cfg.Tree {
-		if node.FirstRecord.Amount == 0 {
+	for _, m := range cfg.ManualItems {
+		amount := YuanToCents(m.Adjustment)
+		if amount == 0 || m.EffectiveMonth == "" {
 			continue
 		}
-		frMonth := node.FirstRecord.Month
-		if frMonth == "" || cmpMonth(frMonth, start) <= 0 {
+		// 生效月不晚于启动月（无需前置回填）或尚未生效（生效月 > 当前月）
+		if cmpMonth(m.EffectiveMonth, start) <= 0 || cmpMonth(m.EffectiveMonth, currentMonth) > 0 {
 			continue
 		}
 
+		node, ok := cfg.Tree[m.Account]
+		if !ok {
+			continue // 科目树缺失，交由 ValidateAccountTree 报不一致
+		}
 		if node.Balances == nil {
 			node.Balances = make(map[string]MonthBalance)
 		}
 
-		for m := start; cmpMonth(m, frMonth) < 0; m = nextMonth(m) {
-			if _, exists := node.Balances[m]; !exists {
-				node.Balances[m] = MonthBalance{
-					Initial: node.FirstRecord.Amount,
+		for mm := start; cmpMonth(mm, m.EffectiveMonth) < 0; mm = nextMonth(mm) {
+			if _, exists := node.Balances[mm]; !exists {
+				node.Balances[mm] = MonthBalance{
+					Initial: amount,
 					Debit:   0,
 					Credit:  0,
-					Final:   node.FirstRecord.Amount,
+					Final:   amount,
+				}
+			}
+		}
+		cfg.Tree[m.Account] = node
+	}
+}
+
+// --- 期初迁移与校验 ---
+
+// inferPropertyByType 按总账科目类别推断属性：资产/费用→借，负债/权益/收入→贷，未知→借。
+// 替代按首月净额推断（审计 M1：银行存款曾因首月净额为负被标为"贷"）。
+func inferPropertyByType(general string) string {
+	switch accountTypes[general] {
+	case "负债", "权益", "收入":
+		return "贷"
+	default:
+		return "借"
+	}
+}
+
+// PurgePhantomInitials 清理历史幻影期初（幂等，generate 加载 JSON 后自动调用）：
+// 自动识别科目 FirstRecord.Amount 置 0；删除余额历史中 月份<首次月 且 借方==0 && 贷方==0 的记录
+// （首次月之前不可能有发生额，此类记录只可能是旧 ensureBackfillForAll 回填产生）。
+func PurgePhantomInitials(cfg *GlobalConfig) {
+	for account, node := range cfg.Tree {
+		if node.FirstRecord.Method != "自动识别" {
+			continue
+		}
+		if node.FirstRecord.Amount != 0 {
+			node.FirstRecord.Amount = 0
+		}
+		if node.FirstRecord.Month != "" && node.Balances != nil {
+			for m, mb := range node.Balances {
+				if m < node.FirstRecord.Month && mb.Debit == 0 && mb.Credit == 0 {
+					delete(node.Balances, m)
 				}
 			}
 		}
 		cfg.Tree[account] = node
 	}
+}
+
+// InitialBalanceDiff 返回某月期初映射的借贷差额（分）。借正贷负求和，0=平衡。
+func InitialBalanceDiff(initials map[string]int64) int64 {
+	var sum int64
+	for _, v := range initials {
+		sum += v
+	}
+	return sum
+}
+
+// LatestBalanceMonth 返回科目树中所有余额记录的最大月份（无记录返回 ""）。
+func LatestBalanceMonth(cfg *GlobalConfig) string {
+	var latest string
+	for _, node := range cfg.Tree {
+		for m := range node.Balances {
+			if m > latest {
+				latest = m
+			}
+		}
+	}
+	return latest
+}
+
+// CheckInitialBalanceAt 校验某月快照的期初借贷平衡（借正贷负求和）。返回差额（分）。
+func CheckInitialBalanceAt(cfg *GlobalConfig, month string) int64 {
+	var sum int64
+	for _, node := range cfg.Tree {
+		if mb, ok := node.Balances[month]; ok {
+			sum += mb.Initial
+		}
+	}
+	return sum
+}
+
+// IsUnknownType 判断总账科目类别是否未收录（未知类别默认按"借"处理）。
+func IsUnknownType(general string) bool {
+	_, ok := accountTypes[general]
+	return !ok
 }
 
 // --- 月份辅助 ---
@@ -589,20 +703,20 @@ func typeOrder(t string) int {
 }
 
 var accountTypes = map[string]string{
-	"库存现金": "资产",
-	"银行存款": "资产",
+	"库存现金":  "资产",
+	"银行存款":  "资产",
 	"应收款":   "资产",
-	"内部往来": "资产",
-	"长期投资": "资产",
-	"固定资产": "资产",
+	"内部往来":  "资产",
+	"长期投资":  "资产",
+	"固定资产":  "资产",
 	"应付款":   "负债",
-	"资本":     "权益",
+	"资本":    "权益",
 	"公积公益金": "权益",
-	"经营收入": "收入",
-	"其他收入": "收入",
-	"投资收益": "收入",
-	"补助收入": "收入",
-	"管理费用": "费用",
-	"公益支出": "费用",
-	"其他支出": "费用",
+	"经营收入":  "收入",
+	"其他收入":  "收入",
+	"投资收益":  "收入",
+	"补助收入":  "收入",
+	"管理费用":  "费用",
+	"公益支出":  "费用",
+	"其他支出":  "费用",
 }

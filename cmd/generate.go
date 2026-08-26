@@ -102,65 +102,66 @@ var generateCmd = &cobra.Command{
 
 		// 生成月度累计工作薄
 		xlsxPath := filepath.Join(yearDir, month+".xlsx")
-	if force {
-		// 级联删除当月及之后所有月份的查看版 xlsx
-		entries, err := os.ReadDir(yearDir)
-		if err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				name := entry.Name()
-				if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") > month {
-					path := filepath.Join(yearDir, name)
-					if err := os.Remove(path); err != nil {
-						return fmt.Errorf("删除 %s: %w", path, err)
+		if force {
+			// 级联删除当月及之后所有月份的查看版 xlsx（当月旧文件必须删除，否则 NewWorkbook 会加载旧当月文件
+			// 并把旧版当月期末当作"上月期末"，导致 -f 重建期初被污染）
+			entries, err := os.ReadDir(yearDir)
+			if err == nil {
+				for _, entry := range entries {
+					if entry.IsDir() {
+						continue
 					}
-					if verbose {
-						fmt.Printf("已删除: %s\n", path)
-					}
-				}
-			}
-		}
-		// 同步清理 print/ 子目录中晚于当月的打印版 xlsx
-		printDir := filepath.Join(yearDir, "print")
-		if pentries, err := os.ReadDir(printDir); err == nil {
-			for _, entry := range pentries {
-				if entry.IsDir() {
-					continue
-				}
-				name := entry.Name()
-				if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") > month {
-					path := filepath.Join(printDir, name)
-					if err := os.Remove(path); err != nil {
-						return fmt.Errorf("删除 %s: %w", path, err)
-					}
-					if verbose {
-						fmt.Printf("已删除: %s\n", path)
+					name := entry.Name()
+					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") >= month {
+						path := filepath.Join(yearDir, name)
+						if err := os.Remove(path); err != nil {
+							return fmt.Errorf("删除 %s: %w", path, err)
+						}
+						if verbose {
+							fmt.Printf("已删除: %s\n", path)
+						}
 					}
 				}
 			}
+			// 同步清理 print/ 子目录中当月及之后月份的打印版 xlsx
+			printDir := filepath.Join(yearDir, "print")
+			if pentries, err := os.ReadDir(printDir); err == nil {
+				for _, entry := range pentries {
+					if entry.IsDir() {
+						continue
+					}
+					name := entry.Name()
+					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") >= month {
+						path := filepath.Join(printDir, name)
+						if err := os.Remove(path); err != nil {
+							return fmt.Errorf("删除 %s: %w", path, err)
+						}
+						if verbose {
+							fmt.Printf("已删除: %s\n", path)
+						}
+					}
+				}
+			}
+		} else {
+			if _, err := os.Stat(xlsxPath); err == nil {
+				return fmt.Errorf("%s 已存在，使用 -f 覆盖已有 xlsx", xlsxPath)
+			}
 		}
-	} else {
-		if _, err := os.Stat(xlsxPath); err == nil {
-			return fmt.Errorf("%s 已存在，使用 -f 覆盖已有 xlsx", xlsxPath)
+		if err := generator.GenerateWorkbook(configJSON, month, yearDir, entries); err != nil {
+			return fmt.Errorf("生成工作薄: %w", err)
 		}
-	}
-	if err := generator.GenerateWorkbook(configJSON, month, yearDir, entries); err != nil {
-		return fmt.Errorf("生成工作薄: %w", err)
-	}
 
-	// 生成打印版位格 xlsx（失败仅告警，不影响已落盘的查看版）
-	printPath := filepath.Join(yearDir, "print", month+".xlsx")
-	if err := generator.TransformToPrint(xlsxPath, printPath); err != nil {
-		fmt.Fprintf(os.Stderr, "警告: 生成打印版失败（查看版已成功）: %v\n", err)
-	} else if verbose {
-		fmt.Printf("已生成打印版: %s\n", printPath)
-	}
+		// 生成打印版位格 xlsx（失败仅告警，不影响已落盘的查看版）
+		printPath := filepath.Join(yearDir, "print", month+".xlsx")
+		if err := generator.TransformToPrint(xlsxPath, printPath); err != nil {
+			fmt.Fprintf(os.Stderr, "警告: 生成打印版失败（查看版已成功）: %v\n", err)
+		} else if verbose {
+			fmt.Printf("已生成打印版: %s\n", printPath)
+		}
 
-	fmt.Printf("已生成 %s/%s 工作薄，共 %d 条分录\n", year, month, len(entries))
-	return nil
-},
+		fmt.Printf("已生成 %s/%s 工作薄，共 %d 条分录\n", year, month, len(entries))
+		return nil
+	},
 }
 
 // validateSameMonth 校验所有凭证是否来自同一年同一月，返回推导的年份和月份。

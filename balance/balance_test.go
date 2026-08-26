@@ -149,7 +149,7 @@ func TestGetLeafAccounts(t *testing.T) {
 		t.Fatalf("expected 3 unique leaf accounts, got %d", len(paths))
 	}
 	expected := map[string]bool{
-		"库存现金":     true,
+		"库存现金":    true,
 		"银行存款-工行": true,
 		"银行存款-建行": true,
 	}
@@ -202,7 +202,7 @@ func TestLoadSaveConfig(t *testing.T) {
 		Settings: GlobalSettings{StartMonth: "2026-01"},
 		Tree: map[string]AccountNode{
 			"库存现金": {
-				Property: "借",
+				Property:    "借",
 				FirstRecord: FirstRecord{Method: "自动识别", Month: "2026-01", Amount: 0},
 				Balances: map[string]MonthBalance{
 					"2026-01": {Initial: 0, Debit: 60000, Credit: 41800, Final: 18200},
@@ -297,8 +297,8 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 
 func TestYuanCentsRoundTrip(t *testing.T) {
 	tests := []struct {
-		yuan   float64
-		cents  int64
+		yuan  float64
+		cents int64
 	}{
 		{0, 0},
 		{1.00, 100},
@@ -343,11 +343,11 @@ func TestUpdateBalancesAfterGenerate(t *testing.T) {
 	}
 
 	activity := map[string]Activity{
-		"库存现金": {Debit: 500000, Credit: 300000},
+		"库存现金":    {Debit: 500000, Credit: 300000},
 		"银行存款-工行": {Debit: 0, Credit: 150000},
 	}
 	initialBalances := map[string]int64{
-		"库存现金":   0,
+		"库存现金":    0,
 		"银行存款-工行": 200000,
 	}
 
@@ -400,25 +400,134 @@ func TestGetInitBalanceForGenerate(t *testing.T) {
 				FirstRecord: FirstRecord{Method: "手动调整", Month: "2026-08", Amount: 150000},
 			},
 		},
+		ManualItems: []ManualItem{
+			{Account: "其他应收款-张三", EffectiveMonth: "2026-08", Adjustment: 1500.00},
+		},
 	}
 
 	prev := map[string]int64{
-		"库存现金": 500000,
+		"库存现金":     500000,
+		"其他应收款-张三": 160000, // 2026-07 期末（模拟续链）
 	}
 
-	// Priority 1: prevMonthEnd
+	// Priority 1: 手动调整科目生效月当月 → 直取调整额
+	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-08", prev); got != 150000 {
+		t.Errorf("其他应收款-张三 init = %d, want 150000（生效月调整额）", got)
+	}
+
+	// 生效月之后续链：期初=上月期末，不被调整额覆盖（铁律二）
+	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-09", prev); got != 160000 {
+		t.Errorf("其他应收款-张三 2026-09 init = %d, want 160000（上月期末续链）", got)
+	}
+
+	// Priority 2: prevMonthEnd
 	if got := GetInitBalanceForGenerate(cfg, "库存现金", "2026-02", prev); got != 500000 {
 		t.Errorf("库存现金 init = %d, want 500000", got)
-	}
-
-	// Priority 2: first record amount when month matches
-	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-08", prev); got != 150000 {
-		t.Errorf("其他应收款-张三 init = %d, want 150000", got)
 	}
 
 	// Priority 3: 0
 	if got := GetInitBalanceForGenerate(cfg, "未知科目", "2026-01", prev); got != 0 {
 		t.Errorf("未知科目 init = %d, want 0", got)
+	}
+}
+
+func TestGetInitBalanceCrossYearNoOverride(t *testing.T) {
+	// 跨年：自动识别科目首次月在上年，2026 各月不命中调整额 → 期初=上年末（prevFinals），不被覆盖
+	cfg := &GlobalConfig{
+		Settings: GlobalSettings{StartMonth: "2025-10"},
+		AutoItems: []AutoItem{
+			{Account: "银行存款", FirstMonth: "2025-10", Adjustment: 5000.00}, // 5000 元 = 500000 分
+		},
+	}
+	prev := map[string]int64{"银行存款": 12345600} // 2025-12 期末
+	if got := GetInitBalanceForGenerate(cfg, "银行存款", "2026-01", prev); got != 12345600 {
+		t.Errorf("跨年 2026-01 init = %d, want 12345600（上年末，调整额不覆盖）", got)
+	}
+	// 首次月当月仍命中调整额
+	if got := GetInitBalanceForGenerate(cfg, "银行存款", "2025-10", map[string]int64{}); got != 500000 {
+		t.Errorf("2025-10 init = %d, want 500000（首次月调整额）", got)
+	}
+}
+
+func TestAutoAccountNoBackfill(t *testing.T) {
+	// 自动识别科目：FirstRecord.Amount 恒 0，且 ensureBackfillForAll 不回填
+	cfg := &GlobalConfig{
+		Settings: GlobalSettings{StartMonth: "2026-01"},
+		Tree: map[string]AccountNode{
+			"银行存款": {
+				FirstRecord: FirstRecord{Method: "自动识别", Month: "2026-05", Amount: 123456},
+				Balances:    make(map[string]MonthBalance),
+			},
+		},
+	}
+	ensureBackfillForAll(cfg, "2026-05")
+	node := cfg.Tree["银行存款"]
+	if len(node.Balances) != 0 {
+		t.Errorf("自动识别科目不应回填，got %d 条记录", len(node.Balances))
+	}
+}
+
+func TestPurgePhantomInitials(t *testing.T) {
+	cfg := &GlobalConfig{
+		Tree: map[string]AccountNode{
+			// 自动识别科目：首次月前的幻影回填记录（无发生额）应被清理
+			"银行存款": {
+				FirstRecord: FirstRecord{Method: "自动识别", Month: "2025-10", Amount: 11811959},
+				Balances: map[string]MonthBalance{
+					"2025-01": {Initial: 11811959, Final: 11811959},
+					"2025-05": {Initial: 11811959, Final: 11811959},
+					"2025-10": {Initial: 0, Debit: 100, Credit: 200, Final: -100}, // 真实记录，保留
+					"2025-11": {Initial: -100, Debit: 0, Credit: 0, Final: -100},  // 首次月后，保留
+				},
+			},
+			// 手动调整科目不受影响
+			"应收款-张三": {
+				FirstRecord: FirstRecord{Method: "手动调整", Month: "2026-03", Amount: 150000},
+			},
+		},
+	}
+	PurgePhantomInitials(cfg)
+
+	bank := cfg.Tree["银行存款"]
+	if bank.FirstRecord.Amount != 0 {
+		t.Errorf("自动科目 FirstRecord.Amount = %d, want 0", bank.FirstRecord.Amount)
+	}
+	if _, ok := bank.Balances["2025-01"]; ok {
+		t.Error("幻影记录 2025-01 应被清理")
+	}
+	if _, ok := bank.Balances["2025-05"]; ok {
+		t.Error("幻影记录 2025-05 应被清理")
+	}
+	if _, ok := bank.Balances["2025-10"]; !ok {
+		t.Error("真实记录 2025-10 不应被清理")
+	}
+	if _, ok := bank.Balances["2025-11"]; !ok {
+		t.Error("首次月后记录不应被清理")
+	}
+	if cfg.Tree["应收款-张三"].FirstRecord.Amount != 150000 {
+		t.Error("手动调整科目不应被迁移")
+	}
+}
+
+func TestInferPropertyByType(t *testing.T) {
+	cases := map[string]string{
+		"库存现金": "借", "银行存款": "借", "管理费用": "借",
+		"应付款": "贷", "资本": "贷", "经营收入": "贷",
+		"完全未知科目": "借",
+	}
+	for general, want := range cases {
+		if got := inferPropertyByType(general); got != want {
+			t.Errorf("inferPropertyByType(%s) = %s, want %s", general, got, want)
+		}
+	}
+}
+
+func TestInitialBalanceDiff(t *testing.T) {
+	if d := InitialBalanceDiff(map[string]int64{"a": 100, "b": -100}); d != 0 {
+		t.Errorf("balanced diff = %d, want 0", d)
+	}
+	if d := InitialBalanceDiff(map[string]int64{"a": 100, "b": -90}); d != 10 {
+		t.Errorf("unbalanced diff = %d, want 10", d)
 	}
 }
 
@@ -490,7 +599,7 @@ func TestValidateAccountTree(t *testing.T) {
 	// Valid
 	cfg := &GlobalConfig{
 		Tree: map[string]AccountNode{
-			"库存现金": {},
+			"库存现金":   {},
 			"应收款-张三": {},
 		},
 		AutoItems: []AutoItem{
@@ -529,6 +638,9 @@ func TestValidateAccountTree(t *testing.T) {
 func TestBackfill(t *testing.T) {
 	cfg := &GlobalConfig{
 		Settings: GlobalSettings{StartMonth: "2026-01"},
+		ManualItems: []ManualItem{
+			{Account: "其他应收款-张三", EffectiveMonth: "2026-03", Adjustment: 1500.00},
+		},
 		Tree: map[string]AccountNode{
 			"其他应收款-张三": {
 				Property: "借",

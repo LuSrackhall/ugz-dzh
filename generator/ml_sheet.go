@@ -20,15 +20,15 @@ const (
 	// Row5:  月  日   字  号      明细科目们（中两行）
 	// Row6: （延续）              （延续）
 	// Row7: （延续）  摘要(四行)   借或贷(四行)
-	mlOffMonth    = 0 // 月
-	mlOffDay      = 1 // 日
-	mlOffVouChar  = 2 // 字
-	mlOffVouNum   = 3 // 号
-	mlOffSummary  = 4 // 摘要
-	mlOffDebit    = 5 // 借方金额
-	mlOffCredit   = 6 // 贷方金额
-	mlOffDir      = 7 // 方向
-	mlOffBalance  = 8 // 余额
+	mlOffMonth   = 0 // 月
+	mlOffDay     = 1 // 日
+	mlOffVouChar = 2 // 字
+	mlOffVouNum  = 3 // 号
+	mlOffSummary = 4 // 摘要
+	mlOffDebit   = 5 // 借方金额
+	mlOffCredit  = 6 // 贷方金额
+	mlOffDir     = 7 // 方向
+	mlOffBalance = 8 // 余额
 )
 
 // mlFirstDataPageStart 返回第一个数据页 block 的起始行号（= 该页上边距行）。
@@ -341,7 +341,9 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		if len(detailOrder) > 0 {
 			var existNonEmpty []string
 			for _, d := range existingDetails {
-				if d != "" { existNonEmpty = append(existNonEmpty, d) }
+				if d != "" {
+					existNonEmpty = append(existNonEmpty, d)
+				}
 			}
 			fmt.Printf("DEBUG %s: existNonEmpty=%v detailOrder=%v\n", name, existNonEmpty, detailOrder)
 			if err := wb.checkMLDetailOrderConflict(name, existingDetails, detailOrder); err != nil {
@@ -357,17 +359,17 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		_ = finalDetails
 
 		// 更新标题行（仅更新新增的列，数据页列标题行）
-			lay := mlLayout()
-			colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header
-			for _, nd := range newAppended {
-				col := mlDetailCol(lay, finalIdx[nd])
-				cell := mlCellName(col, colHeaderRow)
-				wb.File.SetCellValue(name, cell, nd)
+		lay := mlLayout()
+		colHeaderRow := mlFirstDataPageStart() + 5 // Row+4 of first data page header
+		for _, nd := range newAppended {
+			col := mlDetailCol(lay, finalIdx[nd])
+			cell := mlCellName(col, colHeaderRow)
+			wb.File.SetCellValue(name, cell, nd)
 		}
-			// 更新列宽（Front 侧明细列）
-			for i := 0; i < mlMaxDetails; i++ {
-				colLetter := cellColLetter(mlDetailCol(lay, i))
-				wb.File.SetColWidth(name, colLetter, colLetter, 14)
+		// 更新列宽（Front 侧明细列）
+		for i := 0; i < mlMaxDetails; i++ {
+			colLetter := cellColLetter(mlDetailCol(lay, i))
+			wb.File.SetColWidth(name, colLetter, colLetter, 14)
 		}
 
 		return name, finalIdx, newAppended, nil
@@ -473,7 +475,6 @@ func (wb *Workbook) checkMLDetailOrderConflict(sheet string, existingDetails []s
 	}
 	return nil
 }
-
 
 // cellColLetter 返回列号的字母表示。
 func cellColLetter(col int) string {
@@ -809,7 +810,8 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 		row = mlFirstDataPageStart() + lay.DataStartRow // = 38: 数据页header后承前页行
 		cfLabel := carryForwardLabel
 		if initial != 0 {
-			cfLabel = "上年结转"
+			// 新 Sheet 期初行：建账/调整语义（审计：期初行摘要按来源区分）
+			cfLabel = "期初余额"
 		}
 		wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
 		row++ // = 12：第一条分录
@@ -836,7 +838,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
 			row++
-				pageDebit = 0
+			pageDebit = 0
 			pageCredit = 0
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
@@ -851,7 +853,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel)
 			row++
-				pageDebit = 0
+			pageDebit = 0
 			pageCredit = 0
 			pageDetails = make([]mlDetailTotals, numDetails)
 		}
@@ -947,6 +949,7 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 	}
 
 }
+
 // writeMLCarryForwardRow 写多科目明细账的"承前页"行，双面写入（结构与过次页相同，标签可定制）。
 
 // 翻页触发时 writeMLPageBreakRow 会覆盖为完整数据。
@@ -985,12 +988,13 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 		wb.setMoneyStyle(sheet, row, col)
 	}
 
-// 翻页触发时 writeMLPageBreakRow 覆盖为完整数据；不触发时红色文字作为模板结构保留。
+	// 翻页触发时 writeMLPageBreakRow 覆盖为完整数据；不触发时红色文字作为模板结构保留。
 }
 
-
 // writeMLPageNumLayout 写"分第 n 页(suffix)"，三段分别占指定列区间：
-//   分第（右对齐）| n（居中，绿色虚线下划线）| 页(suffix)（左对齐）
+//
+//	分第（右对齐）| n（居中，绿色虚线下划线）| 页(suffix)（左对齐）
+//
 // num<=0 时 n 位置仅绿色虚线下划线（无数字），分第/页 绿字保留（空白表占位）。
 func (wb *Workbook) writeMLPageNumLayout(sheet string, row, num int, suffix string,
 	fenDiStart, fenDiSpan, nStart, nSpan, sufStart, sufSpan int) {
@@ -1035,12 +1039,13 @@ func (wb *Workbook) writeMLPageNumLayout(sheet string, row, num int, suffix stri
 // hasBack/hasFront 控制是否写对应侧；backPageNum/frontPageNum 分别是两侧的"分第N页"。
 // row 是该页 block 的起始行（上边距行）。
 // 行结构（9 行）：
-//   Row +0: 上边距行（空）
-//   Row +1: 分第 n 页 — Back 侧标题区 + Front 侧标题区
-//   Row +2: 多科目明细账 — XXX（Back 侧标题区）| 科目名（Front 侧标题区，印章红）
-//   Row +3: 科目名 — Back 侧 + Front 侧科目区（印章红）
-//   Row +4: [空行]
-//   Row +5~8: 列标题 — Back 侧（7基础列 + 明细1~4）| Front 侧（明细5~14）
+//
+//	Row +0: 上边距行（空）
+//	Row +1: 分第 n 页 — Back 侧标题区 + Front 侧标题区
+//	Row +2: 多科目明细账 — XXX（Back 侧标题区）| 科目名（Front 侧标题区，印章红）
+//	Row +3: 科目名 — Back 侧 + Front 侧科目区（印章红）
+//	Row +4: [空行]
+//	Row +5~8: 列标题 — Back 侧（7基础列 + 明细1~4）| Front 侧（明细5~14）
 func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontPageNum int, general string, hasBack, hasFront bool) error {
 	lay := mlLayout()
 	darkGreen := "006100"

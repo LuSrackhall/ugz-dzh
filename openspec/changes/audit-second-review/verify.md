@@ -46,6 +46,7 @@
 3. **H2 端到端**：构造括号红字凭证 `(11,700.00)` → generate 提示"贷方为负数（红字）"；查看版贷方显示 -11700；打印版拆位数字 11700 **红色字体**（FFCC0000，29 格）✓
 4. **H3**：代码确认 WriteMergeGLClosings 遍历 wb.Config.Tree 全叶子，activity 零值安全 ✓
 5. `go test ./...` 全绿；e2e 全流程 + `--keep-json` 通过 ✓
+6. **子 agent 验收 PASS WITH WARNINGS**（1 项已解决）：voucher/parser_test.go 原 196 行 6 场景集成测试误被覆盖 → 已从 ec32ca0 恢复 + 追加红字测试（0576696），voucher 包 6 测试全绿 ✓
 
 ---
 

@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"strings"
+
 	"ledger/voucher"
 
 	"github.com/xuri/excelize/v2"
@@ -325,7 +327,9 @@ func (wb *Workbook) ExtractYtdTotals(accounts []string) (map[string]int64, map[s
 			continue
 		}
 		for monthKey, mb := range node.Balances {
-			if monthKey < wb.Month {
+			// 审计 H1：year-close 会跨年保留 Balances，必须按同年过滤，
+			// 否则新年度的"本年累计"会把上年全年发生额加进来。
+			if strings.HasPrefix(monthKey, wb.Month[:5]) && monthKey < wb.Month {
 				ytdDebit[account] += mb.Debit
 				ytdCredit[account] += mb.Credit
 			}
@@ -347,7 +351,8 @@ func (wb *Workbook) ExtractQuarterlyTotals(accounts []string) (map[string]int64,
 			continue
 		}
 		for monthKey, mb := range node.Balances {
-			if monthKey >= qStart && monthKey < wb.Month {
+			// 同年过滤（审计 H1，与 ytd 保持一致；qStart 已在年内，双保险）
+			if strings.HasPrefix(monthKey, wb.Month[:5]) && monthKey >= qStart && monthKey < wb.Month {
 				qtdDebit[account] += mb.Debit
 				qtdCredit[account] += mb.Credit
 			}

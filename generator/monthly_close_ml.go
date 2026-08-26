@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"strings"
+
 	"ledger/generator/layout"
 	"ledger/voucher"
 
@@ -379,7 +381,8 @@ func (wb *Workbook) getDetailPrevYearTotal(general, detail string) int64 {
 	}
 	var total int64
 	for monthKey, mb := range node.Balances {
-		if monthKey < wb.Month {
+		// 审计 H1：同年过滤，避免跨年把上年发生额计入本年累计
+		if strings.HasPrefix(monthKey, wb.Month[:5]) && monthKey < wb.Month {
 			total += mb.Debit - mb.Credit
 		}
 	}
@@ -395,7 +398,8 @@ func (wb *Workbook) getDetailPrevQuarterTotal(general, detail string) int64 {
 	qStart := quarterStart(wb.Month)
 	var total int64
 	for monthKey, mb := range node.Balances {
-		if monthKey >= qStart && monthKey < wb.Month {
+		// 同年过滤（审计 H1，与 ytd 保持一致；qStart 已在年内，双保险）
+		if strings.HasPrefix(monthKey, wb.Month[:5]) && monthKey >= qStart && monthKey < wb.Month {
 			total += mb.Debit - mb.Credit
 		}
 	}

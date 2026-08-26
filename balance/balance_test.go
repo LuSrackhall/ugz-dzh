@@ -392,6 +392,38 @@ func TestUpdateBalancesAfterGenerate(t *testing.T) {
 	}
 }
 
+func TestUpdateBalancesBackfillInactive(t *testing.T) {
+	// 无分录但期初≠0 的科目（如 add-manual 建账期初）应补充回写 Balances，
+	// 使 check 期初平衡校验能统计到（否则漏检）。
+	cfg := &GlobalConfig{
+		Settings: GlobalSettings{StartMonth: "2026-01"},
+		Tree: map[string]AccountNode{
+			"银行存款-工商银行": {
+				FirstRecord: FirstRecord{Method: "手动调整", Month: "2026-01", Amount: 10000000},
+				Balances:    make(map[string]MonthBalance),
+			},
+		},
+	}
+	activity := map[string]Activity{"库存现金": {Debit: 100, Credit: 100}}
+	initialBalances := map[string]int64{
+		"银行存款-工商银行": 10000000,
+		"库存现金":      0,
+	}
+	if err := UpdateBalancesAfterGenerate(cfg, "2026-01", activity, initialBalances); err != nil {
+		t.Fatalf("UpdateBalancesAfterGenerate: %v", err)
+	}
+	bal, ok := cfg.Tree["银行存款-工商银行"].Balances["2026-01"]
+	if !ok {
+		t.Fatal("银行存款-工商银行 missing 2026-01 balance（补充回写）")
+	}
+	if bal.Initial != 10000000 || bal.Final != 10000000 || bal.Debit != 0 || bal.Credit != 0 {
+		t.Errorf("银行存款-工商银行 2026-01 = %+v, want Initial=Final=10000000 无发生额", bal)
+	}
+	if _, ok := cfg.Tree["库存现金"].Balances["2026-01"]; !ok {
+		t.Error("库存现金 missing 2026-01 balance（有活动正常回写）")
+	}
+}
+
 func TestGetInitBalanceForGenerate(t *testing.T) {
 	cfg := &GlobalConfig{
 		Settings: GlobalSettings{StartMonth: "2026-01"},

@@ -330,6 +330,31 @@ func UpdateBalancesAfterGenerate(cfg *GlobalConfig, month string, activity map[s
 		cfg.Tree[account] = node
 	}
 
+	// 补充回写：期初≠0 但当月无分录的科目（如 add-manual 建账期初、无活动但有余额科目），
+	// 使其 Balances 与期初表/GL 期初行一致——否则 check 期初平衡校验会漏检这些科目的期初。
+	for account, init := range initialBalances {
+		if init == 0 {
+			continue
+		}
+		if _, hasAct := activity[account]; hasAct {
+			continue
+		}
+		node, ok := cfg.Tree[account]
+		if !ok {
+			continue
+		}
+		if node.Balances == nil {
+			node.Balances = make(map[string]MonthBalance)
+		}
+		node.Balances[month] = MonthBalance{
+			Initial: init,
+			Debit:   0,
+			Credit:  0,
+			Final:   init,
+		}
+		cfg.Tree[account] = node
+	}
+
 	return nil
 }
 

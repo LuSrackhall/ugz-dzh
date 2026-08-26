@@ -19,6 +19,12 @@
 - [x] 3.2 e2e 全流程通过
 - [x] 3.3 实测：期初调整落建账月（2025-10 期初=100000 + 账页"期初余额"行）；非建账月续链（2025-11=10 月末）；中途修正（add-manual 100000→150000 幂等更新，-f 重建后 2025-10/11 期初=150000）
 
+## 4. 手动验证发现并修复（补充回写缺口）
+
+- [x] 4.1 发现：add-manual 建账期初科目当月无分录 → Balances 不回写 → check 期初平衡**漏检**（期初表 +100000 不平却显示通过）
+- [x] 4.2 修复：`UpdateBalancesAfterGenerate` 对"期初≠0 但当月无分录"科目补充回写 Balances（期初=期末=调整额），与期初表/GL 期初行一致
+- [x] 4.3 测试：TestUpdateBalancesBackfillInactive；实测 check 正确报"期初借贷不平衡 差额 100000 元"
+
 ---
 
 ## Post-Implementation Workflow

@@ -42,6 +42,15 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("目录 %s 中没有解析到任何凭证分录", voucherDir)
 		}
 
+		// 借贷平衡校验（审计 H2，CLI 内建安全：不平拒绝生成）
+		warnings, err := voucher.ValidateVoucherBalance(entries)
+		if err != nil {
+			return fmt.Errorf("凭证借贷平衡校验失败: %w", err)
+		}
+		for _, w := range warnings {
+			fmt.Printf("提示: %s\n", w)
+		}
+
 		// 同年同月校验 + 推导年份月份
 		year, month, err := validateSameMonth(entries)
 		if err != nil {

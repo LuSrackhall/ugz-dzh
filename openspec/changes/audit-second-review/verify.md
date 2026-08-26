@@ -47,6 +47,7 @@
 4. **H3**：代码确认 WriteMergeGLClosings 遍历 wb.Config.Tree 全叶子，activity 零值安全 ✓
 5. `go test ./...` 全绿；e2e 全流程 + `--keep-json` 通过 ✓
 6. **子 agent 验收 PASS WITH WARNINGS**（1 项已解决）：voucher/parser_test.go 原 196 行 6 场景集成测试误被覆盖 → 已从 ec32ca0 恢复 + 追加红字测试（0576696），voucher 包 6 测试全绿 ✓
+7. **验证流程再抓 H3 缺口（eea799d）**：仅遍历 Tree 时当月**首次出现**子科目尚未回写进 Tree（新年首月）→ 合并"本年累计"漏计；改为 activity ∪ Tree 并集遍历。实测：1 月首次=10000 ✓、2 月无活动=10000 ✓（修复前 1 月=0）✓
 
 ---
 

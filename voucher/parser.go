@@ -215,6 +215,19 @@ func parseAmountToCents(s string) (int64, bool) {
 	s = strings.ReplaceAll(s, "，", ",")
 	s = strings.ReplaceAll(s, " ", "")
 	s = strings.ReplaceAll(s, "　", "")
+
+	// 红字（负数）格式归一（审计二审 H2）：
+	//   - 括号 (500) → 负数（剥括号后若内容无负号则取反）
+	//   - 全角减号 － / Unicode 减号 − → ASCII '-'
+	neg := false
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") && strings.Contains(s, ")") {
+		neg = true
+		s = strings.TrimPrefix(s, "(")
+		s = strings.TrimSuffix(s, ")")
+	}
+	s = strings.ReplaceAll(s, "－", "-")
+	s = strings.ReplaceAll(s, "−", "-")
+
 	keepRx := regexp.MustCompile(`[^0-9.\-]`)
 	clean := keepRx.ReplaceAllString(s, "")
 	if clean == "" {
@@ -227,6 +240,9 @@ func parseAmountToCents(s string) (int64, bool) {
 	val, err := strconv.ParseFloat(clean, 64)
 	if err != nil {
 		return 0, false
+	}
+	if neg && val > 0 {
+		val = -val
 	}
 	cents := int64(math.Round(val * 100))
 	return cents, true

@@ -257,13 +257,13 @@ func (wb *Workbook) WriteMergeGLClosings(activity map[string]Activity, ytdDebit,
 		parentInitial += initials[general]
 
 		// 汇总本年累计 = 截至上月的 ytd + 当月 activity
+		// 遍历 Tree 全部叶子（含当月无分录但有历史累计者）——审计二审 H3：
+		// 原实现只遍历 activity，无活动子科目的历史累计被漏，父级累计 < 叶子之和。
 		var cumDebit, cumCredit int64
-		for k := range activity {
+		for k := range wb.Config.Tree {
 			if isChildOf(k, general) {
-				cumDebit += ytdDebit[k]
-				cumCredit += ytdCredit[k]
-				cumDebit += activity[k].Debit
-				cumCredit += activity[k].Credit
+				cumDebit += ytdDebit[k] + activity[k].Debit
+				cumCredit += ytdCredit[k] + activity[k].Credit
 			}
 		}
 		if a, ok := activity[general]; ok {
@@ -274,12 +274,10 @@ func (wb *Workbook) WriteMergeGLClosings(activity map[string]Activity, ytdDebit,
 		// 汇总本季累计
 		var qtDebit, qtCredit int64
 		if isQuarterEnd(wb.Month) {
-			for k := range activity {
+			for k := range wb.Config.Tree {
 				if isChildOf(k, general) {
-					qtDebit += qtdDebit[k]
-					qtCredit += qtdCredit[k]
-					qtDebit += activity[k].Debit
-					qtCredit += activity[k].Credit
+					qtDebit += qtdDebit[k] + activity[k].Debit
+					qtCredit += qtdCredit[k] + activity[k].Credit
 				}
 			}
 			if a, ok := activity[general]; ok {

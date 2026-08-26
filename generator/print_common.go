@@ -315,16 +315,16 @@ func restoreSheetOrder(f *excelize.File, name string, origIdx int) {
 
 // printSheetConfig 描述一个 Sheet 的打印变换参数。
 type printSheetConfig struct {
-	totalViewCols   int              // 查看版总列数
-	amountCols      []int            // 金额列号（1-indexed）
-	splitCols       map[int]int      // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
-	splitNA         map[int]int      // 非金额列 → 展开列数（如 GL 摘要列 4 格；文本合并回单格、空值仅继承边界）
-	splitNAPixelDelta map[int]float64 // 拆分非金额列的总像素增量（可为负；如 GL 摘要列 -3px）
-	dataAlignCols   map[int]string   // 非金额列 → 数据区（isDataRow，不含表头）横向对齐覆盖（如 GL 号列/借或贷列 "center"）
-	isLabelRow      func(r int) bool // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
-	isDataRow       func(r int) bool // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
-	breakViewCol    int              // 查看版垂直分页符所在列
-	applyPageLayout func(f *excelize.File, sheet string, breakPrintCol, lastRow int)
+	totalViewCols     int              // 查看版总列数
+	amountCols        []int            // 金额列号（1-indexed）
+	splitCols         map[int]int      // 金额列 → 展开小列数（未覆盖默认 12；ML: 借/贷/余 11、明细 10）
+	splitNA           map[int]int      // 非金额列 → 展开列数（如 GL 摘要列 4 格；文本合并回单格、空值仅继承边界）
+	splitNAPixelDelta map[int]float64  // 拆分非金额列的总像素增量（可为负；如 GL 摘要列 -3px）
+	dataAlignCols     map[int]string   // 非金额列 → 数据区（isDataRow，不含表头）横向对齐覆盖（如 GL 号列/借或贷列 "center"）
+	isLabelRow        func(r int) bool // 12 小列标签行（GL: SubHeaderRow+1；ML: 每 block 的 h4）
+	isDataRow         func(r int) bool // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
+	breakViewCol      int              // 查看版垂直分页符所在列
+	applyPageLayout   func(f *excelize.File, sheet string, breakPrintCol, lastRow int)
 	// amountColPixel 金额小列的目标渲染像素宽（>0 时启用，0 = 按查看版列宽均分/字符守恒）。
 	// 用户定值（ML）= 14：缓解 Excel 每列 +5px 像素取整导致的区域膨胀。
 	amountColPixel float64
@@ -458,8 +458,8 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	}
 
 	// 单元格
-	digitCache := make(map[[3]int]int) // (styleID,k,n) → 数据数字格样式（7pt）
-	labelCache := make(map[[3]int]int) // (styleID,k,n) → 表头单位行标签格样式（5pt，折中B）
+	digitCache := make(map[[4]int]int) // (styleID,k,n,red) → 数据数字格样式（7pt）
+	labelCache := make(map[[4]int]int) // (styleID,k,n,red) → 表头单位行标签格样式（5pt，折中B）
 	alignCache := make(map[string]int) // "sid|对齐" → 数据区横向对齐覆盖样式
 	var extraMerges []metaMerge        // 文本标签新建的 12 列合并
 	for _, cell := range meta.cells {
@@ -543,7 +543,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if sid != 0 {
 				for k := 0; k < n; k++ {
 					pc := cm.startCol(c) + k
-					lid := amountSubStyle(f, sid, k, labelCache, n, cfg.labelFontSize, 0, "")
+					lid := amountSubStyle(f, sid, k, labelCache, n, cfg.labelFontSize, 0, "", false)
 					_ = f.SetCellValue(sheet, cellAxis(pc, r), labels[k])
 					_ = f.SetCellStyle(sheet, cellAxis(pc, r), cellAxis(pc, r), lid)
 				}
@@ -565,13 +565,14 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if val != "" {
 				cents, _ = yuanStrToCents(val)
 			}
+			red := cents < 0 // 红字（负数）：数字用红色字体标记（审计二审 H2，手工账红笔惯例）
 			if cents < 0 {
 				cents = -cents
 			}
 			digits := splitCNY(cents, n)
 			for k := 0; k < n; k++ {
 				pc := cm.startCol(c) + k
-				did := amountSubStyle(f, sid, k, digitCache, n, 0, cfg.dataFontSize, cfg.dataFontFamily)
+				did := amountSubStyle(f, sid, k, digitCache, n, 0, cfg.dataFontSize, cfg.dataFontFamily, red)
 				if digits[k] != "" {
 					_ = f.SetCellValue(sheet, cellAxis(pc, r), digits[k])
 				}
@@ -631,11 +632,16 @@ func cellAxis(col, row int) string {
 // 字体：标签格 labelSize（ML 5pt）、数据数字格 dataSize（ML 6pt，dataFamily=Noteworthy；
 // GL 0 → printDigitFontSize 7pt 由 applyPrintFont 统一宋体）；颜色取原样式（金额格无字体=默认黑；表头标签格=绿色）。
 // 边框：上/下继承原样式；左 = (k==0? 原左 : 分组线[k-1])；右 = (k==n-1? 原右 : 分组线[k])。
-func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[3]int]int, n int, labelSize, dataSize float64, dataFamily string) int {
-	// key 含 n：同一 styleID 在 GL(12列)/ML(11,10列) 下 k 相同但含义不同（元位置不同），
-	// 若不含 n 会缓存串用，导致红细线/加粗线错位、列内部出现不该有的红线。
+// amountSubStyle 构建并缓存"金额小格"样式（含分组竖线/继承边框；red 时数字红色=红字标记）。
+func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[4]int]int, n int, labelSize, dataSize float64, dataFamily string, red bool) int {
+	// key 含 n 与 red：同一 styleID 在 GL(12列)/ML(11,10列) 下 k 相同但含义不同（元位置不同），
+	// 红/黑字体也必须区分（审计二审 H2：红字打印红色标记，防缓存串用）。
 	// 标签/数字用各自独立 cache（labelCache / digitCache），字体 5pt vs 7pt 互不串用。
-	key := [3]int{origStyleID, k, n}
+	redFlag := 0
+	if red {
+		redFlag = 1
+	}
+	key := [4]int{origStyleID, k, n, redFlag}
 	if id, ok := cache[key]; ok {
 		return id
 	}
@@ -653,8 +659,10 @@ func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[3]int]int, 
 	if labelSize == 0 && dataFamily != "" {
 		st.Font.Family = dataFamily
 	}
-	// 取原样式字体颜色（金额格通常无字体即黑色；表头标签格取绿色）
-	if def, err := f.GetStyle(origStyleID); err == nil && def.Font != nil {
+	// 取原样式字体颜色（金额格通常无字体即黑色；表头标签格取绿色）；红字强制 #CC0000
+	if red {
+		st.Font.Color = "#CC0000"
+	} else if def, err := f.GetStyle(origStyleID); err == nil && def.Font != nil {
 		if def.Font.Color != "" {
 			st.Font.Color = def.Font.Color
 		}
@@ -691,8 +699,8 @@ func amountSubStyle(f *excelize.File, origStyleID, k int, cache map[[3]int]int, 
 // 与 amountSubStyle 的区别：中间格（k=1..10）左右**无边框**——不生成分组竖线
 // （避免溢出到标题区），也不复制原红双线（避免 12 条双线）。
 // 边框：上/下继承原样式（水平线铺满 12 格）；左 = k==0 ? 原左边框 : 无；右 = k==11 ? 原右边框 : 无。
-func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[3]int]int, n int) int {
-	key := [3]int{origStyleID, k, n}
+func amountEdgeStyle(f *excelize.File, origStyleID, k int, cache map[[4]int]int, n int) int {
+	key := [4]int{origStyleID, k, n, 0}
 	if id, ok := cache[key]; ok {
 		return id
 	}

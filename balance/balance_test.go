@@ -536,6 +536,28 @@ func TestInferPropertyByType(t *testing.T) {
 	}
 }
 
+func TestGetInitBalanceZeroBalanceRecent(t *testing.T) {
+	// 审计二审 H1：最近月期末=0（结平）的科目跨年首月，期初必须=0，
+	// 不得跳过 0 回退到更早非零月（凭空复活余额）。
+	cfg := &GlobalConfig{
+		Settings: GlobalSettings{StartMonth: "2025-10"},
+		Tree: map[string]AccountNode{
+			"应付款-某户": {Balances: map[string]MonthBalance{
+				"2025-11": {Final: 50000},
+				"2025-12": {Final: 0}, // 结平
+			}},
+		},
+	}
+	if got := GetInitBalanceForGenerate(cfg, "应付款-某户", "2026-01", map[string]int64{}); got != 0 {
+		t.Errorf("结平科目跨年期初 = %d, want 0（不翻旧账）", got)
+	}
+	// 对照：最近月期末非零 → 取最近月
+	cfg.Tree["应付款-某户"].Balances["2025-12"] = MonthBalance{Final: 30000}
+	if got := GetInitBalanceForGenerate(cfg, "应付款-某户", "2026-01", map[string]int64{}); got != 30000 {
+		t.Errorf("非结平科目跨年期初 = %d, want 30000", got)
+	}
+}
+
 func TestInitialBalanceDiff(t *testing.T) {
 	if d := InitialBalanceDiff(map[string]int64{"a": 100, "b": -100}); d != 0 {
 		t.Errorf("balanced diff = %d, want 0", d)

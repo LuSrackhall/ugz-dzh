@@ -388,11 +388,12 @@ func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMon
 	// 3. 从 JSON 科目树中取最近月份的期末余额作为期初
 	node, ok := cfg.Tree[account]
 	if ok {
-		// 找最新的有余额的月份
+		// 取最新月份的期末余额（含 0）——不得跳过期末=0 的月份回退到更早非零月
+		// （审计二审 H1：年末结平科目跨年首月会凭空复活更早月余额）
 		var latestMonth string
 		var latestBal int64
 		for m, mb := range node.Balances {
-			if m < month && mb.Final != 0 && (latestMonth == "" || m > latestMonth) {
+			if m < month && (latestMonth == "" || m > latestMonth) {
 				latestMonth = m
 				latestBal = mb.Final
 			}

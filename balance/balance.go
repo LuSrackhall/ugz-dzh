@@ -330,38 +330,37 @@ func UpdateBalancesAfterGenerate(cfg *GlobalConfig, month string, activity map[s
 		cfg.Tree[account] = node
 	}
 
-	ensureBackfillForAll(cfg, month)
 	return nil
 }
 
 // GetInitBalanceForGenerate 获取某科目在某月的期初余额（分）。
 // prevMonthEnd 为上月各科目的期末余额。
-// 期初来源优先级（铁律二：除生效月当月外，一律走连续链）：
-//  1. 手动调整科目：生效月==month 且 调整额≠0 → 调整额
-//  2. 自动识别科目：首次月==month 且 调整额≠0 → 调整额
-//  3. 上月期末 prevMonthEnd
-//  4. 科目树中最近月份的期末余额（m < month）
-//  5. 0
+// 期初来源优先级（期初锚定建账月，铁律二：除建账月当月外，一律走连续链）：
+//  1. 建账月（启动月==month）时：手动调整科目 / 自动识别科目 调整额≠0 → 期初=调整额
+//  2. 上月期末 prevMonthEnd
+//  3. 科目树中最近月份的期末余额（m < month）
+//  4. 0
 func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMonthEnd map[string]int64) int64 {
-	// 1. 手动调整科目：仅生效月当月直取调整额（不覆盖后续月份，保证余额链连续）
-	for _, m := range cfg.ManualItems {
-		if m.Account == account && m.EffectiveMonth == month && m.Adjustment != 0 {
-			return YuanToCents(m.Adjustment)
+	// 1. 期初调整额只锚定建账月（启动月）：生成启动月时直取，其余月份一律续链
+	if month == cfg.Settings.StartMonth {
+		for _, m := range cfg.ManualItems {
+			if m.Account == account && m.Adjustment != 0 {
+				return YuanToCents(m.Adjustment)
+			}
 		}
-	}
-	// 2. 自动识别科目：仅首次月当月直取调整额
-	for _, a := range cfg.AutoItems {
-		if a.Account == account && a.FirstMonth == month && a.Adjustment != 0 {
-			return YuanToCents(a.Adjustment)
+		for _, a := range cfg.AutoItems {
+			if a.Account == account && a.Adjustment != 0 {
+				return YuanToCents(a.Adjustment)
+			}
 		}
 	}
 
-	// 3. 上月期末
+	// 2. 上月期末
 	if end, ok := prevMonthEnd[account]; ok {
 		return end
 	}
 
-	// 4. 从 JSON 科目树中取最近月份的期末余额作为期初
+	// 3. 从 JSON 科目树中取最近月份的期末余额作为期初
 	node, ok := cfg.Tree[account]
 	if ok {
 		// 找最新的有余额的月份
@@ -381,37 +380,50 @@ func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMon
 	return 0
 }
 
-// HasInitialAdjustment 判断某科目在某月的期初是否来自期初调整额（生效月/首次月==当前月且调整额≠0）。
+// HasInitialAdjustment 判断某科目在某月的期初是否来自期初调整额（仅建账月/启动月）。
 func HasInitialAdjustment(cfg *GlobalConfig, account, month string) bool {
+	if month != cfg.Settings.StartMonth {
+		return false
+	}
 	for _, m := range cfg.ManualItems {
-		if m.Account == account && m.EffectiveMonth == month && m.Adjustment != 0 {
+		if m.Account == account && m.Adjustment != 0 {
 			return true
 		}
 	}
 	for _, a := range cfg.AutoItems {
-		if a.Account == account && a.FirstMonth == month && a.Adjustment != 0 {
+		if a.Account == account && a.Adjustment != 0 {
 			return true
 		}
 	}
 	return false
 }
 
-// AddManualAdjustment 添加手动调整科目到配置。
+// AddManualAdjustment 设置/修改手动调整科目的建账月期初值。
+// 同科目已有条目 → 更新调整额/说明（修正期初）；无则追加。幂等，不报"已存在"。
+// effectiveMonth 仅作信息性记录（补录时点），不参与期初计算（期初锚定建账月）。
 func AddManualAdjustment(cfg *GlobalConfig, account, effectiveMonth string, adjustmentYuan float64, note string) error {
 	amount := YuanToCents(adjustmentYuan)
 
-	for _, m := range cfg.ManualItems {
-		if m.Account == account && m.EffectiveMonth == effectiveMonth {
-			return fmt.Errorf("手动调整科目 %s 在 %s 已存在", account, effectiveMonth)
+	updated := false
+	for i := range cfg.ManualItems {
+		if cfg.ManualItems[i].Account == account {
+			cfg.ManualItems[i].Adjustment = adjustmentYuan
+			cfg.ManualItems[i].Note = note
+			if effectiveMonth != "" {
+				cfg.ManualItems[i].EffectiveMonth = effectiveMonth
+			}
+			updated = true
+			break
 		}
 	}
-
-	cfg.ManualItems = append(cfg.ManualItems, ManualItem{
-		Account:        account,
-		EffectiveMonth: effectiveMonth,
-		Adjustment:     adjustmentYuan,
-		Note:           note,
-	})
+	if !updated {
+		cfg.ManualItems = append(cfg.ManualItems, ManualItem{
+			Account:        account,
+			EffectiveMonth: effectiveMonth,
+			Adjustment:     adjustmentYuan,
+			Note:           note,
+		})
+	}
 
 	if cfg.Tree == nil {
 		cfg.Tree = make(map[string]AccountNode)
@@ -437,7 +449,6 @@ func AddManualAdjustment(cfg *GlobalConfig, account, effectiveMonth string, adju
 	}
 	cfg.Tree[account] = node
 
-	ensureBackfillForAll(cfg, effectiveMonth)
 	return nil
 }
 
@@ -478,48 +489,6 @@ func ValidateAccountTree(cfg *GlobalConfig) error {
 	}
 
 	return nil
-}
-
-// --- 期初前推 ---
-
-// ensureBackfillForAll 只对"手动调整科目"（调整额≠0）回填余额记录：从启动月到生效月-1。
-// 自动识别科目一律不回填（审计 M2：避免首月净额被误当期初调整回填产生幻影期初）。
-func ensureBackfillForAll(cfg *GlobalConfig, currentMonth string) {
-	start := cfg.Settings.StartMonth
-	if start == "" {
-		return
-	}
-
-	for _, m := range cfg.ManualItems {
-		amount := YuanToCents(m.Adjustment)
-		if amount == 0 || m.EffectiveMonth == "" {
-			continue
-		}
-		// 生效月不晚于启动月（无需前置回填）或尚未生效（生效月 > 当前月）
-		if cmpMonth(m.EffectiveMonth, start) <= 0 || cmpMonth(m.EffectiveMonth, currentMonth) > 0 {
-			continue
-		}
-
-		node, ok := cfg.Tree[m.Account]
-		if !ok {
-			continue // 科目树缺失，交由 ValidateAccountTree 报不一致
-		}
-		if node.Balances == nil {
-			node.Balances = make(map[string]MonthBalance)
-		}
-
-		for mm := start; cmpMonth(mm, m.EffectiveMonth) < 0; mm = nextMonth(mm) {
-			if _, exists := node.Balances[mm]; !exists {
-				node.Balances[mm] = MonthBalance{
-					Initial: amount,
-					Debit:   0,
-					Credit:  0,
-					Final:   amount,
-				}
-			}
-		}
-		cfg.Tree[m.Account] = node
-	}
 }
 
 // --- 期初迁移与校验 ---

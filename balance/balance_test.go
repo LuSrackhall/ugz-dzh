@@ -397,27 +397,27 @@ func TestGetInitBalanceForGenerate(t *testing.T) {
 		Settings: GlobalSettings{StartMonth: "2026-01"},
 		Tree: map[string]AccountNode{
 			"其他应收款-张三": {
-				FirstRecord: FirstRecord{Method: "手动调整", Month: "2026-08", Amount: 150000},
+				FirstRecord: FirstRecord{Method: "手动调整", Month: "2026-01", Amount: 150000},
 			},
 		},
 		ManualItems: []ManualItem{
-			{Account: "其他应收款-张三", EffectiveMonth: "2026-08", Adjustment: 1500.00},
+			{Account: "其他应收款-张三", EffectiveMonth: "2026-01", Adjustment: 1500.00},
 		},
 	}
 
 	prev := map[string]int64{
 		"库存现金":     500000,
-		"其他应收款-张三": 160000, // 2026-07 期末（模拟续链）
+		"其他应收款-张三": 160000, // 2026-01 期末（模拟续链）
 	}
 
-	// Priority 1: 手动调整科目生效月当月 → 直取调整额
-	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-08", prev); got != 150000 {
-		t.Errorf("其他应收款-张三 init = %d, want 150000（生效月调整额）", got)
+	// Priority 1: 建账月（启动月）→ 直取调整额
+	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-01", prev); got != 150000 {
+		t.Errorf("其他应收款-张三 init = %d, want 150000（建账月调整额）", got)
 	}
 
-	// 生效月之后续链：期初=上月期末，不被调整额覆盖（铁律二）
-	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-09", prev); got != 160000 {
-		t.Errorf("其他应收款-张三 2026-09 init = %d, want 160000（上月期末续链）", got)
+	// 非建账月续链：期初=上月期末，调整额不覆盖（铁律二）
+	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-02", prev); got != 160000 {
+		t.Errorf("其他应收款-张三 2026-02 init = %d, want 160000（上月期末续链）", got)
 	}
 
 	// Priority 2: prevMonthEnd
@@ -432,7 +432,7 @@ func TestGetInitBalanceForGenerate(t *testing.T) {
 }
 
 func TestGetInitBalanceCrossYearNoOverride(t *testing.T) {
-	// 跨年：自动识别科目首次月在上年，2026 各月不命中调整额 → 期初=上年末（prevFinals），不被覆盖
+	// 跨年：建账月为 2025-10，2026 各月非建账月 → 期初=上年末（prevFinals），调整额不覆盖
 	cfg := &GlobalConfig{
 		Settings: GlobalSettings{StartMonth: "2025-10"},
 		AutoItems: []AutoItem{
@@ -443,27 +443,9 @@ func TestGetInitBalanceCrossYearNoOverride(t *testing.T) {
 	if got := GetInitBalanceForGenerate(cfg, "银行存款", "2026-01", prev); got != 12345600 {
 		t.Errorf("跨年 2026-01 init = %d, want 12345600（上年末，调整额不覆盖）", got)
 	}
-	// 首次月当月仍命中调整额
+	// 建账月（=启动月 2025-10）命中调整额
 	if got := GetInitBalanceForGenerate(cfg, "银行存款", "2025-10", map[string]int64{}); got != 500000 {
-		t.Errorf("2025-10 init = %d, want 500000（首次月调整额）", got)
-	}
-}
-
-func TestAutoAccountNoBackfill(t *testing.T) {
-	// 自动识别科目：FirstRecord.Amount 恒 0，且 ensureBackfillForAll 不回填
-	cfg := &GlobalConfig{
-		Settings: GlobalSettings{StartMonth: "2026-01"},
-		Tree: map[string]AccountNode{
-			"银行存款": {
-				FirstRecord: FirstRecord{Method: "自动识别", Month: "2026-05", Amount: 123456},
-				Balances:    make(map[string]MonthBalance),
-			},
-		},
-	}
-	ensureBackfillForAll(cfg, "2026-05")
-	node := cfg.Tree["银行存款"]
-	if len(node.Balances) != 0 {
-		t.Errorf("自动识别科目不应回填，got %d 条记录", len(node.Balances))
+		t.Errorf("2025-10 init = %d, want 500000（建账月调整额）", got)
 	}
 }
 
@@ -562,10 +544,17 @@ func TestAddManualAdjustment(t *testing.T) {
 		t.Errorf("amount = %d, want 200000", node.FirstRecord.Amount)
 	}
 
-	// Duplicate should fail
+	// Duplicate: 幂等更新（修正建账月期初值），不报错
 	err = AddManualAdjustment(cfg, "其他应收款-李四", "2026-05", 100.00, "重复")
-	if err == nil {
-		t.Error("expected error for duplicate manual adjustment")
+	if err != nil {
+		t.Errorf("重复 add-manual 应更新而非报错: %v", err)
+	}
+	if cfg.ManualItems[0].Adjustment != 100.00 {
+		t.Errorf("调整额 = %f, want 100（已更新）", cfg.ManualItems[0].Adjustment)
+	}
+	updatedNode := cfg.Tree["其他应收款-李四"]
+	if updatedNode.FirstRecord.Amount != 10000 {
+		t.Errorf("FirstRecord.Amount = %d, want 10000（同步更新）", updatedNode.FirstRecord.Amount)
 	}
 }
 
@@ -632,49 +621,6 @@ func TestValidateAccountTree(t *testing.T) {
 	}
 	if err := ValidateAccountTree(cfg3); err == nil {
 		t.Error("expected error for missing account in tree")
-	}
-}
-
-func TestBackfill(t *testing.T) {
-	cfg := &GlobalConfig{
-		Settings: GlobalSettings{StartMonth: "2026-01"},
-		ManualItems: []ManualItem{
-			{Account: "其他应收款-张三", EffectiveMonth: "2026-03", Adjustment: 1500.00},
-		},
-		Tree: map[string]AccountNode{
-			"其他应收款-张三": {
-				Property: "借",
-				FirstRecord: FirstRecord{
-					Method: "手动调整",
-					Month:  "2026-03",
-					Amount: 150000,
-				},
-				Balances: make(map[string]MonthBalance),
-			},
-		},
-	}
-
-	ensureBackfillForAll(cfg, "2026-03")
-
-	node := cfg.Tree["其他应收款-张三"]
-	// Should have balances for 2026-01 and 2026-02
-	for _, m := range []string{"2026-01", "2026-02"} {
-		bal, ok := node.Balances[m]
-		if !ok {
-			t.Errorf("missing backfill for %s", m)
-			continue
-		}
-		if bal.Initial != 150000 || bal.Final != 150000 {
-			t.Errorf("%s: initial=%d final=%d, want 150000", m, bal.Initial, bal.Final)
-		}
-		if bal.Debit != 0 || bal.Credit != 0 {
-			t.Errorf("%s: should have zero activity", m)
-		}
-	}
-
-	// Should NOT have balance for 2026-03 (first record month, not backfilled)
-	if _, ok := node.Balances["2026-03"]; ok {
-		t.Error("should not backfill the first record month itself")
 	}
 }
 

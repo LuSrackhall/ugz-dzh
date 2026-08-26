@@ -1,5 +1,7 @@
 # initial-balance Spec
 
+> **Note（2026-08-26 被 audit-initial-anchor 修正）**：本 spec 中"生效月==当前月"/"首次月==当前月"的调整额触发条件，已按会计专家评审改为"**启动月（建账月）==当前月**"——期初调整只落建账月，`生效月`/`首次月份` 字段降级为信息性，`ensureBackfillForAll` 回填机制删除，`add-manual` 改为幂等更新。详见 openspec/changes/audit-initial-anchor/。
+
 ## ADDED Requirements
 
 ### Requirement: 期初调整额在生效月生效

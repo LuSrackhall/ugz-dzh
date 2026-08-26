@@ -57,3 +57,5 @@ year-close 预生成空文件场景（当月文件存在 → 加载，不带 -f�
 - **行为变化**：已有 JSON 中 AutoItems.Adjustment 若被用户手动改过非零值，修复后将开始生效（这正是修复目的），需在验收中覆盖。
 - **已知限制（三路中途补记不一致）**：调整额生效月（非 1 月）的中途补记期初行仅 GL 插入；ML/MergeGL 对已有 Sheet 仍沿用 lastPageBalance 旧链（跨年 1 月场景三路均正确，因为旧链期末=新年期初）。GL 与 ML 在中途补记场景会显示不同的余额起点——spec 已明确该限制，三路一致化列入后续独立 change（涉及 ML 明细列聚合起算，复杂度高）。
 - **-f 删除范围**：仅删除账本文件（YYYY-MM.xlsx），`isMonthXlsxName` 防误删 ledger.xlsx/balance.xlsx 汇总文件（子 agent 验收发现并修复）。
+
+- **审计低优先级项（L1-L3）未处理**：L1 期末表合计口径、L2 期初/期末表零余额科目、L3 ML 月结行借贷/明细口径混用——审计定位"建议但不紧急"，本批修复（H2/M1/M2/M3/M4/死字段）未覆盖；L4 红字负数列示口径已在 audit-voucher-balance 明确。后续如需处理单独开 change。

@@ -7,9 +7,10 @@ import (
 
 // ValidateVoucherBalance 校验凭证借贷平衡（审计 H2，CLI 内建安全）。
 //
-// 规则（绝对值口径，兼容红字）：
-//  1. 按（日期, 凭证号）分组，每组 Σ|借方| == Σ|贷方|；不平衡返回 error（含凭证号与差额）。
-//  2. 借方或贷方为负数（红字）→ warning"红字将显示为负金额"，不自动折入对侧（折入会破坏绝对值平衡）。
+// 规则（带符号净额口径，兼容红字同侧冲抵）：
+//  1. 按（日期, 凭证号）分组，每组 Σ借方 == Σ贷方（带符号求和）；不平衡返回 error（含凭证号与差额）。
+//     红字（负数）直接参与求和：同侧红字冲抵（贷 -11700 + 贷 +11700 = 0）天然平衡。
+//  2. 借方或贷方为负数（红字）→ warning"红字将显示为负金额"，不自动折入对侧。
 //  3. VoucherNum<=0 的条目无法可靠分组，跳过分组校验并 warning。
 //
 // entries 不会被修改。
@@ -59,15 +60,8 @@ func ValidateVoucherBalance(entries []Entry) (warnings []string, err error) {
 	for _, k := range keys {
 		var debit, credit int64
 		for _, e := range groups[k] {
-			d, c := e.DebitCents, e.CreditCents
-			if d < 0 {
-				d = -d
-			}
-			if c < 0 {
-				c = -c
-			}
-			debit += d
-			credit += c
+			debit += e.DebitCents
+			credit += e.CreditCents
 		}
 		if debit != credit {
 			diff := debit - credit

@@ -11,9 +11,34 @@ import (
 // WriteMonthClosings 对有变化的 Sheet 追加"本月合计"、"本季合计"（仅季末）、"本年累计"和"期末余额"行。
 func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit map[string]int64, initials map[string]int64, changedSheets map[string]bool) error {
 	lay := glLayout()
-	for account, act := range activity {
+
+	// M4 无活动月份补月结行：期初（上月末余额）≠0 但当月无分录、且存在 GL Sheet 的科目，
+	// 补"本月合计 0/0 + 本年累计 + 期末余额=期初"行，使账本逐月连续清晰。
+	// 使用副本扩展，不修改入参（不影响 MergeGL/ML 后续处理）。
+	extendedActivity := make(map[string]Activity, len(activity))
+	extendedChanged := make(map[string]bool, len(changedSheets))
+	for k, v := range activity {
+		extendedActivity[k] = v
+		extendedChanged[sheetNameGL(k)] = true
+	}
+	for account, init := range initials {
+		if init == 0 {
+			continue
+		}
+		if _, hasAct := extendedActivity[account]; hasAct {
+			continue
+		}
 		sheet := sheetNameGL(account)
-		if !changedSheets[sheet] {
+		if !wb.hasSheet(sheet) {
+			continue
+		}
+		extendedActivity[account] = Activity{}
+		extendedChanged[sheet] = true
+	}
+
+	for account, act := range extendedActivity {
+		sheet := sheetNameGL(account)
+		if !extendedChanged[sheet] {
 			continue
 		}
 
@@ -188,29 +213,29 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), cumStyle)
 
-			// 应用每5行底边加粗样式（基于固定页结构）
-			if glRowInPage(lay, row)%5 == 0 {
-				ts3, _ := wb.File.NewStyle(&excelize.Style{
-					Font: &excelize.Font{Bold: true, Size: 10},
-					Border: []excelize.Border{
-						{Type: "top", Color: "#006100", Style: 1},
-						{Type: "right", Color: "#006100", Style: 1},
-						{Type: "bottom", Color: "#006100", Style: 2},
-						{Type: "left", Color: "#006100", Style: 1},
-					},
-				})
-				wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
-					cellName(dataCol(lay, pageNum, glColCount-1), row), ts3)
-				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
-				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
-				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
-				} else {
-				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-			}
+		// 应用每5行底边加粗样式（基于固定页结构）
+		if glRowInPage(lay, row)%5 == 0 {
+			ts3, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Bold: true, Size: 10},
+				Border: []excelize.Border{
+					{Type: "top", Color: "#006100", Style: 1},
+					{Type: "right", Color: "#006100", Style: 1},
+					{Type: "bottom", Color: "#006100", Style: 2},
+					{Type: "left", Color: "#006100", Style: 1},
+				},
+			})
+			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+				cellName(dataCol(lay, pageNum, glColCount-1), row), ts3)
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+		} else {
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+		}
 
-			row++
+		row++
 
 		// "期末余额" 行 — 期初 + 本月借 - 本月贷
 		checkBreak()
@@ -237,26 +262,26 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
 			cellName(dataCol(lay, pageNum, glColCount-1), row), endStyle)
 
-			// 应用每5行底边加粗样式（基于固定页结构）
-			if glRowInPage(lay, row)%5 == 0 {
-				ts4, _ := wb.File.NewStyle(&excelize.Style{
-					Font: &excelize.Font{Bold: true, Size: 10},
-					Border: []excelize.Border{
-						{Type: "top", Color: "#006100", Style: 1},
-						{Type: "right", Color: "#006100", Style: 1},
-						{Type: "bottom", Color: "#006100", Style: 2},
-						{Type: "left", Color: "#006100", Style: 1},
-					},
-				})
-				wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
-					cellName(dataCol(lay, pageNum, glColCount-1), row), ts4)
-				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
-				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
-				wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
-			} else {
-				wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-			}
+		// 应用每5行底边加粗样式（基于固定页结构）
+		if glRowInPage(lay, row)%5 == 0 {
+			ts4, _ := wb.File.NewStyle(&excelize.Style{
+				Font: &excelize.Font{Bold: true, Size: 10},
+				Border: []excelize.Border{
+					{Type: "top", Color: "#006100", Style: 1},
+					{Type: "right", Color: "#006100", Style: 1},
+					{Type: "bottom", Color: "#006100", Style: 2},
+					{Type: "left", Color: "#006100", Style: 1},
+				},
+			})
+			wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+				cellName(dataCol(lay, pageNum, glColCount-1), row), ts4)
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
+			wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+		} else {
+			wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 		}
+	}
 
 	return nil
 }

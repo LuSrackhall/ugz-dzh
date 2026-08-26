@@ -174,6 +174,16 @@ func (wb *Workbook) currentPath() string {
 	return filepath.Join(wb.OutputDir, wb.Month+".xlsx")
 }
 
+// hasSheet 判断工作薄中是否存在指定 Sheet。
+func (wb *Workbook) hasSheet(name string) bool {
+	for _, s := range wb.File.GetSheetList() {
+		if s == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Save 保存工作薄到本月文件。
 func (wb *Workbook) Save() error {
 	// 清理默认 "Sheet1" — 此时已有其他 sheet，可以安全删除

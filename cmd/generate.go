@@ -155,7 +155,11 @@ var generateCmd = &cobra.Command{
 			}
 		} else {
 			if _, err := os.Stat(xlsxPath); err == nil {
-				return fmt.Errorf("%s 已存在，使用 -f 覆盖已有 xlsx", xlsxPath)
+				// M3 幂等保护：已含当月"本月合计"行视为已生成，要求 -f；
+				// year-close 预生成的空工作薄（无本月合计行）放行直接生成
+				if done, err := generator.AlreadyGenerated(xlsxPath); err == nil && done {
+					return fmt.Errorf("%s 已生成过（含本月合计行），使用 -f 覆盖重建", xlsxPath)
+				}
 			}
 		}
 		if err := generator.GenerateWorkbook(configJSON, month, yearDir, entries); err != nil {

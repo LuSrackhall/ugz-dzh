@@ -31,19 +31,28 @@ func TestValidateVoucherBalance(t *testing.T) {
 			errContains: "记字第3号",
 		},
 		{
-			name: "红字按绝对值口径通过且提示",
+			name: "红字同侧冲抵按净额口径平衡",
 			entries: []Entry{
-				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 50000, CreditCents: 0},
-				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: -50000},
+				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: -1170000},
+				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: 1170000},
 			},
 			wantErr:     false,
 			minWarnings: 1,
 		},
 		{
-			name: "红字不修改原值",
+			name: "跨侧红字借贷不相等报错",
 			entries: []Entry{
 				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 50000, CreditCents: 0},
 				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: -50000},
+			},
+			wantErr:     true,
+			errContains: "借贷不平衡",
+		},
+		{
+			name: "红字不修改原值",
+			entries: []Entry{
+				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: -1170000},
+				{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: 1170000},
 			},
 			wantErr: false,
 		},
@@ -89,14 +98,14 @@ func TestValidateVoucherBalance(t *testing.T) {
 
 func TestValidateVoucherBalanceRedEntryUnmodified(t *testing.T) {
 	entries := []Entry{
-		{Date: "2026-01-05", VoucherNum: 3, DebitCents: 50000, CreditCents: 0},
-		{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: -50000},
+		{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: -1170000},
+		{Date: "2026-01-05", VoucherNum: 3, DebitCents: 0, CreditCents: 1170000},
 	}
 	if _, err := ValidateVoucherBalance(entries); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// 红字必须保持原值（不折入对侧）
-	if entries[1].CreditCents != -50000 || entries[1].DebitCents != 0 {
-		t.Errorf("红字被修改: entry[1] = %+v, want CreditCents=-50000", entries[1])
+	if entries[0].CreditCents != -1170000 || entries[0].DebitCents != 0 {
+		t.Errorf("红字被修改: entry[0] = %+v, want CreditCents=-1170000", entries[0])
 	}
 }

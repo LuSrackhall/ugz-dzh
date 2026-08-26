@@ -43,3 +43,5 @@ ledger
 # e2e test output
 test/e2e/out/
 test/e2e/test_data
+
+.claude/worktrees/

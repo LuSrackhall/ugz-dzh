@@ -2,6 +2,8 @@
 
 审计发现期初机制五个缺陷：期初调整额死字段（改了不生效）、自动识别科目首月净额污染期初链路（M2 幻影期初）、科目属性按净额猜（M1）、期初行摘要不分来源、无期初试算平衡校验。项目宗旨：JSON 唯一权威源、git 管变更、余额链连续（铁律二）、历史 xlsx 永不修改（铁律一）。
 
+> **Note（2026-08-26 被 audit-initial-anchor 修正）**：本 design 中"生效月==当前月/首次月==当前月"的调整额触发条件已改为"**启动月（建账月）==当前月**"（期初锚定建账月）；`生效月`/`首次月份` 字段降级为信息性；`ensureBackfillForAll` 回填机制已删除；`add-manual` 改为幂等更新。D1/D3 与"期初前推"小节已被 audit-initial-anchor 取代，详见 openspec/changes/audit-initial-anchor/。
+
 ## Goals / Non-Goals
 
 **Goals:**

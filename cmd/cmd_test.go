@@ -6,6 +6,27 @@ import (
 	"testing"
 )
 
+func TestIsMonthXlsxName(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"2026-01.xlsx", true},
+		{"2025-12.xlsx", true},
+		{"ledger.xlsx", false},  // 汇总文件，-f 不得误删
+		{"balance.xlsx", false}, // 汇总文件，-f 不得误删
+		{"2026-1.xlsx", false},
+		{"202601.xlsx", false},
+		{"2026-13.xlsx", true}, // 格式校验不限制月份范围（文件名层面）
+		{"readme.txt", false},
+	}
+	for _, c := range cases {
+		if got := isMonthXlsxName(c.name); got != c.want {
+			t.Errorf("isMonthXlsxName(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestRootCommand(t *testing.T) {
 	if rootCmd.Use != "ledger" {
 		t.Errorf("root command Use = %q, want %q", rootCmd.Use, "ledger")

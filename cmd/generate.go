@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"ledger/balance"
@@ -103,8 +104,9 @@ var generateCmd = &cobra.Command{
 		// 生成月度累计工作薄
 		xlsxPath := filepath.Join(yearDir, month+".xlsx")
 		if force {
-			// 级联删除当月及之后所有月份的查看版 xlsx（当月旧文件必须删除，否则 NewWorkbook 会加载旧当月文件
+			// 级联删除当月及之后所有月份的账本 xlsx（当月旧文件必须删除，否则 NewWorkbook 会加载旧当月文件
 			// 并把旧版当月期末当作"上月期末"，导致 -f 重建期初被污染）
+			// 仅删除账本文件（YYYY-MM.xlsx），绝不误删 ledger.xlsx / balance.xlsx 汇总文件
 			entries, err := os.ReadDir(yearDir)
 			if err == nil {
 				for _, entry := range entries {
@@ -112,7 +114,7 @@ var generateCmd = &cobra.Command{
 						continue
 					}
 					name := entry.Name()
-					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") >= month {
+					if isMonthXlsxName(name) && strings.TrimSuffix(name, ".xlsx") >= month {
 						path := filepath.Join(yearDir, name)
 						if err := os.Remove(path); err != nil {
 							return fmt.Errorf("删除 %s: %w", path, err)
@@ -131,7 +133,7 @@ var generateCmd = &cobra.Command{
 						continue
 					}
 					name := entry.Name()
-					if strings.HasSuffix(name, ".xlsx") && strings.TrimSuffix(name, ".xlsx") >= month {
+					if isMonthXlsxName(name) && strings.TrimSuffix(name, ".xlsx") >= month {
 						path := filepath.Join(printDir, name)
 						if err := os.Remove(path); err != nil {
 							return fmt.Errorf("删除 %s: %w", path, err)
@@ -162,6 +164,21 @@ var generateCmd = &cobra.Command{
 		fmt.Printf("已生成 %s/%s 工作薄，共 %d 条分录\n", year, month, len(entries))
 		return nil
 	},
+}
+
+// isMonthXlsxName 判断文件名是否为账本文件（YYYY-MM.xlsx），避免 -f 级联删除误伤 ledger.xlsx / balance.xlsx 汇总文件。
+func isMonthXlsxName(name string) bool {
+	trimmed := strings.TrimSuffix(name, ".xlsx")
+	if len(trimmed) != 7 || trimmed[4] != '-' {
+		return false
+	}
+	if _, err := strconv.Atoi(trimmed[:4]); err != nil {
+		return false
+	}
+	if _, err := strconv.Atoi(trimmed[5:]); err != nil {
+		return false
+	}
+	return true
 }
 
 // validateSameMonth 校验所有凭证是否来自同一年同一月，返回推导的年份和月份。

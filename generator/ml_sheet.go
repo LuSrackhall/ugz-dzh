@@ -198,7 +198,7 @@ func (wb *Workbook) mlLastPageBalance(sheet string) int64 {
 			sum = strings.TrimSpace(r[sumIdx])
 		}
 		switch sum {
-		case carryForwardLabel, "上年结转", "本月合计", "本季合计", "本年累计", periodEndLabel, pageBreakLabel:
+		case carryForwardLabel, "期初余额", "上年结转", "本月合计", "本季合计", "本年累计", periodEndLabel, pageBreakLabel:
 			continue
 		}
 		balStr := strings.TrimSpace(r[balIdx])

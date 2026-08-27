@@ -32,6 +32,9 @@ build/
 *.log
 logs/
 
+# Auto-generated closing vouchers（派生产物：可由 JSON 余额幂等重建，同 xlsx 账本不进 git）
+closing/
+
 test/e2e/test_data/*
 
 # Project

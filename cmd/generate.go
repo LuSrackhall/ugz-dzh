@@ -22,7 +22,7 @@ func init() {
 	generateCmd.Flags().BoolP("force", "f", false, "覆盖已有 xlsx")
 	generateCmd.Flags().BoolP("verbose", "V", false, "输出详细日志")
 	generateCmd.Flags().StringP("platform", "p", "auto", "打印版目标平台: auto(当前系统)/mac/windows")
-	generateCmd.Flags().String("config", "", "打印版配置文件 (print-config.json)：必须显式传参才会加载（不会自动查找当前目录）。英文键格式 platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}，文件须 UTF-8 无 BOM；只作用于打印版 print/ 目录，须重新 generate 后查看新文件。模板见 docs/print-config.example.json，说明见 docs/print-config.md")
+	generateCmd.Flags().String("config", "", "打印版配置文件 (print-config.json)：显式 --config 优先；未传则自动加载当前工作目录下的 print-config.json（有则生效，无则用默认值）。英文键格式 platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}，文件须 UTF-8 无 BOM；只作用于打印版 print/ 目录，须重新 generate 后查看新文件。模板见 docs/print-config.example.json，说明见 docs/print-config.md")
 	generateCmd.MarkFlagRequired("voucherDir")
 }
 
@@ -38,13 +38,25 @@ var generateCmd = &cobra.Command{
 		platform, _ := cmd.Flags().GetString("platform")
 		printConfigPath, _ := cmd.Flags().GetString("config")
 		generator.PrintPlatform = platform // 先定平台，配置加载与生成都基于它
+		// 自动发现：未显式传 --config 时，自动加载当前工作目录下的 print-config.json（若有）
+		autoConfig := ""
+		if printConfigPath == "" {
+			if _, err := os.Stat("print-config.json"); err == nil {
+				autoConfig = "print-config.json"
+				printConfigPath = autoConfig
+			}
+		}
 		if err := generator.LoadPrintConfig(printConfigPath); err != nil {
 			return err
 		}
 		if printConfigPath != "" {
-			fmt.Printf("打印版配置已加载: %s → %s\n", printConfigPath, generator.CurrentConfigSummary())
+			where := "已加载"
+			if autoConfig != "" {
+				where = "已自动发现当前目录"
+			}
+			fmt.Printf("打印版配置%s: %s → %s\n", where, printConfigPath, generator.CurrentConfigSummary())
 		} else {
-			fmt.Printf("打印版配置: 默认 → %s（可用 --config print-config.json 自定义）\n", generator.CurrentConfigSummary())
+			fmt.Printf("打印版配置: 默认 → %s（可放 print-config.json 到当前目录自动生效，或 --config 显式指定）\n", generator.CurrentConfigSummary())
 		}
 
 		// 收集所有凭证

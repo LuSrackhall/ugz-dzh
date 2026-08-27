@@ -18,11 +18,11 @@
 - `-f`：覆盖重建当月（从当月删除重建，-f 级联需逐月或使用 rebuild.sh）
 - `-p/--platform <auto|mac|windows>`：打印版目标平台（默认 auto=当前系统；在 Mac 上可用 `--platform windows` 生成 Windows 版打印版，配合 scripts/gen-win-test.sh 迭代标定）
 - `--config <print-config.json>`（可选）：打印版配置文件——平台补偿系数（colScale/rowScale）与分区域字体（fonts.normal/digit/title/default），解决 WPS 各平台/机器渲染尺寸不一致；不传用默认值（Windows 列宽×1.1075/行高×0.992，Mac 恒 1.0）。字段说明见 docs/print-config.md，模板见 docs/print-config.example.json
-  - **⚠️ 必须显式传 `--config` 才会加载**（CLI 不会自动查找当前目录的 print-config.json）
-  - **必须是英文键**：`platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}`（中文键会报错/不生效）
+  - **自动发现**：未传 `--config` 时，**自动加载当前工作目录下的 print-config.json**（有则生效，无则用默认值）——把配置文件放在运行 ledger 的目录即可生效，无需传参
+  - **必须是英文键**：`platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}`（中文键会报错）
   - 文件须 **UTF-8 无 BOM** 编码（JSON 不能有注释/尾逗号）
   - **只作用于打印版** `输出目录/<年份>/print/*.xlsx`（查看版不变），须重新 generate 后看新文件
-  - 自检：generate 启动会打印 `打印版配置: 默认/已加载 → 平台=.. 列宽系数=..` 行，`已加载: <路径>` + 目标系数值 = 生效；`默认` = 配置文件没被读取
+  - 自检：generate 启动会打印 `打印版配置: 已加载/已自动发现当前目录/默认 → 平台=.. 列宽系数=..` 行，`默认` = 配置文件没被读取
 - 自动并入 `<输出目录>/<年份>/closing/*.md`（系统生成的结转凭证）
 - 凭证号未解析 → 阻断报错；文件名凭证号重复 → 告警
 

@@ -83,6 +83,11 @@ var generateCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("加载配置 %s: %w", configJSON, err)
 		}
+
+		// 结账标记（Change 11）：已结账月份默认拒绝生成（防误改），-f 例外
+		if cfg.Settings.ClosingMonth != "" && month <= cfg.Settings.ClosingMonth && !force {
+			return fmt.Errorf("月份 %s 已结账（结账月 %s）——如确认需修改，请使用 -f 强制重建（从该月起级联）", month, cfg.Settings.ClosingMonth)
+		}
 		if len(cfg.Settings.AccountMap) > 0 {
 			ApplyAccountMap(entries, cfg.Settings.AccountMap)
 			if verbose {

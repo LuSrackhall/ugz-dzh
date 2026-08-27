@@ -527,7 +527,7 @@ func TestInferPropertyByType(t *testing.T) {
 	cases := map[string]string{
 		"库存现金": "借", "银行存款": "借", "管理费用": "借",
 		"应付款": "贷", "资本": "贷", "经营收入": "贷",
-		"完全未知科目": "借",
+		"完全未知科目": "未分类", // Change 11：未知科目默认未分类（防误归类）
 	}
 	for general, want := range cases {
 		if got := inferPropertyByType(general); got != want {

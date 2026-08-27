@@ -45,6 +45,7 @@ var addManualCmd = &cobra.Command{
 		}
 
 		fmt.Printf("已设置手动调整科目: %s (期初调整额 %.2f，作用于建账月)\n", account, amount)
+		fmt.Printf("提示: 期初调整锚定建账月 %s，-m 参数仅作记录、不参与计算；如需调整其他月份期初，请用 generate -f 从建账月重建\n", cfg.Settings.StartMonth)
 		return nil
 	},
 }

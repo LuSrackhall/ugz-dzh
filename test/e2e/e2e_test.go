@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/xuri/excelize/v2"
 	"testing"
 )
 
@@ -440,4 +442,70 @@ func TestCLIFullWorkflow(t *testing.T) {
 	}
 
 	t.Logf("完整工作流测试通过")
+}
+
+// TestJournalNoStaleAcrossMonths（Change 9 验收补测）：生成 10 月+11 月后，
+// 11 月现金日记账不得残留 10 月数据，且含"本年累计"行。
+func TestJournalNoStaleAcrossMonths(t *testing.T) {
+	root, err := findProjectRoot()
+	if err != nil {
+		t.Fatalf("找不到项目根目录: %v", err)
+	}
+	bin := filepath.Join(t.TempDir(), "ledger")
+	cmd := exec.Command("go", "build", "-o", bin, ".")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("编译失败: %s", out)
+	}
+	testData := filepath.Join(root, "test", "e2e", "test_data")
+	output := filepath.Join(t.TempDir(), "out")
+
+	run := func(args ...string) error {
+		c := exec.Command(bin, args...)
+		out, err := c.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%v: %s", err, out)
+		}
+		return nil
+	}
+	if err := run("init", "-s", "2025-10", "-o", output); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := run("generate", "-v", filepath.Join(testData, "2025_10"), "-o", output, "-f"); err != nil {
+		t.Fatalf("generate 10月: %v", err)
+	}
+	if err := run("generate", "-v", filepath.Join(testData, "2025_11"), "-o", output, "-f"); err != nil {
+		t.Fatalf("generate 11月: %v", err)
+	}
+
+	f, err := excelize.OpenFile(filepath.Join(output, "2025", "2025-11.xlsx"))
+	if err != nil {
+		t.Fatalf("打开 2025-11.xlsx: %v", err)
+	}
+	defer f.Close()
+
+	ws := "现金日记账"
+	if idx, err := f.GetSheetIndex(ws); err != nil || idx < 0 {
+		t.Fatalf("缺少 现金日记账 sheet: idx=%d err=%v", idx, err)
+	}
+	rows, err := f.GetRows(ws)
+	if err != nil {
+		t.Fatalf("读现金日记账: %v", err)
+	}
+	// 无 10 月日期残留
+	for _, row := range rows {
+		if len(row) > 0 && strings.Contains(row[0], "2025-10") {
+			t.Errorf("现金日记账残留 10 月数据: %q", row[0])
+		}
+	}
+	// 含"本年累计"行
+	hasYtd := false
+	for _, row := range rows {
+		if len(row) > 0 && row[0] == "本年累计" {
+			hasYtd = true
+		}
+	}
+	if !hasYtd {
+		t.Error("现金日记账缺'本年累计'行")
+	}
 }

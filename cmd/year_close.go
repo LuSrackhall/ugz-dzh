@@ -64,6 +64,19 @@ var yearCloseCmd = &cobra.Command{
 			}
 			if t, ok := balance.AccountTypeOf(gen); ok && (t == "收入" || t == "费用") {
 				fmt.Printf("警告: 损益类科目 %s 年末余额 %.2f 元非 0，疑似漏结转（收入/费用应结转归零）\n", account, float64(mb.Final)/100)
+				// 结转草稿（设计专家审查 Change 9）：按余额方向给出建议分录（目标科目=本年收益）
+				abs := mb.Final
+				if abs < 0 {
+					abs = -abs
+				}
+				var draft string
+				if (t == "费用" && mb.Final > 0) || (t == "收入" && mb.Final < 0) {
+					// 费用借余 / 收入贷余（正常方向）→ 借 本年收益 / 贷 科目
+					draft = fmt.Sprintf("借 本年收益 %.2f / 贷 %s %.2f", float64(abs)/100, account, float64(abs)/100)
+				} else {
+					draft = fmt.Sprintf("借 %s %.2f / 贷 本年收益 %.2f", account, float64(abs)/100, float64(abs)/100)
+				}
+				fmt.Printf("  结转草稿: %s\n", draft)
 			}
 		}
 
@@ -84,6 +97,17 @@ var yearCloseCmd = &cobra.Command{
 
 		if err := f.SaveAs(newPath); err != nil {
 			return fmt.Errorf("保存 %s: %w", newPath, err)
+		}
+
+		// 生产门槛（设计专家审查 Change 9）：自动生成新年度 JSON（科目树/映射/期初调整/余额历史保留）
+		newJSON := filepath.Join(nextYearDir, fmt.Sprintf("%04d.json", yy+1))
+		if b, err := os.ReadFile(configPath); err == nil {
+			if err := os.WriteFile(newJSON, b, 0o644); err != nil {
+				return fmt.Errorf("复制新年度 JSON: %w", err)
+			}
+			fmt.Printf("已生成新年度配置 %s（科目树/映射/期初调整保留）\n", newJSON)
+		} else {
+			fmt.Printf("警告: 无法读取 %s，未生成新年度 JSON（请手动复制）\n", configPath)
 		}
 
 		fmt.Printf("已生成 %s 跨年结转工作薄\n", nextYear)

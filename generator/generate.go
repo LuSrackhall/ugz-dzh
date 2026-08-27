@@ -96,6 +96,11 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("生成期初表: %w", err)
 	}
 
+	// 5b. 生成现金/银行日记账（设计专家审查 Change 9）
+	if err := wb.WriteJournals(entries, initials); err != nil {
+		return fmt.Errorf("生成日记账: %w", err)
+	}
+
 	// 6. 追加分录到总分类账 Sheet
 	// 对仅有期初余额但无当月分录的科目，追加 上年结转
 	if err := wb.AppendEntries(entries, initials); err != nil {

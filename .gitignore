@@ -48,3 +48,8 @@ test/e2e/out/
 test/e2e/test_data
 
 .claude/worktrees/
+
+# Installed skills（安装产物：ledger install-skill 从 embedded/ 重建）
+.agents/skills/
+.claude/skills/
+.workbuddy/skills/

@@ -392,6 +392,8 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	}
 
 	// 列宽：金额列 ÷n（n=该列展开数），其余原宽；零宽列显式设置 0（保持总宽守恒）
+	// 平台补偿：Windows 渲染偏小，列宽值 ×colScale（Mac=1）
+	colScale, rowScale := platformCompensate()
 	for c := 1; c <= cfg.totalViewCols; c++ {
 		w := meta.colWidth[c]
 		if w <= 0 {
@@ -423,7 +425,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 					sub = base + d/7
 				}
 				pc := cm.startCol(c) + k
-				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub)
+				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub*colScale)
 			}
 		} else {
 			// 拆分非金额列（如 GL 摘要列 4 格）：n 子列按"原字符数 ÷ n"等分——
@@ -433,7 +435,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if n := cm.splitCols(c); n > 1 {
 				subW := (w*7 + cfg.splitNAPixelDelta[c]) / (7 * float64(n))
 				for k := 0; k < n; k++ {
-					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW)
+					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW*colScale)
 				}
 				continue
 			}
@@ -446,14 +448,14 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if d, ok := cfg.nonAmountPixelDelta[c]; ok {
 				w = w + d/7
 			}
-			_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), w)
+			_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), w*colScale)
 		}
 	}
 
-	// 行高：原样回填（行不变）
+	// 行高：原样回填（行不变）；平台补偿：Windows 渲染行高偏小，×rowScale（Mac=1）
 	for r := 1; r <= meta.maxRow; r++ {
 		if h := meta.rowHeight[r]; h > 0 {
-			_ = f.SetRowHeight(sheet, r, h)
+			_ = f.SetRowHeight(sheet, r, h*rowScale)
 		}
 	}
 

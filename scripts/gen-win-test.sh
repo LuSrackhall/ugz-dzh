@@ -41,7 +41,7 @@ cp "$SRC_JSON" "$OUT/$YEAR/"
 
 echo
 echo "== 完成 =="
-echo "Windows 版打印版: $OUT/print/${MONTH}.xlsx"
+echo "Windows 版打印版: $OUT/$YEAR/print/${MONTH}.xlsx"
 echo "请将此文件发到 Windows，用 WPS 打开观察（100% 缩放）："
 echo "  1. 表格是否适配页面（不溢出、不过小）"
 echo "  2. 长宽比例是否合适（接近 1.36）"

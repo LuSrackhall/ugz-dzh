@@ -27,8 +27,8 @@ func platformCompensate() (colScale, rowScale float64) {
 		plat = runtime.GOOS
 	}
 	if plat == "windows" {
-		// TODO: Windows 端重新适配标定（适配 Windows 页面，非 Mac 尺寸）
-		return 1.0, 1.0
+		// Windows 端标定（2026-08-28 用户肉眼观察迭代）：列宽 ×1.1075、行高 ×0.992
+		return 1.1075, 0.992
 	}
 	return 1.0, 1.0
 }

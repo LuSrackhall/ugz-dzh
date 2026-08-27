@@ -26,3 +26,4 @@
 
 ## Overall Decision
 - [x] ✅ PASS
+9. **子 agent 验收 ❌ → 修复**：① 报表 sheet 跨月残留（reportSheet 前 DeleteSheet）；② lock 缺月份格式校验（YYYY-MM，'' 解锁）；③ 补 TestReportsNoStaleAcrossMonths。实测：11 月报表无残留、lock abc 拒绝/2025-10 设置/'' 解锁 ✓

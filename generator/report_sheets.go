@@ -32,8 +32,13 @@ func (wb *Workbook) WriteReportSheets(entries []voucher.Entry, activity map[stri
 	return nil
 }
 
-// reportStyle 报表通用样式。
+// reportStyle 报表通用样式（创建前清除同名旧 sheet——跨月残留，验收发现同 Change 9 日记账缺陷）。
 func (wb *Workbook) reportSheet(sheet, title string, headers []string, widths []float64) (*excelize.File, int, error) {
+	for _, s := range wb.File.GetSheetList() {
+		if s == sheet {
+			wb.File.DeleteSheet(s)
+		}
+	}
 	idx, err := wb.File.NewSheet(sheet)
 	if err != nil {
 		return nil, 0, fmt.Errorf("创建 %s: %w", sheet, err)

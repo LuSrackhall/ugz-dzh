@@ -25,6 +25,10 @@ var lockCmd = &cobra.Command{
 		configPath, _ := cmd.Flags().GetString("json")
 		month, _ := cmd.Flags().GetString("month")
 
+		if month != "" && (len(month) != 7 || month[4] != '-') {
+			return fmt.Errorf("结账月格式错误 %q——期望 YYYY-MM（如 2025-12），或 -m '' 解锁", month)
+		}
+
 		cfg, err := balance.LoadConfig(configPath)
 		if err != nil {
 			return fmt.Errorf("加载配置: %w", err)

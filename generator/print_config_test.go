@@ -52,3 +52,67 @@ func TestCurrentFontsByPlatform(t *testing.T) {
 	}
 	PrintPlatform = "auto"
 }
+
+func TestSheetConfigGLML(t *testing.T) {
+	printCfg = defaultPrintConfig()
+	// windows 平台：GL 专用系数/字体；ML 不配 → 回退平台级
+	printCfg.Platforms["windows"] = PlatformConfig{
+		ColScale: 1.1075, RowScale: 0.992,
+		Fonts: FontConfig{Normal: "Calibri", Digit: "Noteworthy", Title: "仿宋", Default: "宋体"},
+		GL: &SheetConfig{
+			ColScale: 1.2,
+			Fonts:    FontConfig{Digit: "宋体", Title: "黑体"},
+		},
+	}
+	PrintPlatform = "windows"
+
+	// GL：专用系数 + 字体（未填字段回退平台级）
+	printSheetType = "gl"
+	if c, r := sheetCompensate(); c != 1.2 || r != 0.992 {
+		t.Errorf("GL 系数 = (%v,%v), want (1.2,0.992)", c, r)
+	}
+	f := currentFonts()
+	if f.Digit != "宋体" || f.Title != "黑体" || f.Normal != "Calibri" {
+		t.Errorf("GL 字体 = %+v, want digit=宋体 title=黑体 normal=Calibri", f)
+	}
+
+	// ML：无专用配置 → 平台级
+	printSheetType = "ml"
+	if c, r := sheetCompensate(); c != 1.1075 || r != 0.992 {
+		t.Errorf("ML 系数 = (%v,%v), want (1.1075,0.992)", c, r)
+	}
+	if got := currentFonts().Digit; got != "Noteworthy" {
+		t.Errorf("ML digit = %v, want Noteworthy(平台级)", got)
+	}
+
+	// 非 GL/ML：平台级
+	printSheetType = ""
+	if c, _ := sheetCompensate(); c != 1.1075 {
+		t.Errorf("平台级系数 = %v, want 1.1075", c)
+	}
+	printSheetType = ""
+	PrintPlatform = "auto"
+}
+
+func TestLoadPrintConfigGLML(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "print-config.json")
+	content := `{"platforms":{"windows":{"colScale":1.1,"gl":{"colScale":1.25,"fonts":{"digit":"宋体"}},"ml":{}}}}`
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	printCfg = defaultPrintConfig()
+	if err := LoadPrintConfig(p); err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	w := printCfg.Platforms["windows"]
+	if w.GL == nil || w.GL.ColScale != 1.25 || w.GL.Fonts.Digit != "宋体" {
+		t.Errorf("GL 配置未生效: %+v", w.GL)
+	}
+	if w.GL.RowScale != 0 || w.GL.Fonts.Normal != "Calibri" {
+		t.Errorf("GL 未填字段应回退平台级默认: %+v", w.GL)
+	}
+	if w.ML != nil {
+		t.Errorf("ml:{} 应视为未配置: %+v", w.ML)
+	}
+}

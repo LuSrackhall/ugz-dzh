@@ -37,16 +37,34 @@ import (
 	"runtime"
 )
 
+// printSheetType 当前正在变换的账本类型（"gl"/"ml"/""=平台级），
+// 由 TransformToPrint 在遍历 sheet 时设置，驱动 GL/ML 分账本配置。
+var printSheetType = ""
+
 // PrintConfig 打印版配置（英文键，可直接 json.Unmarshal）。
 type PrintConfig struct {
 	Platforms map[string]PlatformConfig `json:"platforms"`
 }
 
-// PlatformConfig 单平台配置（补偿系数 + 分区域字体）。
+// PlatformConfig 单平台配置（补偿系数 + 分区域字体 + 可选 GL/ML 分账本覆盖）。
 type PlatformConfig struct {
+	ColScale float64      `json:"colScale"`
+	RowScale float64      `json:"rowScale"`
+	Fonts    FontConfig   `json:"fonts"`
+	GL       *SheetConfig `json:"gl"` // 总分类账专用（可选；缺省用平台级）
+	ML       *SheetConfig `json:"ml"` // 多科目明细账专用（可选；缺省用平台级）
+}
+
+// SheetConfig 单账本类型（GL/ML）覆盖配置：系数/字体未填时回退平台级。
+type SheetConfig struct {
 	ColScale float64    `json:"colScale"`
 	RowScale float64    `json:"rowScale"`
 	Fonts    FontConfig `json:"fonts"`
+}
+
+// empty 判断 sheet 配置是否全空（模板里 "gl": {} 视为未配置）。
+func (s *SheetConfig) empty() bool {
+	return s == nil || (s.ColScale == 0 && s.RowScale == 0 && s.Fonts == (FontConfig{}))
 }
 
 // FontConfig 分区域字体（normal=列宽基准；digit=金额数字；title=大标题；default=其余）。
@@ -89,9 +107,63 @@ func platformConfig() PlatformConfig {
 	return defaultPrintConfig().Platforms["mac"]
 }
 
-// currentFonts 当前平台的分区域字体。
+// mergeFonts 用 over 的非空字段覆盖 base，返回合并结果（sheet 级字体未填时回退平台级）。
+func mergeFonts(base FontConfig, over FontConfig) FontConfig {
+	if over.Normal != "" {
+		base.Normal = over.Normal
+	}
+	if over.Digit != "" {
+		base.Digit = over.Digit
+	}
+	if over.Title != "" {
+		base.Title = over.Title
+	}
+	if over.Default != "" {
+		base.Default = over.Default
+	}
+	return base
+}
+
+// sheetConfig 当前账本类型（GL/ML）的覆盖配置；无则返回 nil。
+func sheetConfig() *SheetConfig {
+	cfg := platformConfig()
+	switch printSheetType {
+	case "gl":
+		if cfg.GL.empty() {
+			return nil
+		}
+		return cfg.GL
+	case "ml":
+		if cfg.ML.empty() {
+			return nil
+		}
+		return cfg.ML
+	}
+	return nil
+}
+
+// currentFonts 当前平台的分区域字体（GL/ML 有专用字体时优先，未填项回退平台级）。
 func currentFonts() FontConfig {
-	return platformConfig().Fonts
+	base := platformConfig().Fonts
+	if sc := sheetConfig(); sc != nil {
+		return mergeFonts(base, sc.Fonts)
+	}
+	return base
+}
+
+// sheetCompensate 当前账本类型的列宽/行高补偿系数（GL/ML 专用系数优先，0 回退平台级）。
+func sheetCompensate() (colScale, rowScale float64) {
+	cfg := platformConfig()
+	colScale, rowScale = cfg.ColScale, cfg.RowScale
+	if sc := sheetConfig(); sc != nil {
+		if sc.ColScale != 0 {
+			colScale = sc.ColScale
+		}
+		if sc.RowScale != 0 {
+			rowScale = sc.RowScale
+		}
+	}
+	return colScale, rowScale
 }
 
 // CurrentConfigSummary 当前平台配置摘要（供 generate 打印确认加载状态）。
@@ -150,6 +222,15 @@ func LoadPrintConfig(path string) error {
 		}
 		if pc.Fonts.Default != "" {
 			base.Fonts.Default = pc.Fonts.Default
+		}
+		// GL/ML 分账本覆盖（全空视为未配置）
+		if !pc.GL.empty() {
+			sc := &SheetConfig{ColScale: pc.GL.ColScale, RowScale: pc.GL.RowScale, Fonts: mergeFonts(base.Fonts, pc.GL.Fonts)}
+			base.GL = sc
+		}
+		if !pc.ML.empty() {
+			sc := &SheetConfig{ColScale: pc.ML.ColScale, RowScale: pc.ML.RowScale, Fonts: mergeFonts(base.Fonts, pc.ML.Fonts)}
+			base.ML = sc
 		}
 		printCfg.Platforms[name] = base
 	}

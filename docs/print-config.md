@@ -68,6 +68,28 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 | `platforms.<平台>.fonts.digit` | 数据区金额数字字体 | Noteworthy |
 | `platforms.<平台>.fonts.title` | 大标题字体 | 仿宋 |
 | `platforms.<平台>.fonts.default` | 表头/标签/摘要等其余区域字体 | 宋体 |
+| `platforms.<平台>.gl` / `.ml` | **GL（总分类账）/ ML（多科目明细账）分账本覆盖**（可选）：单独设该账本的 colScale/rowScale/fonts，未填字段回退平台级 | 无（用平台级） |
+
+### GL/ML 分账本配置
+
+总分类账与多科目明细账结构不同（ML 多栏 + 装订区），可独立调参：
+
+```json
+{
+  "platforms": {
+    "windows": {
+      "colScale": 1.1075, "rowScale": 0.992,
+      "fonts": { "normal": "Calibri", "digit": "Noteworthy", "title": "仿宋", "default": "宋体" },
+      "gl": { "colScale": 1.3, "fonts": { "digit": "宋体" } },
+      "ml": { "rowScale": 0.98 }
+    }
+  }
+}
+```
+
+- `gl`：总分类账专用——列宽系数 1.3、数字字体宋体；行高、normal/title/default 回退平台级
+- `ml`：多科目明细账专用——行高 0.98；其余回退平台级
+- 只写要覆盖的字段；`"gl": {}` / `"ml": {}` 视为未配置
 
 ### 特性
 

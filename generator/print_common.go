@@ -392,8 +392,8 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	}
 
 	// 列宽：金额列 ÷n（n=该列展开数），其余原宽；零宽列显式设置 0（保持总宽守恒）
-	// 平台补偿：Windows 渲染偏小，列宽值 ×colScale（Mac=1）
-	colScale, rowScale := platformCompensate()
+	// 平台补偿：Windows 渲染偏小，列宽值 ×colScale（Mac=1）；GL/ML 可分账本独立系数
+	colScale, rowScale := sheetCompensate()
 	for c := 1; c <= cfg.totalViewCols; c++ {
 		w := meta.colWidth[c]
 		if w <= 0 {

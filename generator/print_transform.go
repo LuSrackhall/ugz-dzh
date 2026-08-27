@@ -44,11 +44,13 @@ func TransformToPrint(viewPath, printPath string) error {
 	for _, sheet := range f.GetSheetList() {
 		switch {
 		case strings.HasPrefix(sheet, sheetPrefixGL):
+			printSheetType = "gl" // GL/ML 分账本配置（printSheetType 驱动系数/字体按账本类型取）
 			if err := transformGLSheet(f, sheet); err != nil {
 				return fmt.Errorf("变换总分类账 %s: %w", sheet, err)
 			}
 			applyPrintFont(f, sheet) // 字体统一宋体加粗（在拆位样式生成后）
 		case strings.HasPrefix(sheet, sheetPrefixML):
+			printSheetType = "ml"
 			if err := transformMLSheet(f, sheet); err != nil {
 				return fmt.Errorf("变换多科目明细账 %s: %w", sheet, err)
 			}

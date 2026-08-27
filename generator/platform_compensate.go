@@ -12,9 +12,5 @@ package generator
 // 由 cmd 层在 TransformToPrint 前设置。
 var PrintPlatform = "auto"
 
-// platformCompensate 返回打印版尺寸的平台补偿系数（列宽、行高）。
-// 系数来源：print-config.json（platforms.<当前平台>），缺省=默认标定值。
-func platformCompensate() (colScale, rowScale float64) {
-	cfg := platformConfig()
-	return cfg.ColScale, cfg.RowScale
-}
+// 注：平台补偿系数与 GL/ML 分账本覆盖由 print_config.go 的
+// sheetCompensate()/currentFonts() 统一提供（platforms.<平台>[.gl|.ml]）。

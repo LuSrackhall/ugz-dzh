@@ -20,7 +20,7 @@ agent_created: true
 | 命令 | 用途 |
 |---|---|
 | `ledger init -s <YYYY-MM> -o <输出目录>` | 建账（设置建账月=启动月，生成 {year}.json） |
-| `ledger generate -v <凭证目录> -o <输出> [-f]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建） |
+| `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数+分区域字体，见 docs/print-config.md） |
 | `ledger map -a <错名> -b <对名> -j <json>` | 科目名称映射纠错 |
 | `ledger add-manual -a <科目> -m <月> -n <金额> -t <备注> -j <json>` | 期初调整（**只作用于建账月**，-m 仅记录） |
 | `ledger year-close -j <json> -o <输出>` | 跨年结转（生成新年 JSON + 空账本 + 损益结转草稿 + 三告警） |
@@ -67,6 +67,7 @@ agent_created: true
 
 ### 6. 打印
 - GL/ML 账页：打印版位格 xlsx（`print/` 子目录，金额拆位、红字红色字体）
+- 打印版尺寸跨平台不一致（WPS Mac/Windows 渲染差异）时：用 `generate --platform <mac|windows>` 指定目标平台，或 `--config print-config.json` 调平台补偿系数（colScale/rowScale）与分区域字体（默认 Windows 列宽×1.1075/行高×0.992）；字段说明见 docs/print-config.md，模板见 docs/print-config.example.json，Mac 上可配合 scripts/gen-win-test.sh 生成 Windows 版测试
 - 日记账/期初期末表/报表：直接打印查看版 sheet
 
 ## 数据宪法（CLI 安全原则，必须遵守）

@@ -11,11 +11,13 @@
 
 ## generate — 生成月度账本
 ```
-./ledger generate -v <凭证目录> -o <输出目录> [-f] [-V]
+./ledger generate -v <凭证目录> -o <输出目录> [-f] [-V] [-p <平台>] [--config <print-config.json>]
 ```
 - `-v` 凭证目录：**该目录下所有凭证必须同一年同一月**（报错则检查是否混入其他月）
 - 无 `-f`：幂等保护——已生成月份（含"本月合计"）拒绝重跑
 - `-f`：覆盖重建当月（从当月删除重建，-f 级联需逐月或使用 rebuild.sh）
+- `-p/--platform <auto|mac|windows>`：打印版目标平台（默认 auto=当前系统；在 Mac 上可用 `--platform windows` 生成 Windows 版打印版，配合 scripts/gen-win-test.sh 迭代标定）
+- `--config <print-config.json>`（可选）：打印版配置文件——平台补偿系数（colScale/rowScale）与分区域字体（fonts.normal/digit/title/default），解决 WPS 各平台/机器渲染尺寸不一致；不传用默认值（Windows 列宽×1.1075/行高×0.992，Mac 恒 1.0）。字段说明见 docs/print-config.md，模板见 docs/print-config.example.json
 - 自动并入 `<输出目录>/<年份>/closing/*.md`（系统生成的结转凭证）
 - 凭证号未解析 → 阻断报错；文件名凭证号重复 → 告警
 

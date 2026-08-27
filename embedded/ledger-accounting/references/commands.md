@@ -21,8 +21,8 @@
 - `-v` 凭证目录：**该目录下所有凭证必须同一年同一月**（报错则检查是否混入其他月）
 - 无 `-f`：幂等保护——已生成月份（含"本月合计"）拒绝重跑
 - `-f`：覆盖重建当月（从当月删除重建，-f 级联需逐月或使用 rebuild.sh）
-- `-p/--platform <auto|mac|windows>`：打印版目标平台（默认 auto=当前系统；在 Mac 上可用 `--platform windows` 生成 Windows 版打印版，配合 scripts/gen-win-test.sh 迭代标定）
-- `--config <print-config.json>`（可选）：打印版配置文件——平台补偿系数（colScale/rowScale）与分区域字体（fonts.normal/digit/title/default），解决 WPS 各平台/机器渲染尺寸不一致；不传用默认值（Windows 列宽×1.1075/行高×0.992，Mac 恒 1.0）。字段说明见 docs/print-config.md，模板见 docs/print-config.example.json
+- `-p/--platform <auto|mac|windows>`：打印版目标平台（默认 auto=当前系统；在 Mac 上可用 `--platform windows` 生成 Windows 版打印版，配合本 skill 包内 scripts/gen-win-test.sh 迭代标定（仅开发环境 Mac 需要））
+- `--config <print-config.json>`（可选）：打印版配置文件——平台补偿系数（colScale/rowScale）与分区域字体（fonts.normal/digit/title/default），解决 WPS 各平台/机器渲染尺寸不一致；不传用默认值（Windows 列宽×1.1075/行高×0.992，Mac 恒 1.0）。字段说明见 references/print-config.md，模板见 examples/print-config.example.json
   - **自动发现**：未传 `--config` 时，**自动加载当前工作目录下的 print-config.json**（有则生效，无则用默认值）——把配置文件放在运行 ledger 的目录即可生效，无需传参
   - **必须是英文键**：`platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}`（中文键会报错）
   - 文件须 **UTF-8 无 BOM** 编码（JSON 不能有注释/尾逗号）
@@ -95,6 +95,7 @@
 ```
 bash scripts/rebuild.sh <凭证根目录> <输出目录>
 ```
+- 脚本随本 skill 分发（scripts/rebuild.sh，生产环境可从 skill 包提取到本地执行）
 - 读 JSON 启动月，逐月 `generate -f` 重建
 - 凭证目录支持 `<根>/2025_10/` 或 `<根>/2025/10/` 两种形态
 - 灾难恢复：xlsx 丢失/漂移时一键从 JSON + 凭证重建

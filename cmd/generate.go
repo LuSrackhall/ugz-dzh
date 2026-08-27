@@ -22,7 +22,7 @@ func init() {
 	generateCmd.Flags().BoolP("force", "f", false, "覆盖已有 xlsx")
 	generateCmd.Flags().BoolP("verbose", "V", false, "输出详细日志")
 	generateCmd.Flags().StringP("platform", "p", "auto", "打印版目标平台: auto(当前系统)/mac/windows")
-	generateCmd.Flags().String("config", "", "打印版配置文件 (print-config.json)：显式 --config 优先；未传则自动加载当前工作目录下的 print-config.json（有则生效，无则用默认值）。英文键格式 platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}，文件须 UTF-8 无 BOM；只作用于打印版 print/ 目录，须重新 generate 后查看新文件。模板见 docs/print-config.example.json，说明见 docs/print-config.md")
+	generateCmd.Flags().String("config", "", "打印版配置文件 (print-config.json)：显式 --config 优先；未传则自动发现 当前工作目录 → 输出根目录（ledger init 会自动生成模板）。英文键格式 platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}，文件须 UTF-8 无 BOM；只作用于打印版 print/ 目录，须重新 generate 后查看新文件")
 	generateCmd.MarkFlagRequired("voucherDir")
 }
 

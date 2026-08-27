@@ -11,7 +11,7 @@ agent_created: true
 `ledger` 是 Go 编写的 CLI（项目根编译产物，`go build -o ledger .`）。核心流程：
 **JSON 配置 + 凭证 Markdown → 每月 Excel 账本**。JSON 是唯一权威源，git 管理变更。
 
-- 项目根：见 workspace（含 `balance/ voucher/ generator/ cmd/ scripts/`）
+- **本 skill 自包含**：所有文档（commands/print-config/workflows）、配置模板（examples/）、脚本（scripts/）都在本包内，生产环境（仅 ledger.exe + 本 skill）可直接查阅，不依赖源码项目
 - 产物：`<输出目录>/<年份>/{年份}.json`（配置权威源）+ `{年份}-{月}.xlsx`（账本）+ `print/`（打印版位格）
 - 二进制：项目根 `./ledger`（或 `go build -o ledger .` 重建）
 
@@ -20,7 +20,7 @@ agent_created: true
 | 命令 | 用途 |
 |---|---|
 | `ledger init -s <YYYY-MM> -o <输出目录>` | 建账（设置建账月=启动月，生成 {year}.json，并建好 vouchers/ 凭证目录 + print-config.json 打印版配置模板 + README，完整管理体系一次到位） |
-| `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数+分区域字体，见 docs/print-config.md） |
+| `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数+分区域字体，见 references/print-config.md） |
 | `ledger map -a <错名> -b <对名> -j <json>` | 科目名称映射纠错 |
 | `ledger add-manual -a <科目> -m <月> -n <金额> -t <备注> -j <json>` | 期初调整（**只作用于建账月**，-m 仅记录） |
 | `ledger year-close -j <json> -o <输出>` | 跨年结转（生成新年 JSON + 空账本 + 损益结转草稿 + 三告警） |
@@ -69,7 +69,7 @@ agent_created: true
 
 ### 6. 打印
 - GL/ML 账页：打印版位格 xlsx（`print/` 子目录，金额拆位、红字红色字体）
-- 打印版尺寸跨平台不一致（WPS Mac/Windows 渲染差异）时：用 `generate --platform <mac|windows>` 指定目标平台，或 `--config print-config.json` 调平台补偿系数（colScale/rowScale）与分区域字体（默认 Windows 列宽×1.1075/行高×0.992）；字段说明见 docs/print-config.md，模板见 docs/print-config.example.json，Mac 上可配合 scripts/gen-win-test.sh 生成 Windows 版测试
+- 打印版尺寸跨平台不一致（WPS Mac/Windows 渲染差异）时：用 `generate --platform <mac|windows>` 指定目标平台，或 `--config print-config.json` 调平台补偿系数（colScale/rowScale）与分区域字体（默认 Windows 列宽×1.1075/行高×0.992）；字段说明见 references/print-config.md，模板见 examples/print-config.example.json，Mac 上可配合 scripts/gen-win-test.sh 生成 Windows 版测试
 - **⚠️ 配置自动发现**：`print-config.json` 放在**运行 ledger 的当前目录**即自动生效（无需 --config 传参；显式传参优先）；配置用英文键（中文键会报错）；文件须 UTF-8 无 BOM；只作用于打印版（查看版不变），须重新 generate 后看 `print/` 新文件。自检：generate 启动打印的 `打印版配置: 已加载/已自动发现当前目录/默认 → 平台=.. 列宽系数=..` 行
 - 日记账/期初期末表/报表：直接打印查看版 sheet
 

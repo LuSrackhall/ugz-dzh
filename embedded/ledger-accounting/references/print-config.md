@@ -1,5 +1,7 @@
 # 打印版配置文件 print-config.json
 
+> 本文件随 ledger-accounting skill 分发（`references/print-config.md`），生产环境（仅 exe + skill）可直接查阅。
+
 `generate` 支持通过 `--config print-config.json`（可选）配置打印版的**平台补偿系数**与**分区域字体**，用于解决 WPS 各平台/各机器渲染尺寸不一致的问题，且**无需改代码、重新编译、发版**——直接改 JSON 重新生成即可。
 
 不传 `--config` 时使用内置默认值（与当前标定行为一致），配置完全向后兼容。
@@ -84,4 +86,4 @@ WPS 各平台/各机器渲染列宽、行高存在差异（字体环境、渲染
 
 ## 完整示例
 
-见 `docs/print-config.example.json`；`ledger init` 也会自动生成 `print-config.json` 模板到输出根目录。
+见本 skill 包 `examples/print-config.example.json`。

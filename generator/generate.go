@@ -2,6 +2,7 @@ package generator
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"ledger/balance"
@@ -51,6 +52,17 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	prevFinals, err := wb.ExtractLastMonthFinals()
 	if err != nil {
 		return fmt.Errorf("提取上月期末: %w", err)
+	}
+
+	// 生产门槛：跳月检测——非首月、非跨年首月（1 月期初走 JSON 结转，12 月 xlsx 在上一级目录）且
+	// 上月账本 xlsx 不存在 → 告警（不阻断，余额链靠 JSON 回退仍连续）
+	if month > cfg.Settings.StartMonth && !strings.HasSuffix(month, "-01") {
+		prevXlsx := wb.prevMonthPath()
+		if prevXlsx != "" {
+			if _, err := os.Stat(prevXlsx); err != nil {
+				fmt.Printf("警告: 上月账本 %s 不存在，疑似跳月/漏月，请确认（本年累计可能缺月）\n", prevXlsx)
+			}
+		}
 	}
 
 	// 构建期初映射
@@ -165,18 +177,18 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	if err := balance.UpdateBalancesAfterGenerate(cfg, month, balActivity, initials); err != nil {
 		return fmt.Errorf("回写余额: %w", err)
 	}
-	if err := balance.SaveConfig(configPath, cfg); err != nil {
-		return fmt.Errorf("保存配置: %w", err)
-	}
 
 	// 11. 页末写红色"过次页"标签
 	if err := wb.finalizeAllGLSheets(); err != nil {
 		return fmt.Errorf("页末补齐: %w", err)
 	}
 
-	// 12. 保存 xlsx
+	// 12. 保存 xlsx（生产门槛：先落盘 xlsx、成功后回写 JSON——失败原子性）
 	if err := wb.Save(); err != nil {
 		return fmt.Errorf("保存 xlsx: %w", err)
+	}
+	if err := balance.SaveConfig(configPath, cfg); err != nil {
+		return fmt.Errorf("保存配置: %w", err)
 	}
 
 	return nil

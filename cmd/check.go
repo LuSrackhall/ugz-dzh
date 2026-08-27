@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -71,7 +72,7 @@ var checkCmd = &cobra.Command{
 				drift := 0
 				checked := 0
 				for _, row := range rows {
-					if len(row) < 4 {
+					if len(row) < 1 {
 						continue
 					}
 					account := strings.TrimSpace(row[0])
@@ -83,8 +84,17 @@ var checkCmd = &cobra.Command{
 						continue
 					}
 					jsonFinal := node.Balances[month].Final
-					xFinal := int64((parseYuanFloat(row[2]) - parseYuanFloat(row[3])) * 100)
-					// 四舍五入到分
+					// 按列号显式读借/贷金额（越界当 0）——验收修复：借方余额行 GetRows 仅 3 列，
+					// 原 len(row)<4 跳过导致借方科目漂移漏检
+					var debit, credit float64
+					if len(row) > 2 {
+						debit = parseYuanFloat(row[2])
+					}
+					if len(row) > 3 {
+						credit = parseYuanFloat(row[3])
+					}
+					// 分精确舍入（验收修复：int64 截断会 0.29→0.28 误报）
+					xFinal := int64(math.Round((debit - credit) * 100))
 					if xFinal != jsonFinal {
 						drift++
 						fmt.Printf("⚠ 漂移: %s JSON=%.2f xlsx=%.2f\n", account, float64(jsonFinal)/100, float64(xFinal)/100)

@@ -23,3 +23,4 @@
 
 ## Overall Decision
 - [x] ✅ PASS
+6. **子 agent 验收 PASS WITH WARNINGS → 修复（check 漂移比对 2 缺陷）**：① int64 截断→math.Round 分舍入（0.29 不再误报）；② len(row)<4 跳过借方余额行→按列号显式读（越界当 0）。实测：17 科目全比对一致、篡改库存现金借方→漂移检出 ✓

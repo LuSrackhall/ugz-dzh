@@ -21,6 +21,7 @@ func init() {
 	generateCmd.Flags().StringP("output", "o", ".", "输出根目录")
 	generateCmd.Flags().BoolP("force", "f", false, "覆盖已有 xlsx")
 	generateCmd.Flags().BoolP("verbose", "V", false, "输出详细日志")
+	generateCmd.Flags().StringP("platform", "p", "auto", "打印版目标平台: auto(当前系统)/mac/windows")
 	generateCmd.MarkFlagRequired("voucherDir")
 }
 
@@ -33,6 +34,7 @@ var generateCmd = &cobra.Command{
 		output, _ := cmd.Flags().GetString("output")
 		force, _ := cmd.Flags().GetBool("force")
 		verbose, _ := cmd.Flags().GetBool("verbose")
+		platform, _ := cmd.Flags().GetString("platform")
 
 		// 收集所有凭证
 		entries, err := CollectEntries(voucherDir)
@@ -205,6 +207,7 @@ var generateCmd = &cobra.Command{
 
 		// 生成打印版位格 xlsx（失败仅告警，不影响已落盘的查看版）
 		printPath := filepath.Join(yearDir, "print", month+".xlsx")
+		generator.PrintPlatform = platform
 		if err := generator.TransformToPrint(xlsxPath, printPath); err != nil {
 			fmt.Fprintf(os.Stderr, "警告: 生成打印版失败（查看版已成功）: %v\n", err)
 		} else if verbose {

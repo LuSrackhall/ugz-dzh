@@ -22,7 +22,12 @@
 
 ## 工作树约定
 - 打印版相关工作树：`worktree-print-fresh`（本次全新实现，已提交未 push）。旧 `worktree-print-digit-columns`（locked，记录器架构，未采用）。
-- 审计修复：`change/audit-fix` 分支（9 commit）**已于 2026-08-26 经用户批准 ff 合并 main 并 push**（main 现为 1ba3655，含打印版全部提交）；5 个 audit change 已 archive；`.worktrees/change/audit-fix` **保留未清理**（用户要求）。
+- 审计修复：`change/audit-fix` 分支经用户批准**分 3 批合并 main 并 push**（最终 main = b7ec932，2026-08-27）：Change 1-5（期初/平衡/幂等/锚定建账月）+ Change 6-7（红字/期初回退/合并累计/合并父级冲突/跨年校验）+ Change 8（投产门槛：失败原子性/凭证号阻断/跳月告警/备份文档/跨年提示）。**8 个 change 全部 archive**。`.worktrees/change/audit-fix` **保留未清理**（用户要求）。
+
+## 审计修复历程（2026-08-26 ~ 08-27，8 个 change，四轮专家审查收敛）
+- 会计专家（agent-6ad11b15）+ 审计专家（agent-612211a3）四轮审查，每轮发现问题→修复→子 agent 验收→用户批准合并。
+- 关键修复：期初锚定建账月（Change 5，会计语义修正）；期初回退含 0（H1）；红字四格式+打印红色字体（H2）；合并累计并集（H3）；合并父级冲突双拦截（D1）；跨年结转三告警（F1）；投产 5 门槛（Change 8）。
+- **投产结论（2026-08-27）**：有条件投产——5 条必须门槛已全部补齐（Change 8），系统达到可投产条件；全量重建脚本/check xlsx 漂移比对为可选后续项。
 
 ## 项目原则：CLI 是绝对安全对象（2026-08-26 用户明确）
 - **CLI 产物（ledger 各子命令，尤其 generate）才是需要"绝对安全"的核心**；`scripts/test-e2e.sh` 只是开发测试工具，其便利（如 --keep-json 续跑）不能替代 CLI 内建的安全机制。

@@ -22,7 +22,7 @@
 
 ## 工作树约定
 - 打印版相关工作树：`worktree-print-fresh`（本次全新实现，已提交未 push）。旧 `worktree-print-digit-columns`（locked，记录器架构，未采用）。
-- 审计修复：`change/audit-fix` 分支经用户批准**分 3 批合并 main 并 push**（最终 main = b7ec932，2026-08-27）：Change 1-5（期初/平衡/幂等/锚定建账月）+ Change 6-7（红字/期初回退/合并累计/合并父级冲突/跨年校验）+ Change 8（投产门槛：失败原子性/凭证号阻断/跳月告警/备份文档/跨年提示）。**8 个 change 全部 archive**。`.worktrees/change/audit-fix` **保留未清理**（用户要求）。
+- 审计修复：`change/audit-fix` 分支经用户批准**分批合并 main 并 push**（2026-08-27，main = daddf87）：Change 1-5（期初/平衡/幂等/锚定建账月）+ Change 6-7（红字/期初回退/合并累计/合并父级冲突/跨年校验）+ Change 8（投产门槛）+ **Change 9（设计专家修复：日记账/试算平衡/year-close JSON/损益结转草稿）**。**9 个 change 全部 archive**。`.worktrees/change/audit-fix` **保留未清理**（用户要求）。
 
 ## 审计修复历程（2026-08-26 ~ 08-27，8 个 change，四轮专家审查收敛）
 - 会计专家（agent-6ad11b15）+ 审计专家（agent-612211a3）四轮审查，每轮发现问题→修复→子 agent 验收→用户批准合并。

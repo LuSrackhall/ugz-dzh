@@ -184,13 +184,16 @@ OCR 识别凭证时可能产生错字（如"管埋费用"、"银杭存款"），
 
 ```
 子命令：
-  generate     生成月度账本（年份/月份自动推导，凭证需同年同月）
-  init         系统初始化 — 创建 {year}/{year}.json
-  map          管理科目名称映射表（add / delete / list）
-  check        检测 JSON 科目树与余额完整性
-  add-manual   手动添加调整科目
-  reset        重置打印标记
-  year-close   跨年结转
+  generate      生成月度账本（年份/月份自动推导，凭证需同年同月；自动并入 closing/ 结转凭证）
+  init          系统初始化 — 创建 {year}/{year}.json
+  map           管理科目名称映射表（add / delete / list）
+  check         检测 JSON 科目树、期初试算平衡与 xlsx 漂移
+  add-manual    手动添加调整科目（期初调整锚定建账月）
+  reset         重置打印标记
+  year-close    跨年结转（生成新年 JSON + 空账本 + 结转草稿）
+  gen-close     生成年末损益结转凭证（到 output/{year}/closing/，不写入手工凭证目录）
+  lock          设置结账月（<=结账月默认拒绝无 -f 生成，防误改）
+  install-skill 安装 ledger-accounting 会计技能（标准源 .agents/skills + 按选择接入各工具）
 
 运行 ledger --help 或 ledger <command> --help 查看各子命令的详细参数。
 ```

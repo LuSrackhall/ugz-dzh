@@ -21,8 +21,9 @@ func init() {
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "检测 JSON 科目树与余额完整性",
-	Long:  "验证科目余额总览.json 中科目树的一致性，确保自动识别和手动调整科目与科目树一一对应。",
+	Short: "检测 JSON 科目树、期初试算平衡与 xlsx 漂移",
+	Long: "验证科目余额总览.json：① 科目树一致性（自动识别/手动调整科目一一对应）；② 期初试算平衡（借=贷）；" +
+		"③ xlsx 漂移比对（最新月期末表 vs JSON 余额，防手工改表——-f 重建可修复）。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("json")
 

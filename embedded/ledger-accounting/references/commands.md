@@ -30,7 +30,9 @@
 
 ## map — 科目映射纠错
 ```
-./ledger map -a <凭证中的错名> -b <正确科目名> -j <json>
+./ledger map add -f <凭证中的错名> -t <正确科目名> -j <json>
+./ledger map delete -f <错名> -j <json>
+./ledger map list -j <json>
 ```
 合并科目（凭证写错名时统一纠正），映射存 JSON 全局设置.科目映射表。
 
@@ -88,3 +90,13 @@ bash scripts/rebuild.sh <凭证根目录> <输出目录>
 ## 其他
 - `reset`：重置相关状态（按需）
 - 帮助：`./ledger <命令> --help`
+
+## install-skill — 安装本技能
+```
+./ledger install-skill                          # 交互选择接入 agent（1=WorkBuddy/2=Claude Code/3=Cursor）
+./ledger install-skill --select 1,2             # 非交互指定
+./ledger install-skill --real-workbuddy         # WorkBuddy 用真实复制（软链接不被加载时）
+```
+- `.agents/skills/ledger-accounting/` 始终安装（真实文件，标准源：dsh/Cursor/Copilot 原生读）
+- 选中工具软链接接入（失败自动降级复制）；安装产物不进 git
+- 修改本技能：编辑项目 `embedded/ledger-accounting/` → `go build -o ledger .` → `install-skill` 全同步

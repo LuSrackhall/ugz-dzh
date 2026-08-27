@@ -64,14 +64,15 @@ var yearCloseCmd = &cobra.Command{
 			}
 			if t, ok := balance.AccountTypeOf(gen); ok && (t == "收入" || t == "费用") {
 				fmt.Printf("警告: 损益类科目 %s 年末余额 %.2f 元非 0，疑似漏结转（收入/费用应结转归零）\n", account, float64(mb.Final)/100)
-				// 结转草稿（设计专家审查 Change 9）：按余额方向给出建议分录（目标科目=本年收益）
+				// 结转草稿（设计专家审查 Change 9）：方向由余额符号决定（验收修正）——
+				// 借余（final>0）→ 借 本年收益 / 贷 科目；贷余（final<0）→ 借 科目 / 贷 本年收益。
+				// 目标科目=本年收益（权益类）。
 				abs := mb.Final
 				if abs < 0 {
 					abs = -abs
 				}
 				var draft string
-				if (t == "费用" && mb.Final > 0) || (t == "收入" && mb.Final < 0) {
-					// 费用借余 / 收入贷余（正常方向）→ 借 本年收益 / 贷 科目
+				if mb.Final > 0 {
 					draft = fmt.Sprintf("借 本年收益 %.2f / 贷 %s %.2f", float64(abs)/100, account, float64(abs)/100)
 				} else {
 					draft = fmt.Sprintf("借 %s %.2f / 贷 本年收益 %.2f", account, float64(abs)/100, float64(abs)/100)

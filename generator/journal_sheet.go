@@ -18,11 +18,12 @@ var journalHeaders = []string{"日期", "凭证字号", "摘  要", "对方科�
 //   - 银行存款日记账：银行存款（含子科目）同上
 //
 // 数据全部来自当月 entries（日期/凭证号/摘要/金额），对方科目取同凭证其他分录的总账科目。
-func (wb *Workbook) WriteJournals(entries []voucher.Entry, initials map[string]int64) error {
-	if err := wb.writeOneJournal("现金日记账", "库存现金", entries, initials); err != nil {
+// ytdDebit/ytdCredit 为截至上月的本年累计（用于"本年累计"行）。
+func (wb *Workbook) WriteJournals(entries []voucher.Entry, initials map[string]int64, ytdDebit, ytdCredit map[string]int64) error {
+	if err := wb.writeOneJournal("现金日记账", "库存现金", entries, initials, ytdDebit, ytdCredit); err != nil {
 		return err
 	}
-	if err := wb.writeOneJournal("银行存款日记账", "银行存款", entries, initials); err != nil {
+	if err := wb.writeOneJournal("银行存款日记账", "银行存款", entries, initials, ytdDebit, ytdCredit); err != nil {
 		return err
 	}
 	return nil
@@ -39,7 +40,18 @@ func sumInitialsFor(initials map[string]int64, general string) int64 {
 	return total
 }
 
-func (wb *Workbook) writeOneJournal(sheetName, general string, entries []voucher.Entry, initials map[string]int64) error {
+// sumMapFor 汇总某科目（含子科目）在 map 中的值。
+func sumMapFor(m map[string]int64, general string) int64 {
+	var total int64
+	for k, v := range m {
+		if k == general || strings.HasPrefix(k, general+"-") {
+			total += v
+		}
+	}
+	return total
+}
+
+func (wb *Workbook) writeOneJournal(sheetName, general string, entries []voucher.Entry, initials map[string]int64, ytdDebit, ytdCredit map[string]int64) error {
 	// 筛选当月分录（含子科目）
 	var rows []voucher.Entry
 	for _, e := range entries {
@@ -60,6 +72,13 @@ func (wb *Workbook) writeOneJournal(sheetName, general string, entries []voucher
 		}
 		return i < j
 	})
+
+	// 清除从复制上月 xlsx 继承的旧日记账 sheet（否则旧数据残留，验收发现）
+	for _, s := range wb.File.GetSheetList() {
+		if s == sheetName {
+			wb.File.DeleteSheet(s)
+		}
+	}
 
 	idx, err := wb.File.NewSheet(sheetName)
 	if err != nil {
@@ -100,6 +119,7 @@ func (wb *Workbook) writeOneJournal(sheetName, general string, entries []voucher
 	// 期初行
 	opening := sumInitialsFor(initials, general)
 	balance := opening
+	negativeWarned := false
 	if opening != 0 {
 		wb.File.SetCellValue(sheetName, cellName(1, row), "期初余额")
 		wb.File.SetCellValue(sheetName, cellName(7, row), centsToYuan(balance))
@@ -140,6 +160,11 @@ func (wb *Workbook) writeOneJournal(sheetName, general string, entries []voucher
 		balance += e.DebitCents - e.CreditCents
 		wb.File.SetCellValue(sheetName, cellName(7, row), centsToYuan(balance))
 		wb.setMoneyStyle(sheetName, row, 7)
+		// 现金逐笔负余额提示（现金不得出现贷方余额）
+		if general == "库存现金" && balance < 0 && !negativeWarned {
+			fmt.Printf("警告: 现金日记账出现负余额（%.2f 元，%s 记%d），现金不应出现贷方余额，请核对凭证\n", float64(balance)/100, e.Date, e.VoucherNum)
+			negativeWarned = true
+		}
 		dayDebit += e.DebitCents
 		dayCredit += e.CreditCents
 		prevDate = date
@@ -154,6 +179,8 @@ func (wb *Workbook) writeOneJournal(sheetName, general string, entries []voucher
 	}
 
 	// 月结：本月合计 / 本年累计 / 期末结存
+	ytdD := sumMapFor(ytdDebit, general) + dayTotalDebit
+	ytdC := sumMapFor(ytdCredit, general) + dayTotalCredit
 	totalStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 10},
 		Border:    []excelize.Border{{Type: "top", Color: "#808080", Style: 1}, {Type: "bottom", Color: "#808080", Style: 2}},
@@ -168,15 +195,17 @@ func (wb *Workbook) writeOneJournal(sheetName, general string, entries []voucher
 		wb.setMoneyStyle(sheetName, row, c)
 	}
 	row++
+	wb.File.SetCellValue(sheetName, cellName(1, row), "本年累计")
+	wb.File.SetCellValue(sheetName, cellName(5, row), centsToYuan(ytdD))
+	wb.File.SetCellValue(sheetName, cellName(6, row), centsToYuan(ytdC))
+	wb.File.SetCellStyle(sheetName, cellName(1, row), cellName(7, row), totalStyle)
+	wb.setMoneyStyle(sheetName, row, 5)
+	wb.setMoneyStyle(sheetName, row, 6)
+	row++
 	wb.File.SetCellValue(sheetName, cellName(1, row), "期末结存")
 	wb.File.SetCellValue(sheetName, cellName(7, row), centsToYuan(balance))
 	wb.File.SetCellStyle(sheetName, cellName(1, row), cellName(7, row), totalStyle)
 	wb.setMoneyStyle(sheetName, row, 7)
-
-	// 现金余额为负提示
-	if general == "库存现金" && balance < 0 {
-		fmt.Printf("警告: 现金日记账期末余额为负（%.2f 元），现金不应出现贷方余额，请核对凭证\n", float64(balance)/100)
-	}
 
 	return nil
 }

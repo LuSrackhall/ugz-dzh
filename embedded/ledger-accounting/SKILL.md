@@ -27,6 +27,7 @@ agent_created: true
 | `ledger gen-close -j <json> -o <输出>` | 自动生成年末损益结转凭证到 `<输出>/<年份>/closing/`（不写手工凭证目录） |
 | `ledger lock -j <json> -m <YYYY-MM>` | 设置结账月（<=该月默认拒绝无 -f 生成；`-m ''` 解锁） |
 | `ledger check -j <json>` | 科目树 + 期初试算平衡 + xlsx 漂移比对 |
+| `ledger doctor [-o <输出>]` | 环境自检（版本/skill 安装与自包含/print-config 发现/账本结构）；**生产排障先跑这个** |
 | `scripts/rebuild.sh <凭证根目录> <输出目录>` | 全量重建（读启动月逐月 -f） |
 
 ## 核心工作流

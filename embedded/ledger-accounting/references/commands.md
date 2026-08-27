@@ -104,6 +104,14 @@ bash scripts/rebuild.sh <凭证根目录> <输出目录>
 - `reset`：重置相关状态（按需）
 - 帮助：`./ledger <命令> --help`
 
+## doctor — 环境自检（agent 排障先跑这个）
+```
+./ledger doctor [-o <输出根目录>]
+```
+- 一次查清：程序版本、skill 是否安装且自包含（references/print-config.md 在=新版）、print-config.json 能否被自动发现、输出目录是否有 {year}/{year}.json
+- 输出 `[OK]/[WARN]/[FAIL]` 逐项 + 结论统计 + 修复指引
+- 生产环境遇到"配置不生效/命令报错/agent 行为异常"时，先跑 doctor 定位，再按 [FAIL] 项修复（多为重跑 install-skill 或 init）
+
 ## install-skill — 安装本技能
 ```
 ./ledger install-skill                          # 交互选择接入 agent（1=WorkBuddy/2=Claude Code/3=Cursor）

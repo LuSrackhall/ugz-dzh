@@ -68,7 +68,7 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 | `platforms.<平台>.fonts.digit` | 数据区金额数字字体 | Noteworthy |
 | `platforms.<平台>.fonts.title` | 大标题字体 | 仿宋 |
 | `platforms.<平台>.fonts.default` | 表头/标签/摘要等其余区域字体 | 宋体 |
-| `platforms.<平台>.gl` / `.ml` | **GL（总分类账）/ ML（多科目明细账）分账本覆盖**（可选）：单独设该账本的 colScale/rowScale/fonts，未填字段回退平台级 | 无（用平台级） |
+| `platforms.<平台>.gl` / `.ml` | **GL（总分类账）/ ML（多科目明细账）分账本覆盖**（可选）：单独设该账本的 colScale/rowScale/fonts，未填字段回退平台级 | Windows GL: 1.13595/0.99495（2026-08-28 标定）；ML/其余: 用平台级 |
 
 ### GL/ML 分账本配置
 
@@ -102,7 +102,7 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 
 WPS 各平台/各机器渲染列宽、行高存在差异（字体环境、渲染引擎不同）：同一份打印版 xlsx 在 Windows 上实测整体偏小（表格宽约 -12.5%、行高约 -6%）。补偿系数在生成时乘到列宽/行高值上，使目标平台的输出适配其页面。
 
-默认值（windows 1.1075 / 0.992）为多轮肉眼观察标定的收敛值；换环境后可自行调整，观察方法见 `scripts/gen-win-test.sh` 顶部说明。
+默认值（windows 平台级 1.1075 / 0.992；GL 独立 1.13595 / 0.99495）为多轮肉眼观察标定的收敛值；换环境后可自行调整（GL/ML 可独立调），观察方法见 `scripts/gen-win-test.sh` 顶部说明。
 
 ## 完整示例
 

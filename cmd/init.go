@@ -129,7 +129,7 @@ const rootReadmeContent = `# 手工账本目录（ledger 管理体系）
 `
 
 // printConfigTemplate 打印版配置模板（init 创建 print-config.json）。
-// 与 docs/print-config.example.json 保持一致；字段说明见 docs/print-config.md。
+// 默认值 = 内置标定：Windows 平台级 1.1075/0.992，GL 独立 1.13595/0.99495，ML 用平台级。
 const printConfigTemplate = `{
   "platforms": {
     "windows": {
@@ -140,6 +140,10 @@ const printConfigTemplate = `{
         "digit": "Noteworthy",
         "title": "仿宋",
         "default": "宋体"
+      },
+      "gl": {
+        "colScale": 1.13595,
+        "rowScale": 0.99495
       }
     },
     "mac": {

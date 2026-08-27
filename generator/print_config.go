@@ -84,8 +84,12 @@ func defaultFonts() FontConfig {
 
 func defaultPrintConfig() *PrintConfig {
 	cfg := &PrintConfig{Platforms: map[string]PlatformConfig{}}
-	// Windows：补偿系数为肉眼标定收敛值（2026-08-28），Mac 恒 1.0
-	cfg.Platforms["windows"] = PlatformConfig{ColScale: 1.1075, RowScale: 0.992, Fonts: defaultFonts()}
+	// Windows：平台级补偿为肉眼标定收敛值（2026-08-28）；
+	// GL（总分类账）独立系数（列宽×1.13595、行高×0.99495，用户标定），ML 用平台级
+	cfg.Platforms["windows"] = PlatformConfig{
+		ColScale: 1.1075, RowScale: 0.992, Fonts: defaultFonts(),
+		GL: &SheetConfig{ColScale: 1.13595, RowScale: 0.99495},
+	}
 	cfg.Platforms["mac"] = PlatformConfig{ColScale: 1.0, RowScale: 1.0, Fonts: defaultFonts()}
 	return cfg
 }
@@ -170,8 +174,25 @@ func sheetCompensate() (colScale, rowScale float64) {
 func CurrentConfigSummary() string {
 	plat := currentPlatform()
 	cfg := platformConfig()
-	return fmt.Sprintf("平台=%s 列宽系数=%.4f 行高系数=%.4f 字体(normal=%s digit=%s title=%s default=%s)",
+	s := fmt.Sprintf("平台=%s 列宽系数=%.4f 行高系数=%.4f 字体(normal=%s digit=%s title=%s default=%s)",
 		plat, cfg.ColScale, cfg.RowScale, cfg.Fonts.Normal, cfg.Fonts.Digit, cfg.Fonts.Title, cfg.Fonts.Default)
+	// GL/ML 分账本覆盖（显示回退后的生效值）
+	for _, st := range []struct {
+		name string
+		sc   *SheetConfig
+	}{{"GL", cfg.GL}, {"ML", cfg.ML}} {
+		if sc := st.sc; !sc.empty() {
+			c, r := cfg.ColScale, cfg.RowScale
+			if sc.ColScale != 0 {
+				c = sc.ColScale
+			}
+			if sc.RowScale != 0 {
+				r = sc.RowScale
+			}
+			s += fmt.Sprintf(" %s(列宽%.4f 行高%.4f)", st.name, c, r)
+		}
+	}
+	return s
 }
 
 // LoadPrintConfig 从 JSON 文件加载打印版配置（可选，缺省用默认值）。

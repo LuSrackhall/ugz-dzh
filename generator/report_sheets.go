@@ -144,7 +144,7 @@ func (wb *Workbook) writeBalanceSheet(initials map[string]int64, activity map[st
 	// 以"本年收益"单行汇总——未结转月份报表才平衡且口径规范）
 	yearProfit := -pnlNet
 	if yearProfit != 0 {
-		wb.File.SetCellValue(sheet, cellName(3, row), "本年收益")
+		wb.File.SetCellValue(sheet, cellName(3, row), "本年收益（未结转损益）")
 		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(yearProfit))
 		wb.setMoneyStyle(sheet, row, 4)
 		rightTotal += yearProfit

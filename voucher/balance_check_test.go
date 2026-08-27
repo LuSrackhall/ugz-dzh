@@ -57,12 +57,12 @@ func TestValidateVoucherBalance(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "凭证号未解析跳过分组校验",
+			name: "凭证号未解析阻断（生产门槛）",
 			entries: []Entry{
 				{Date: "2026-01-05", VoucherNum: 0, DebitCents: 10000, CreditCents: 0},
 			},
-			wantErr:     false,
-			minWarnings: 1,
+			wantErr:     true,
+			errContains: "凭证号未解析",
 		},
 		{
 			name: "不同凭证互不干扰",

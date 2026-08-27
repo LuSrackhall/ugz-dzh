@@ -87,6 +87,7 @@ var yearCloseCmd = &cobra.Command{
 		}
 
 		fmt.Printf("已生成 %s 跨年结转工作薄\n", nextYear)
+		fmt.Printf("提示: 期初调整锚定建账月 %s——新年度期初=%s 期末自动结转；如需调整新年期初，请改 JSON 后用 generate -f 从建账月重建\n", cfg.Settings.StartMonth, lastMonth)
 		return nil
 	},
 }

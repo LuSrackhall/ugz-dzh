@@ -46,7 +46,9 @@ func ValidateVoucherBalance(entries []Entry) (warnings []string, err error) {
 	}
 
 	if len(unparsed) > 0 {
-		warnings = append(warnings, fmt.Sprintf("%d 条分录凭证号未解析，跳过借贷平衡校验（请检查凭证号书写格式）", len(unparsed)))
+		// 生产门槛：凭证号未解析 → 阻断（不再跳过）——未解析凭证无法可靠分组，不平衡可静默入账。
+		// 文件名回退已兜底（正文无凭证号时用文件名），真正未解析极罕见，强制用户修正。
+		return nil, fmt.Errorf("%d 条分录凭证号未解析（正文与文件名均无法解析），无法进行借贷平衡校验，请检查凭证号书写格式", len(unparsed))
 	}
 
 	// 逐组校验（凭证号排序输出，便于定位）

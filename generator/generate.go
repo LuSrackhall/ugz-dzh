@@ -54,8 +54,9 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("提取上月期末: %w", err)
 	}
 
-	// 生产门槛：跳月检测——非首月且上月账本 xlsx 不存在 → 告警（不阻断，余额链靠 JSON 回退仍连续）
-	if month > cfg.Settings.StartMonth {
+	// 生产门槛：跳月检测——非首月、非跨年首月（1 月期初走 JSON 结转，12 月 xlsx 在上一级目录）且
+	// 上月账本 xlsx 不存在 → 告警（不阻断，余额链靠 JSON 回退仍连续）
+	if month > cfg.Settings.StartMonth && !strings.HasSuffix(month, "-01") {
 		prevXlsx := wb.prevMonthPath()
 		if prevXlsx != "" {
 			if _, err := os.Stat(prevXlsx); err != nil {

@@ -51,7 +51,7 @@ func applyPrintFont(f *excelize.File, sheet string) {
 				if font.Family != "" {
 					continue
 				}
-				font.Family = printCfg.字体.默认
+				font.Family = currentFonts().Default
 				font.Bold = true
 				st.Font = font
 				nid, err = f.NewStyle(st)

@@ -8,19 +8,13 @@
 // 支持在 Mac 上生成 Windows 版打印版（配合 scripts/gen-win-test.sh 迭代标定）。
 package generator
 
-import "runtime"
-
 // PrintPlatform 打印版目标平台（auto=当前系统；mac/windows=指定平台）。
 // 由 cmd 层在 TransformToPrint 前设置。
 var PrintPlatform = "auto"
 
 // platformCompensate 返回打印版尺寸的平台补偿系数（列宽、行高）。
-// 系数来源：print-config.json（printCfg.平台），缺省=默认标定值。
+// 系数来源：print-config.json（platforms.<当前平台>），缺省=默认标定值。
 func platformCompensate() (colScale, rowScale float64) {
-	plat := PrintPlatform
-	if plat == "" || plat == "auto" {
-		plat = runtime.GOOS
-	}
-	cfg := printPlatformConfig(plat)
-	return cfg.列宽系数, cfg.行高系数
+	cfg := platformConfig()
+	return cfg.ColScale, cfg.RowScale
 }

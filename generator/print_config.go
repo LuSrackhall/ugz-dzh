@@ -1,79 +1,100 @@
 // Package generator — 打印版配置文件（print-config.json，可选）。
 //
 // 用途：把跨平台标定系数与各区域字体从代码硬编码中解放出来，用户/部署时
-// 直接改 JSON 即可调整（无需改代码重新编译发版）。
-// 缺省使用默认值 = 当前标定行为（Windows 列宽×1.1075/行高×0.992 等）。
+// 直接改 JSON 即可调整（无需改代码重新编译发版）。配置按平台分组，
+// 每个平台可独立设置补偿系数与字体。
+// 缺省使用默认值 = 当前标定行为。
 //
 // 配置示例（generate --config print-config.json）：
 //
 //	{
-//	  "平台": {
-//	    "windows": { "列宽系数": 1.1075, "行高系数": 0.992 },
-//	    "mac":     { "列宽系数": 1.0,    "行高系数": 1.0 }
-//	  },
-//	  "字体": {
-//	    "基准": "Calibri",     // Normal 默认字体（列宽基准）
-//	    "数字": "Noteworthy",  // 数据区金额数字
-//	    "标题": "仿宋",        // 大标题（总分类账/明细分户帐）
-//	    "默认": "宋体"         // 表头/标签/摘要等其余区域
+//	  "platforms": {
+//	    "windows": {
+//	      "colScale": 1.1075, "rowScale": 0.992,
+//	      "fonts": { "normal": "Calibri", "digit": "Noteworthy", "title": "仿宋", "default": "宋体" }
+//	    },
+//	    "mac": {
+//	      "colScale": 1.0, "rowScale": 1.0,
+//	      "fonts": { "normal": "Calibri", "digit": "Noteworthy", "title": "仿宋", "default": "宋体" }
+//	    }
 //	  }
 //	}
+//
+// 字段说明：
+//   - platforms.<平台>.colScale / rowScale：该平台打印版列宽/行高补偿系数
+//     （解决 WPS 各平台/机器渲染尺寸不一致；Windows 默认 1.1075/0.992 为肉眼标定值）
+//   - fonts.normal：Normal 默认字体（列宽像素计算基准，可统一两端用同一字体文件如 Arimo）
+//   - fonts.digit：数据区金额数字字体
+//   - fonts.title：大标题（总分类账/明细分户帐）字体
+//   - fonts.default：表头/标签/摘要等其余区域字体
 package generator
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 )
 
-// PrintConfig 打印版配置（字段名英文，JSON 键为中文）。
+// PrintConfig 打印版配置（英文键，可直接 json.Unmarshal）。
 type PrintConfig struct {
-	平台 PlatformConfig `json:"平台"`
-	字体 FontConfig     `json:"字体"`
+	Platforms map[string]PlatformConfig `json:"platforms"`
 }
 
-// PlatformConfig 各平台补偿系数。
+// PlatformConfig 单平台配置（补偿系数 + 分区域字体）。
 type PlatformConfig struct {
-	Windows ScaleConfig `json:"windows"`
-	Mac     ScaleConfig `json:"mac"`
+	ColScale float64    `json:"colScale"`
+	RowScale float64    `json:"rowScale"`
+	Fonts    FontConfig `json:"fonts"`
 }
 
-// ScaleConfig 单平台补偿系数。
-type ScaleConfig struct {
-	列宽系数 float64 `json:"列宽系数"`
-	行高系数 float64 `json:"行高系数"`
-}
-
-// FontConfig 分区域字体（基准=Normal 列宽基准；数字=金额数字；标题=大标题；默认=其余）。
+// FontConfig 分区域字体（normal=列宽基准；digit=金额数字；title=大标题；default=其余）。
 type FontConfig struct {
-	基准 string `json:"基准"`
-	数字 string `json:"数字"`
-	标题 string `json:"标题"`
-	默认 string `json:"默认"`
+	Normal  string `json:"normal"`
+	Digit   string `json:"digit"`
+	Title   string `json:"title"`
+	Default string `json:"default"`
 }
 
 // printCfg 全局打印版配置（默认值=当前标定行为）。
 var printCfg = defaultPrintConfig()
 
+func defaultFonts() FontConfig {
+	return FontConfig{Normal: "Calibri", Digit: "Noteworthy", Title: "仿宋", Default: "宋体"}
+}
+
 func defaultPrintConfig() *PrintConfig {
-	cfg := &PrintConfig{}
-	// 平台补偿系数：Windows 为肉眼标定收敛值（2026-08-28），Mac 恒 1.0
-	cfg.平台.Windows.列宽系数 = 1.1075
-	cfg.平台.Windows.行高系数 = 0.992
-	cfg.平台.Mac.列宽系数 = 1.0
-	cfg.平台.Mac.行高系数 = 1.0
-	// 分区域字体：与打印版生成代码现状一致
-	cfg.字体.基准 = "Calibri"
-	cfg.字体.数字 = "Noteworthy"
-	cfg.字体.标题 = "仿宋"
-	cfg.字体.默认 = "宋体"
+	cfg := &PrintConfig{Platforms: map[string]PlatformConfig{}}
+	// Windows：补偿系数为肉眼标定收敛值（2026-08-28），Mac 恒 1.0
+	cfg.Platforms["windows"] = PlatformConfig{ColScale: 1.1075, RowScale: 0.992, Fonts: defaultFonts()}
+	cfg.Platforms["mac"] = PlatformConfig{ColScale: 1.0, RowScale: 1.0, Fonts: defaultFonts()}
 	return cfg
 }
 
+// currentPlatform 当前目标平台（PrintPlatform 由 cmd 层设置；auto=当前系统）。
+func currentPlatform() string {
+	plat := PrintPlatform
+	if plat == "" || plat == "auto" {
+		plat = runtime.GOOS
+	}
+	return plat
+}
+
+// platformConfig 当前平台配置（未知平台回退 mac 默认，系数 1.0）。
+func platformConfig() PlatformConfig {
+	if cfg, ok := printCfg.Platforms[currentPlatform()]; ok {
+		return cfg
+	}
+	return defaultPrintConfig().Platforms["mac"]
+}
+
+// currentFonts 当前平台的分区域字体。
+func currentFonts() FontConfig {
+	return platformConfig().Fonts
+}
+
 // LoadPrintConfig 从 JSON 文件加载打印版配置（可选，缺省用默认值）。
-// 未配置的字段保持默认值不变。
-// 注意：Go encoding/json 不支持中文 struct tag/字段名匹配（Go 1.17+），
-// 故解析用 map[string]any 手动取中文字段（map 键支持任意 UTF-8 字符串）。
+// 未配置的平台/字段保持默认值不变。
 func LoadPrintConfig(path string) error {
 	if path == "" {
 		return nil
@@ -82,51 +103,35 @@ func LoadPrintConfig(path string) error {
 	if err != nil {
 		return fmt.Errorf("读取打印版配置 %s: %w", path, err)
 	}
-	var root map[string]any
-	if err := json.Unmarshal(data, &root); err != nil {
+	loaded := &PrintConfig{}
+	if err := json.Unmarshal(data, loaded); err != nil {
 		return fmt.Errorf("解析打印版配置 %s: %w", path, err)
 	}
-	// 平台补偿系数
-	if plat, ok := root["平台"].(map[string]any); ok {
-		if win, ok := plat["windows"].(map[string]any); ok {
-			if v, ok := win["列宽系数"].(float64); ok && v != 0 {
-				printCfg.平台.Windows.列宽系数 = v
-			}
-			if v, ok := win["行高系数"].(float64); ok && v != 0 {
-				printCfg.平台.Windows.行高系数 = v
-			}
+	// 合并：覆盖配置里出现的平台（字段非零覆盖，未配置项保持默认）
+	for name, pc := range loaded.Platforms {
+		base, ok := printCfg.Platforms[name]
+		if !ok {
+			base = defaultPrintConfig().Platforms["mac"] // 新平台从 mac 默认起
 		}
-		if mac, ok := plat["mac"].(map[string]any); ok {
-			if v, ok := mac["列宽系数"].(float64); ok && v != 0 {
-				printCfg.平台.Mac.列宽系数 = v
-			}
-			if v, ok := mac["行高系数"].(float64); ok && v != 0 {
-				printCfg.平台.Mac.行高系数 = v
-			}
+		if pc.ColScale != 0 {
+			base.ColScale = pc.ColScale
 		}
-	}
-	// 分区域字体
-	if f, ok := root["字体"].(map[string]any); ok {
-		if v, ok := f["基准"].(string); ok && v != "" {
-			printCfg.字体.基准 = v
+		if pc.RowScale != 0 {
+			base.RowScale = pc.RowScale
 		}
-		if v, ok := f["数字"].(string); ok && v != "" {
-			printCfg.字体.数字 = v
+		if pc.Fonts.Normal != "" {
+			base.Fonts.Normal = pc.Fonts.Normal
 		}
-		if v, ok := f["标题"].(string); ok && v != "" {
-			printCfg.字体.标题 = v
+		if pc.Fonts.Digit != "" {
+			base.Fonts.Digit = pc.Fonts.Digit
 		}
-		if v, ok := f["默认"].(string); ok && v != "" {
-			printCfg.字体.默认 = v
+		if pc.Fonts.Title != "" {
+			base.Fonts.Title = pc.Fonts.Title
 		}
+		if pc.Fonts.Default != "" {
+			base.Fonts.Default = pc.Fonts.Default
+		}
+		printCfg.Platforms[name] = base
 	}
 	return nil
-}
-
-// printPlatformConfig 按目标平台返回补偿系数。
-func printPlatformConfig(plat string) ScaleConfig {
-	if plat == "windows" {
-		return printCfg.平台.Windows
-	}
-	return printCfg.平台.Mac
 }

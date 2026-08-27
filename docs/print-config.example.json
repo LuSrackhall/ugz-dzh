@@ -1,0 +1,24 @@
+{
+  "platforms": {
+    "windows": {
+      "colScale": 1.1075,
+      "rowScale": 0.992,
+      "fonts": {
+        "normal": "Calibri",
+        "digit": "Noteworthy",
+        "title": "仿宋",
+        "default": "宋体"
+      }
+    },
+    "mac": {
+      "colScale": 1.0,
+      "rowScale": 1.0,
+      "fonts": {
+        "normal": "Calibri",
+        "digit": "Noteworthy",
+        "title": "仿宋",
+        "default": "宋体"
+      }
+    }
+  }
+}

@@ -7,7 +7,12 @@
 ./ledger init -s 2025-10 -o output
 ```
 - `-s` 建账月（启动月）：决定期初调整锚定月、跨年结转基准
-- 生成 `output/2025/2025.json`（含全局设置/科目树/科目映射/合并总账科目等配置）
+- **一次性建立完整账本管理体系**（输出根目录）：
+  - `vouchers/` — 凭证输入目录（+ README 命名说明），每月凭证放 `vouchers/YYYY_MM/*.md`
+  - `print-config.json` — 打印版配置模板（generate **自动发现**，放输出根目录即生效；已存在则保留用户修改）
+  - `README.md` — 体系使用说明
+  - `output/<年份>/<年份>.json` — 年度配置（含全局设置/科目树/科目映射/合并总账科目等）
+- 幂等：print-config.json / README / vouchers 已存在不覆盖（仅补缺失项）；年份 JSON 已存在则报错拒绝
 
 ## generate — 生成月度账本
 ```

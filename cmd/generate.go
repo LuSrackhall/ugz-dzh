@@ -38,25 +38,29 @@ var generateCmd = &cobra.Command{
 		platform, _ := cmd.Flags().GetString("platform")
 		printConfigPath, _ := cmd.Flags().GetString("config")
 		generator.PrintPlatform = platform // 先定平台，配置加载与生成都基于它
-		// 自动发现：未显式传 --config 时，自动加载当前工作目录下的 print-config.json（若有）
+		// 自动发现：未显式传 --config 时，依次查找 当前工作目录 → 输出根目录 下的 print-config.json
 		autoConfig := ""
 		if printConfigPath == "" {
-			if _, err := os.Stat("print-config.json"); err == nil {
-				autoConfig = "print-config.json"
-				printConfigPath = autoConfig
+			for _, dir := range []string{".", output} {
+				cand := filepath.Join(dir, "print-config.json")
+				if _, err := os.Stat(cand); err == nil {
+					autoConfig = cand
+					printConfigPath = cand
+					break
+				}
 			}
 		}
 		if err := generator.LoadPrintConfig(printConfigPath); err != nil {
 			return err
 		}
 		if printConfigPath != "" {
-			where := "已加载"
 			if autoConfig != "" {
-				where = "已自动发现当前目录"
+				fmt.Printf("打印版配置已自动发现: %s → %s\n", autoConfig, generator.CurrentConfigSummary())
+			} else {
+				fmt.Printf("打印版配置已加载: %s → %s\n", printConfigPath, generator.CurrentConfigSummary())
 			}
-			fmt.Printf("打印版配置%s: %s → %s\n", where, printConfigPath, generator.CurrentConfigSummary())
 		} else {
-			fmt.Printf("打印版配置: 默认 → %s（可放 print-config.json 到当前目录自动生效，或 --config 显式指定）\n", generator.CurrentConfigSummary())
+			fmt.Printf("打印版配置: 默认 → %s（把 print-config.json 放当前目录或输出根目录即自动生效）\n", generator.CurrentConfigSummary())
 		}
 
 		// 收集所有凭证

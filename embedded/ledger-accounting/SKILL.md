@@ -19,7 +19,7 @@ agent_created: true
 
 | 命令 | 用途 |
 |---|---|
-| `ledger init -s <YYYY-MM> -o <输出目录>` | 建账（设置建账月=启动月，生成 {year}.json） |
+| `ledger init -s <YYYY-MM> -o <输出目录>` | 建账（设置建账月=启动月，生成 {year}.json，并建好 vouchers/ 凭证目录 + print-config.json 打印版配置模板 + README，完整管理体系一次到位） |
 | `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数+分区域字体，见 docs/print-config.md） |
 | `ledger map -a <错名> -b <对名> -j <json>` | 科目名称映射纠错 |
 | `ledger add-manual -a <科目> -m <月> -n <金额> -t <备注> -j <json>` | 期初调整（**只作用于建账月**，-m 仅记录） |
@@ -36,14 +36,16 @@ agent_created: true
 ./ledger init -s 2025-10 -o output
 ```
 - 建账月决定期初调整的锚定月（后续 add-manual 只影响建账月）
-- 生成 `output/2025/2025.json`
+- **一次建立完整管理体系**（输出根目录）：`vouchers/`（凭证输入目录，每月凭证放 `vouchers/YYYY_MM/*.md`）+ `print-config.json`（打印版配置模板，generate 自动发现）+ `README.md` + `output/2025/2025.json`
+- 幂等：重复 init 不覆盖已有 print-config.json/README/vouchers（仅补缺失）；年份 JSON 已存在则报错
 
 ### 2. 每月记账
-1. 用户按月建凭证目录（如 `2025_10/` 或 `2025/10/`），每张凭证一个 Markdown 文件（格式见 references/commands.md）
+1. 凭证放 `vouchers/YYYY_MM/`（init 建好的目录），每张凭证一个 Markdown 文件（格式见 references/commands.md）
 2. 生成当月账本：
 ```bash
-./ledger generate -v 2025_10 -o output
+./ledger generate -v vouchers/2025_10 -o output
 ```
+- `print-config.json` 已在输出根目录，generate **自动发现**（无需 --config）；打印版尺寸不符时直接改它，免发版
 3. 复核：打开 xlsx 检查（总账/明细账/日记账/期初期末表/报表），`check` 校验
 
 ### 3. 科目管理

@@ -30,6 +30,7 @@
 package generator
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -111,9 +112,20 @@ func LoadPrintConfig(path string) error {
 	if err != nil {
 		return fmt.Errorf("读取打印版配置 %s: %w", path, err)
 	}
+	// 容忍 UTF-8 BOM（Windows 记事本"UTF-8 with BOM"保存时产生）
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+	// 防呆：检测旧版中文字段名（早期实现用中文键，Go json 对未知字段静默忽略→配置不生效）
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err == nil {
+		for _, cn := range []string{"平台", "字体", "列宽系数", "行高系数", "基准", "数字", "标题", "默认"} {
+			if _, ok := raw[cn]; ok {
+				return fmt.Errorf("配置文件 %s 使用了中文字段名（如 %q）——旧格式已被废弃，json 会静默忽略导致配置不生效。请改用英文键：platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}（字段说明见 docs/print-config.md）", path, cn)
+			}
+		}
+	}
 	loaded := &PrintConfig{}
 	if err := json.Unmarshal(data, loaded); err != nil {
-		return fmt.Errorf("解析打印版配置 %s: %w", path, err)
+		return fmt.Errorf("解析打印版配置 %s: %w（请确认文件是 UTF-8 无 BOM 编码；JSON 不能有注释/尾逗号）", path, err)
 	}
 	// 合并：覆盖配置里出现的平台（字段非零覆盖，未配置项保持默认）
 	for name, pc := range loaded.Platforms {

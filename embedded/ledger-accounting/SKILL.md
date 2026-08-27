@@ -68,6 +68,7 @@ agent_created: true
 ### 6. 打印
 - GL/ML 账页：打印版位格 xlsx（`print/` 子目录，金额拆位、红字红色字体）
 - 打印版尺寸跨平台不一致（WPS Mac/Windows 渲染差异）时：用 `generate --platform <mac|windows>` 指定目标平台，或 `--config print-config.json` 调平台补偿系数（colScale/rowScale）与分区域字体（默认 Windows 列宽×1.1075/行高×0.992）；字段说明见 docs/print-config.md，模板见 docs/print-config.example.json，Mac 上可配合 scripts/gen-win-test.sh 生成 Windows 版测试
+- **⚠️ `--config` 必须显式传参才生效**（不会自动找当前目录文件）；配置用英文键（中文键会报错）；文件须 UTF-8 无 BOM；只作用于打印版（查看版不变），须重新 generate 后看 `print/` 新文件。自检：generate 启动打印的 `打印版配置: 已加载 → 平台=.. 列宽系数=..` 行
 - 日记账/期初期末表/报表：直接打印查看版 sheet
 
 ## 数据宪法（CLI 安全原则，必须遵守）

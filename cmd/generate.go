@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -37,6 +38,24 @@ var generateCmd = &cobra.Command{
 		entries, err := CollectEntries(voucherDir)
 		if err != nil {
 			return fmt.Errorf("收集凭证: %w", err)
+		}
+
+		// 凭证号重号检测（Change 12）：文件名"记字第X号"数字重复 → 告警（如 记字第0005号.md 与 记字第0005号 更正.md）
+		if files, _ := filepath.Glob(filepath.Join(voucherDir, "*.md")); len(files) > 0 {
+			numMap := make(map[string]string)
+			for _, f := range files {
+				base := filepath.Base(f)
+				m := voucherNumRe.FindStringSubmatch(base)
+				if m == nil {
+					continue
+				}
+				key := m[1] // 凭证号数字（含前导零）
+				if prev, ok := numMap[key]; ok {
+					fmt.Printf("警告: 凭证号重复 %q（%s 与 %s）——同一凭证号出现在两个文件，请检查是否漏账/重号\n", key, prev, base)
+				} else {
+					numMap[key] = base
+				}
+			}
 		}
 		if len(entries) == 0 {
 			return fmt.Errorf("目录 %s 中没有解析到任何凭证分录", voucherDir)
@@ -235,3 +254,6 @@ func validateSameMonth(entries []voucher.Entry) (year, month string, err error) 
 	month = expected
 	return year, month, nil
 }
+
+// voucherNumRe 从文件名提取凭证号数字（Change 12 重号检测）。
+var voucherNumRe = regexp.MustCompile(`记字第\D*0*([0-9]{1,6})`)

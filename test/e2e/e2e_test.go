@@ -509,3 +509,68 @@ func TestJournalNoStaleAcrossMonths(t *testing.T) {
 		t.Error("现金日记账缺'本年累计'行")
 	}
 }
+
+// TestReportsNoStaleAcrossMonths（Change 11 验收补测）：连续两月生成后，
+// 11 月报表 sheet 不得残留 10 月数据（"本年收益"仅出现一次）。
+func TestReportsNoStaleAcrossMonths(t *testing.T) {
+	root, err := findProjectRoot()
+	if err != nil {
+		t.Fatalf("找不到项目根目录: %v", err)
+	}
+	bin := filepath.Join(t.TempDir(), "ledger")
+	cmd := exec.Command("go", "build", "-o", bin, ".")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("编译失败: %s", out)
+	}
+	testData := filepath.Join(root, "test", "e2e", "test_data")
+	output := filepath.Join(t.TempDir(), "out")
+
+	run := func(args ...string) error {
+		c := exec.Command(bin, args...)
+		out, err := c.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%v: %s", err, out)
+		}
+		return nil
+	}
+	if err := run("init", "-s", "2025-10", "-o", output); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for _, m := range []string{"2025_10", "2025_11"} {
+		if err := run("generate", "-v", filepath.Join(testData, m), "-o", output, "-f"); err != nil {
+			t.Fatalf("generate %s: %v", m, err)
+		}
+	}
+
+	f, err := excelize.OpenFile(filepath.Join(output, "2025", "2025-11.xlsx"))
+	if err != nil {
+		t.Fatalf("打开 2025-11.xlsx: %v", err)
+	}
+	defer f.Close()
+
+	for _, sheet := range []string{"收支结余表", "科目汇总表", "凭证序时簿"} {
+		rows, err := f.GetRows(sheet)
+		if err != nil {
+			t.Fatalf("读 %s: %v", sheet, err)
+		}
+		// "本年收益"仅出现一次（无 10 月残留）
+		if sheet == "收支结余表" {
+			n := 0
+			for _, row := range rows {
+				for _, cell := range row {
+					if strings.Contains(cell, "本年收益") {
+						n++
+					}
+				}
+			}
+			if n != 1 {
+				t.Errorf("收支结余表 '本年收益' 出现 %d 次（应为 1，跨月残留）", n)
+			}
+		}
+		// 资产负债表/收支结余表标题应为 2025-11
+		if len(rows) > 0 && len(rows[0]) > 0 && !strings.Contains(rows[0][0], "2025-11") {
+			t.Errorf("%s 标题 %q 非 2025-11（跨月残留）", sheet, rows[0][0])
+		}
+	}
+}

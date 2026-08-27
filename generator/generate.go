@@ -159,6 +159,11 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("生成日记账: %w", err)
 	}
 
+	// 9.03 报表套件（Change 11：资产负债表/收支结余表/科目汇总表/凭证序时簿）
+	if err := wb.WriteReportSheets(entries, activity, initials, ytdDebit, ytdCredit); err != nil {
+		return fmt.Errorf("生成报表: %w", err)
+	}
+
 	// 9.05 月末结账（合并总分类账）
 	if err := wb.WriteMergeGLClosings(activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit, initials); err != nil {
 		return fmt.Errorf("合并总分类账月结: %w", err)

@@ -30,6 +30,7 @@ type GlobalSettings struct {
 	MergeGLAccounts    []string          `json:"合并总账科目"`
 	GLSuppressAccounts []string          `json:"总分类账忽略科目"`
 	MLSuppressAccounts []string          `json:"多科目明细账忽略科目"`
+	ClosingMonth       string            `json:"结账月"` // Change 11：已结账的最后月份（<=该月拒绝无 -f 生成）
 }
 
 // AccountNode 科目树中的一个节点（叶子科目）。
@@ -519,14 +520,17 @@ func ValidateAccountTree(cfg *GlobalConfig) error {
 
 // --- 期初迁移与校验 ---
 
-// inferPropertyByType 按总账科目类别推断属性：资产/费用→借，负债/权益/收入→贷，未知→借。
+// inferPropertyByType 按总账科目类别推断属性：资产/费用→借，负债/权益/收入→贷，未知→未分类。
 // 替代按首月净额推断（审计 M1：银行存款曾因首月净额为负被标为"贷"）。
+// 未知科目返回"未分类"（设计专家审查 Change 11：防误归类，默认"借"会误导）。
 func inferPropertyByType(general string) string {
 	switch accountTypes[general] {
 	case "负债", "权益", "收入":
 		return "贷"
-	default:
+	case "资产", "费用":
 		return "借"
+	default:
+		return "未分类"
 	}
 }
 

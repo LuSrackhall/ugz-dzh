@@ -22,6 +22,7 @@ func init() {
 	generateCmd.Flags().BoolP("force", "f", false, "覆盖已有 xlsx")
 	generateCmd.Flags().BoolP("verbose", "V", false, "输出详细日志")
 	generateCmd.Flags().StringP("platform", "p", "auto", "打印版目标平台: auto(当前系统)/mac/windows")
+	generateCmd.Flags().String("config", "", "打印版配置文件 (print-config.json)，可配平台补偿系数与各区域字体")
 	generateCmd.MarkFlagRequired("voucherDir")
 }
 
@@ -35,6 +36,10 @@ var generateCmd = &cobra.Command{
 		force, _ := cmd.Flags().GetBool("force")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		platform, _ := cmd.Flags().GetString("platform")
+		printConfigPath, _ := cmd.Flags().GetString("config")
+		if err := generator.LoadPrintConfig(printConfigPath); err != nil {
+			return err
+		}
 
 		// 收集所有凭证
 		entries, err := CollectEntries(voucherDir)

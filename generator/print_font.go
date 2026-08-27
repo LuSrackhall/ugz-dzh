@@ -12,7 +12,7 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// printFontName 打印版统一字体名（宋体）。
+// printFontName 打印版"默认"区域（表头/标签/摘要等）字体名（可在 print-config.json 的 字体.默认 配置）。
 const printFontName = "宋体"
 
 // applyPrintFont 统一 sheet 内所有非零样式的字体为 宋体+Bold（保留其他属性）。
@@ -51,7 +51,7 @@ func applyPrintFont(f *excelize.File, sheet string) {
 				if font.Family != "" {
 					continue
 				}
-				font.Family = printFontName
+				font.Family = printCfg.字体.默认
 				font.Bold = true
 				st.Font = font
 				nid, err = f.NewStyle(st)

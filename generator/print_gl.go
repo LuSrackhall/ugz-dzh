@@ -81,8 +81,8 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		dataAlignCols:       dataAlignCols,
 		edgePixelDelta:      edgePixelDelta,
 		nonAmountPixelDelta: nonAmountPixelDelta,
-		// 数据区金额数字（借方/贷方/余额）：字体 Noteworthy（字号保持 7pt）
-		dataFontFamily: "Noteworthy",
+		// 数据区金额数字（借方/贷方/余额）：字体可配（print-config.json 字体.数字；默认 Noteworthy，字号保持 7pt）
+		dataFontFamily: printCfg.字体.数字,
 		postProcess:    applyGLTitleArea,
 		isLabelRow: func(r int) bool {
 			if r < labelRow1 || blockRows <= 0 {
@@ -119,7 +119,7 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 	// 总分类账样式（居中）：仿宋 22pt、绿、粗体、居中+底对齐，底部双线边框
 	// （自摘要列 3/4 处到标题右缘，合并范围=边框起止）。
 	titleStyleCenter, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: "仿宋", Size: 22, Color: "006100", Bold: true},
+		Font:      &excelize.Font{Family: printCfg.字体.标题, Size: 22, Color: "006100", Bold: true},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "bottom"},
 		Border:    []excelize.Border{{Type: "bottom", Color: "006100", Style: 6}},
 	})
@@ -129,7 +129,7 @@ func applyGLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 	// 装订边红双线：正面标题行首列（月列）是装订边，需保留 left=double#CC0000。
 	// 该列已不在标题合并内（合并=边框起止），单独用 titleStyleEdge（左红双线）。
 	titleStyleEdge, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: "仿宋", Size: 22, Color: "006100", Bold: true},
+		Font:      &excelize.Font{Family: printCfg.字体.标题, Size: 22, Color: "006100", Bold: true},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "bottom"},
 		Border:    []excelize.Border{{Type: "left", Color: "CC0000", Style: 6}},
 	})

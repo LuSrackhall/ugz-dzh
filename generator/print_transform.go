@@ -35,6 +35,12 @@ func TransformToPrint(viewPath, printPath string) error {
 	}
 	defer f.Close()
 
+	// 基准字体（Normal 默认字体，列宽像素计算基准）：可由 print-config.json 字体.基准 配置
+	// （如统一两端用 Arimo 时改为 "Arimo"）。默认 Calibri 与现状一致。
+	if err := f.SetDefaultFont(printCfg.字体.基准); err != nil {
+		fmt.Fprintf(os.Stderr, "警告: 设置基准字体失败: %v\n", err)
+	}
+
 	for _, sheet := range f.GetSheetList() {
 		switch {
 		case strings.HasPrefix(sheet, sheetPrefixGL):

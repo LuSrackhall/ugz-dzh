@@ -88,8 +88,8 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 		edgePixel:       edgePixel,
 		nonAmountPixel:  nonAmountPixel,
 		labelFontSize:   6,
-		// 数据区金额数字：6pt Noteworthy（仅数据格；表头标签仍 6pt 宋体）
-		dataFontFamily: "Noteworthy",
+		// 数据区金额数字：6pt，字体可配（print-config.json 字体.数字；默认 Noteworthy；表头标签仍 6pt 宋体）
+		dataFontFamily: printCfg.字体.数字,
 		dataFontSize:   6,
 		postProcess:    applyMLTitleArea,
 	}
@@ -116,7 +116,7 @@ func applyMLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 
 	// Front 标题样式：18pt 仿宋、左/底对齐、绿色底双边
 	titleStyle, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: "仿宋", Size: 18, Color: "006100", Bold: true},
+		Font:      &excelize.Font{Family: printCfg.字体.标题, Size: 18, Color: "006100", Bold: true},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "bottom"},
 		Border:    []excelize.Border{{Type: "bottom", Color: "006100", Style: 6}},
 	})
@@ -126,7 +126,7 @@ func applyMLTitleArea(f *excelize.File, sheet string, cm colMap, maxRow int) {
 	// 明细5 块首列（装订边）需保留红色双线左框——标题行原样式含该边框，
 	// 若用 titleStyle 整体覆盖会把它抹掉（用户反馈过此回归）。
 	titleStyleLeft, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: "仿宋", Size: 18, Color: "006100", Bold: true},
+		Font:      &excelize.Font{Family: printCfg.字体.标题, Size: 18, Color: "006100", Bold: true},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "bottom"},
 		Border: []excelize.Border{
 			{Type: "bottom", Color: "006100", Style: 6},

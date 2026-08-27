@@ -44,12 +44,14 @@ var installSkillCmd = &cobra.Command{
 
 		// ② .claude/skills/ledger-accounting → 软链接（Claude Code）
 		claudeLink := filepath.Join(root, ".claude", "skills", "ledger-accounting")
-		if err := linkSkill(claudeLink, agentsTarget); err != nil {
-			return fmt.Errorf("创建 Claude 软链接: %w", err)
+		claudeMode, err := linkSkill(claudeLink, agentsTarget)
+		if err != nil {
+			return fmt.Errorf("接入 Claude Code: %w", err)
 		}
 
 		// ③ .workbuddy/skills/ledger-accounting（WorkBuddy；默认软链接，--real-workbuddy 复制）
 		wbTarget := filepath.Join(root, ".workbuddy", "skills", "ledger-accounting")
+		var wbMode string
 		if realWorkbuddy {
 			if err := os.RemoveAll(wbTarget); err != nil {
 				return fmt.Errorf("清理旧安装: %w", err)
@@ -57,18 +59,19 @@ var installSkillCmd = &cobra.Command{
 			if _, err := writeSkillTree(wbTarget); err != nil {
 				return fmt.Errorf("写入 WorkBuddy 副本: %w", err)
 			}
-			fmt.Printf("WorkBuddy 副本: %s（真实复制）\n", wbTarget)
+			wbMode = "真实复制（--real-workbuddy）"
 		} else {
-			if err := linkSkill(wbTarget, agentsTarget); err != nil {
-				return fmt.Errorf("创建 WorkBuddy 软链接: %w", err)
+			wbMode, err = linkSkill(wbTarget, agentsTarget)
+			if err != nil {
+				return fmt.Errorf("接入 WorkBuddy: %w", err)
 			}
 		}
 
 		fmt.Printf("已安装 ledger-accounting 技能（%d 个文件，真实源）\n", n)
 		fmt.Printf("  标准源(真实): %s\n", agentsTarget)
-		fmt.Printf("  Claude Code:  %s\n", claudeLink)
-		fmt.Printf("  WorkBuddy:    %s%s\n", wbTarget, map[bool]string{true: "（软链接）", false: ""}[!realWorkbuddy])
-		if !realWorkbuddy {
+		fmt.Printf("  Claude Code:  %s（%s）\n", claudeLink, claudeMode)
+		fmt.Printf("  WorkBuddy:    %s（%s）\n", wbTarget, wbMode)
+		if !realWorkbuddy && wbMode == "软链接" {
 			fmt.Printf("提示: 若 WorkBuddy 会话中未加载到该技能（软链接不被跟随），请重跑: ledger install-skill --real-workbuddy\n")
 		}
 		fmt.Printf("提示: 改技能内容后重跑本命令即可全工具同步；安装产物不进 git（embedded/ 为 git 源）\n")
@@ -104,15 +107,22 @@ func writeSkillTree(target string) (int, error) {
 	return n, err
 }
 
-// linkSkill 创建 skill 软链接（相对路径，指向 agentsTarget）。
-func linkSkill(link, agentsTarget string) error {
+// linkSkill 接入技能：优先相对路径软链接；失败（如 Windows 无符号链接权限）自动回退复制。
+// 返回实际接入方式（"软链接" / "复制（软链接不可用…）"）。
+func linkSkill(link, agentsTarget string) (string, error) {
 	_ = os.RemoveAll(link) // 幂等：先清旧链接/旧副本
 	rel, err := filepath.Rel(filepath.Dir(link), agentsTarget)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
-		return err
+		return "", err
 	}
-	return os.Symlink(rel, link)
+	if serr := os.Symlink(rel, link); serr == nil {
+		return "软链接", nil
+	} else if _, werr := writeSkillTree(link); werr != nil {
+		return "", fmt.Errorf("软链接失败(%v) 且回退复制失败(%v)", serr, werr)
+	} else {
+		return "复制（软链接不可用，可能无符号链接权限——Windows 需开发者模式/管理员）", nil
+	}
 }

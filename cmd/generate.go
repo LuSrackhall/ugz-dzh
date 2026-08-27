@@ -42,19 +42,32 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("目录 %s 中没有解析到任何凭证分录", voucherDir)
 		}
 
-		// 借贷平衡校验（审计 H2，CLI 内建安全：不平拒绝生成）
+		// 同年同月校验 + 推导年份月份
+		year, month, err := validateSameMonth(entries)
+		if err != nil {
+			return err
+		}
+
+		// 自动并入自动结转凭证（output/{year}/closing/，Change 10——系统生成的结转凭证，不污染手工目录）
+		closingDir := filepath.Join(output, year, "closing")
+		if closingFiles, _ := filepath.Glob(filepath.Join(closingDir, "*.md")); len(closingFiles) > 0 {
+			for _, f := range closingFiles {
+				ces, err := voucher.ParseFile(f)
+				if err != nil {
+					return fmt.Errorf("解析自动结转凭证 %s: %w", f, err)
+				}
+				entries = append(entries, ces...)
+			}
+			fmt.Printf("已并入 %d 张自动结转凭证（%s）\n", len(closingFiles), closingDir)
+		}
+
+		// 借贷平衡校验（审计 H2，CLI 内建安全：不平拒绝生成；含自动结转凭证）
 		warnings, err := voucher.ValidateVoucherBalance(entries)
 		if err != nil {
 			return fmt.Errorf("凭证借贷平衡校验失败: %w", err)
 		}
 		for _, w := range warnings {
 			fmt.Printf("提示: %s\n", w)
-		}
-
-		// 同年同月校验 + 推导年份月份
-		year, month, err := validateSameMonth(entries)
-		if err != nil {
-			return err
 		}
 
 		// 推导 JSON 路径: {output}/{year}/{year}.json

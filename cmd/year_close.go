@@ -53,6 +53,7 @@ var yearCloseCmd = &cobra.Command{
 		if diff := balance.CheckInitialBalanceAt(cfg, lastMonth); diff != 0 {
 			fmt.Printf("警告: 期初借贷不平衡（%s 快照），差额 %.2f 元（借正贷负），请核对期初设置\n", lastMonth, float64(diff)/100)
 		}
+		hasUnclosedPnl := false
 		for account, node := range cfg.Tree {
 			mb, ok := node.Balances[lastMonth]
 			if !ok || mb.Final == 0 {
@@ -63,6 +64,7 @@ var yearCloseCmd = &cobra.Command{
 				gen = gen[:idx]
 			}
 			if t, ok := balance.AccountTypeOf(gen); ok && (t == "收入" || t == "费用") {
+				hasUnclosedPnl = true
 				fmt.Printf("警告: 损益类科目 %s 年末余额 %.2f 元非 0，疑似漏结转（收入/费用应结转归零）\n", account, float64(mb.Final)/100)
 				// 结转草稿（设计专家审查 Change 9）：方向由余额符号决定（验收修正）——
 				// 借余（final>0）→ 借 本年收益 / 贷 科目；贷余（final<0）→ 借 科目 / 贷 本年收益。
@@ -79,6 +81,9 @@ var yearCloseCmd = &cobra.Command{
 				}
 				fmt.Printf("  结转草稿: %s\n", draft)
 			}
+		}
+		if hasUnclosedPnl {
+			fmt.Printf("提示: 可用 ledger gen-close -j %s -o %s 自动生成结转凭证到 closing/ 目录（不污染手工凭证目录）\n", configPath, output)
 		}
 
 		yy, _ := strconv.Atoi(lastMonth[:4])

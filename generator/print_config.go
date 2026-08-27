@@ -73,6 +73,12 @@ type FontConfig struct {
 	Digit   string `json:"digit"`
 	Title   string `json:"title"`
 	Default string `json:"default"`
+	// 金额区域列数字：字号/加粗（0/null=现状：GL 7pt / ML 6pt，不加粗）
+	DigitSize float64 `json:"digitSize"`
+	DigitBold *bool   `json:"digitBold"`
+	// 摘要/借/贷/余额表头：字号/加粗（0/null=现状：GL 7pt / ML 6pt，加粗）
+	LabelSize float64 `json:"labelSize"`
+	LabelBold *bool   `json:"labelBold"`
 }
 
 // printCfg 全局打印版配置（默认值=当前标定行为）。
@@ -124,6 +130,18 @@ func mergeFonts(base FontConfig, over FontConfig) FontConfig {
 	}
 	if over.Default != "" {
 		base.Default = over.Default
+	}
+	if over.DigitSize != 0 {
+		base.DigitSize = over.DigitSize
+	}
+	if over.DigitBold != nil {
+		base.DigitBold = over.DigitBold
+	}
+	if over.LabelSize != 0 {
+		base.LabelSize = over.LabelSize
+	}
+	if over.LabelBold != nil {
+		base.LabelBold = over.LabelBold
 	}
 	return base
 }
@@ -243,6 +261,18 @@ func LoadPrintConfig(path string) error {
 		}
 		if pc.Fonts.Default != "" {
 			base.Fonts.Default = pc.Fonts.Default
+		}
+		if pc.Fonts.DigitSize != 0 {
+			base.Fonts.DigitSize = pc.Fonts.DigitSize
+		}
+		if pc.Fonts.DigitBold != nil {
+			base.Fonts.DigitBold = pc.Fonts.DigitBold
+		}
+		if pc.Fonts.LabelSize != 0 {
+			base.Fonts.LabelSize = pc.Fonts.LabelSize
+		}
+		if pc.Fonts.LabelBold != nil {
+			base.Fonts.LabelBold = pc.Fonts.LabelBold
 		}
 		// GL/ML 分账本覆盖（全空视为未配置）
 		if !pc.GL.empty() {

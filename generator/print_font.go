@@ -15,9 +15,17 @@ import (
 // printFontName 打印版"默认"区域（表头/标签/摘要等）字体名（可在 print-config.json 的 字体.默认 配置）。
 const printFontName = "宋体"
 
+// fontKey 样式缓存键：原 styleID + 是否"摘要/借/贷/余额表头目标"（labelCols 格与普通格同 styleID 时不能串用）。
+type fontKey struct {
+	sid    int
+	target bool
+}
+
 // applyPrintFont 统一 sheet 内所有非零样式的字体为 宋体+Bold（保留其他属性）。
-func applyPrintFont(f *excelize.File, sheet string) {
-	styleMap := make(map[int]int) // 原styleID → 新styleID
+// 摘要/借/贷/余额表头标签（isLabelRow 且列∈cfg.labelCols）：labelBold=false → 不加粗；
+// labelSize>0 → 覆盖字号（摘要为非金额列，字号须在此应用）。
+func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetConfig) {
+	styleMap := make(map[fontKey]int) // (sid,target) → 新styleID
 	rows, err := f.GetRows(sheet)
 	if err != nil {
 		return
@@ -36,7 +44,14 @@ func applyPrintFont(f *excelize.File, sheet string) {
 			if err != nil || sid == 0 {
 				continue // 无样式格跳过
 			}
-			nid, ok := styleMap[sid]
+			target := false
+			if cfg.isLabelRow(r) {
+				if view := printColToView(c, cm); cfg.labelCols[view] {
+					target = true
+				}
+			}
+			key := fontKey{sid, target}
+			nid, ok := styleMap[key]
 			if !ok {
 				st, err := f.GetStyle(sid)
 				if err != nil {
@@ -53,16 +68,34 @@ func applyPrintFont(f *excelize.File, sheet string) {
 				}
 				font.Family = currentFonts().Default
 				font.Bold = true
+				if target {
+					if cfg.labelBold != nil {
+						font.Bold = *cfg.labelBold
+					}
+					if cfg.labelFontSize > 0 {
+						font.Size = cfg.labelFontSize
+					}
+				}
 				st.Font = font
 				nid, err = f.NewStyle(st)
 				if err != nil {
 					continue
 				}
-				styleMap[sid] = nid
+				styleMap[key] = nid
 			}
 			_ = f.SetCellStyle(sheet, cell, cell, nid)
 		}
 	}
+}
+
+// printColToView 打印版列号 → 查看版列号（在金额展开/拆分映射上反向查找）。
+func printColToView(p int, cm colMap) int {
+	for v := 1; v < len(cm.start); v++ {
+		if p >= cm.startCol(v) && p <= cm.endCol(v) {
+			return v
+		}
+	}
+	return 0
 }
 
 // isLedgerSheet 判断是否总分类账/多科目明细账 sheet。

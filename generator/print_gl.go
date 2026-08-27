@@ -100,6 +100,22 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		breakViewCol:    lay.PageGapStartCol + 1,
 		applyPageLayout: applyGLPrintPageLayout,
 	}
+	// 摘要/借/贷/余额 表头字体样式 + 金额区域列数字样式（print-config.json fonts 扩展）
+	fc := currentFonts()
+	if fc.LabelSize != 0 {
+		cfg.labelFontSize = fc.LabelSize
+	}
+	if fc.DigitSize != 0 {
+		cfg.dataFontSize = fc.DigitSize
+	}
+	cfg.labelBold = fc.LabelBold
+	cfg.digitBold = fc.DigitBold
+	cfg.labelCols = map[int]bool{
+		lay.FrontStartCol + glColSummary: true, lay.FrontStartCol + glColDebit: true,
+		lay.FrontStartCol + glColCredit: true, lay.FrontStartCol + glColBalance: true,
+		lay.BackStartCol + glColSummary: true, lay.BackStartCol + glColDebit: true,
+		lay.BackStartCol + glColCredit: true, lay.BackStartCol + glColBalance: true,
+	}
 	return transformSheet(f, sheet, cfg)
 }
 

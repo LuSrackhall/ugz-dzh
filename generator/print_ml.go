@@ -93,6 +93,22 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 		dataFontSize:   6,
 		postProcess:    applyMLTitleArea,
 	}
+	// 摘要/借/贷/余额 表头字体样式 + 金额区域列数字样式（print-config.json fonts 扩展）
+	fc := currentFonts()
+	if fc.LabelSize != 0 {
+		cfg.labelFontSize = fc.LabelSize
+	}
+	if fc.DigitSize != 0 {
+		cfg.dataFontSize = fc.DigitSize
+	}
+	cfg.labelBold = fc.LabelBold
+	cfg.digitBold = fc.DigitBold
+	cfg.labelCols = map[int]bool{
+		lay.BackStartCol + mlOffSummary: true,
+		lay.BackStartCol + mlOffDebit:   true,
+		lay.BackStartCol + mlOffCredit:  true,
+		lay.BackStartCol + mlOffBalance: true,
+	}
 	return transformSheet(f, sheet, cfg)
 }
 

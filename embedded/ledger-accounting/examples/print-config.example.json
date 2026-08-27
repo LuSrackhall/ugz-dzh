@@ -7,7 +7,11 @@
         "normal": "Calibri",
         "digit": "Noteworthy",
         "title": "仿宋",
-        "default": "宋体"
+        "default": "宋体",
+        "labelSize": 0,
+        "labelBold": null,
+        "digitSize": 0,
+        "digitBold": null
       },
       "gl": {
         "colScale": 1.13595,
@@ -31,7 +35,11 @@
         "normal": "Calibri",
         "digit": "Noteworthy",
         "title": "仿宋",
-        "default": "宋体"
+        "default": "宋体",
+        "labelSize": 0,
+        "labelBold": null,
+        "digitSize": 0,
+        "digitBold": null
       }
     }
   }

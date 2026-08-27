@@ -13,23 +13,23 @@ import (
 
 func init() {
 	rootCmd.AddCommand(installSkillCmd)
-	installSkillCmd.Flags().StringP("output", "o", "", "安装目标目录（默认 ~/.workbuddy/skills/）")
+	installSkillCmd.Flags().StringP("output", "o", "", "安装目标目录（默认：CLI 所在目录的 .workbuddy/skills/，即项目级）")
 }
 
 var installSkillCmd = &cobra.Command{
 	Use:   "install-skill",
-	Short: "安装 ledger-accounting 会计技能到 WorkBuddy 技能目录",
-	Long: "把内嵌（embed）的 ledger-accounting 技能（SKILL.md + references/）安装到指定目录，" +
-		"供 agent 在对话中自动加载、全程指导记账（建账/科目管理/月结/结转/跨年/git 管理）。" +
-		"默认安装到 ~/.workbuddy/skills/（用户级，跨项目可用）；可用 -o 指定。覆盖安装（幂等）。",
+	Short: "安装 ledger-accounting 会计技能到项目级技能目录",
+	Long: "把内嵌（embed）的 ledger-accounting 技能（SKILL.md + references/）安装到项目级技能目录" +
+		"（默认：CLI 可执行文件所在目录的 .workbuddy/skills/），供本项目 agent 在对话中自动加载、全程指导记账。" +
+		"可用 -o 指定其他位置。覆盖安装（幂等）。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		out, _ := cmd.Flags().GetString("output")
 		if out == "" {
-			home, err := os.UserHomeDir()
+			exe, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("无法获取用户目录: %w", err)
+				return fmt.Errorf("无法定位可执行文件: %w", err)
 			}
-			out = filepath.Join(home, ".workbuddy", "skills")
+			out = filepath.Join(filepath.Dir(exe), ".workbuddy", "skills")
 		}
 		target := filepath.Join(out, "ledger-accounting")
 		if err := os.RemoveAll(target); err != nil {

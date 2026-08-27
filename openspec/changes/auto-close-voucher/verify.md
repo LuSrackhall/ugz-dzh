@@ -53,3 +53,4 @@
 - [x] ✅ PASS
 - [ ] ⚠️ PASS WITH WARNINGS: `<note>`
 - [ ] ❌ FAIL: `<reason>`
+7. **子 agent 验收发现并修复（余额月非 12 月结转不生效）**：gen-close 凭证日期硬编码 12-31，余额月为 10 月时被 FilterByMonth 过滤 → 改为余额月最后一天（2025-10-31）；实测 10 月场景结转并入后损益归零 ✓

@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"ledger/balance"
 	"ledger/voucher"
@@ -124,9 +126,14 @@ var genCloseCmd = &cobra.Command{
 			return fmt.Errorf("创建 closing 目录: %w", err)
 		}
 
+		// 凭证日期 = 余额月最后一天（验收发现：硬编码 12-31 会被 FilterByMonth 过滤，余额月非 12 月时结转不生效）
+		yy, _ := strconv.Atoi(month[:4])
+		mm, _ := strconv.Atoi(month[5:])
+		lastDay := time.Date(yy, time.Month(mm)+1, 0, 0, 0, 0, 0, time.UTC).Day()
+
 		// 写凭证（标准格式，可被解析器识别）
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("记字第%04d号 1/1\n\n记帐凭证\n\n%s年12月31日\n\n附件 张\n\n", num, year))
+		sb.WriteString(fmt.Sprintf("记字第%04d号 1/1\n\n记帐凭证\n\n%04d年%02d月%02d日\n\n附件 张\n\n", num, yy, mm, lastDay))
 		sb.WriteString("<table><thead><tr><th>摘要</th><th>总帐科目</th><th>明细科目</th><th>借方</th><th>贷方</th></tr></thead><tbody>")
 		var totalDebit, totalCredit float64
 		for _, l := range lines {

@@ -7,11 +7,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version 构建时注入（goreleaser ldflags: -X ledger/cmd.version={{.Version}}）。
+// 本地 go build 为 "dev"；发布包为 tag 版本（如 v0.7.2）。
+var version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:     "ledger",
 	Short:   "手工账电子化生成系统",
 	Long:    "将手工记账凭证（Markdown 文件）自动转为每月独立、完整的累计 Excel 工作薄。",
-	Version: "1.0.0",
+	Version: version,
 	Run: func(cmd *cobra.Command, args []string) {
 		printGuide(cmd.Version)
 	},

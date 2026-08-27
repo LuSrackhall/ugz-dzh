@@ -5,6 +5,8 @@ builds:
     binary: ledger
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X ledger/cmd.version={{ .Version }}
     goos:
       - linux
       - darwin

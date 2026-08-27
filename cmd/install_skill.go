@@ -57,6 +57,11 @@ var installSkillCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("写入标准源: %w", err)
 		}
+		// 版本联动：写入 VERSION 文件（= 当前 ledger 版本），doctor 校验 skill 与 CLI 是否匹配
+		if err := os.WriteFile(filepath.Join(agentsTarget, "VERSION"), []byte(version+"\n"), 0o644); err != nil {
+			return fmt.Errorf("写入版本标记: %w", err)
+		}
+		n++
 
 		// 确定接入哪些工具
 		selected, err := resolveSelection(selectFlag)

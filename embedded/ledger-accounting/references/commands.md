@@ -108,7 +108,7 @@ bash scripts/rebuild.sh <凭证根目录> <输出目录>
 ```
 ./ledger doctor [-o <输出根目录>]
 ```
-- 一次查清：程序版本、skill 是否安装且自包含（references/print-config.md 在=新版）、print-config.json 能否被自动发现、输出目录是否有 {year}/{year}.json
+- 一次查清：程序版本、skill 是否安装且自包含（references/print-config.md 在=新版）、**CLI 与 skill 版本是否匹配（VERSION 文件）**、print-config.json 能否被自动发现、输出目录是否有 {year}/{year}.json
 - 输出 `[OK]/[WARN]/[FAIL]` 逐项 + 结论统计 + 修复指引
 - 生产环境遇到"配置不生效/命令报错/agent 行为异常"时，先跑 doctor 定位，再按 [FAIL] 项修复（多为重跑 install-skill 或 init）
 
@@ -118,5 +118,6 @@ bash scripts/rebuild.sh <凭证根目录> <输出目录>
 ./ledger install-skill --select 1,2             # 非交互指定
 ./ledger install-skill --real-workbuddy         # WorkBuddy 用真实复制（软链接不被加载时）
 ```
+- **版本联动**：安装时把当前 ledger 版本写入 `.agents/skills/ledger-accounting/VERSION`——**更新 ledger 后必须重跑 install-skill**，否则技能与程序不匹配；用 `ledger doctor` 校验（版本不一致会 [FAIL] 并提示重装）
 - 安装后，你的 agent 工具（WorkBuddy / Claude Code / Cursor / dsh 等）在对话中遇到记账、建账、结转等操作时会自动加载本技能来指导你
 - 标准源 `.agents/skills/` 始终安装（支持 Agent Skills 开放标准的工具原生读取）

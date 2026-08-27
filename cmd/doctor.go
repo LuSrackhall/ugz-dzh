@@ -39,7 +39,7 @@ var doctorCmd = &cobra.Command{
 		// ① 版本与平台
 		report("OK", "程序", fmt.Sprintf("ledger %s (%s/%s)", rootCmd.Version, runtime.GOOS, runtime.GOARCH))
 
-		// ② skill 安装（exe 旁 .agents/skills/ledger-accounting）
+		// ② skill 安装（exe 旁 .agents/skills/ledger-accounting）+ 版本匹配
 		skillDir := ""
 		if exe, err := os.Executable(); err == nil {
 			skillDir = filepath.Join(filepath.Dir(exe), ".agents", "skills", "ledger-accounting")
@@ -57,6 +57,17 @@ var doctorCmd = &cobra.Command{
 				report("FAIL", "skill", fmt.Sprintf("已安装但非自包含（缺 references/print-config.md，%d 文件）——旧版。请重跑 ledger install-skill", n))
 			default:
 				report("FAIL", "skill", fmt.Sprintf("未安装。请运行 ledger install-skill（安装到 %s）", skillDir))
+			}
+			// 版本匹配：CLI 版本 vs skill VERSION（本地 dev 构建跳过）
+			if verData, err := os.ReadFile(filepath.Join(skillDir, "VERSION")); err == nil {
+				skillVer := strings.TrimSpace(string(verData))
+				if version != "dev" && skillVer != version {
+					report("FAIL", "版本匹配", fmt.Sprintf("CLI %s 与已装 skill %s 不一致——更新 CLI 后须重跑 ledger install-skill 同步技能", version, skillVer))
+				} else {
+					report("OK", "版本匹配", fmt.Sprintf("CLI %s = skill %s", version, skillVer))
+				}
+			} else if n > 0 {
+				report("FAIL", "版本匹配", fmt.Sprintf("skill 无版本标记（旧安装）——请重跑 ledger install-skill（CLI 当前 %s）", version))
 			}
 		}
 

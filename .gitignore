@@ -52,4 +52,5 @@ test/e2e/test_data
 # Installed skills（安装产物：ledger install-skill 从 embedded/ 重建）
 .agents/skills/
 .claude/skills/
+.cursor/skills/
 .workbuddy/skills/

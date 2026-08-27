@@ -37,8 +37,14 @@ var generateCmd = &cobra.Command{
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		platform, _ := cmd.Flags().GetString("platform")
 		printConfigPath, _ := cmd.Flags().GetString("config")
+		generator.PrintPlatform = platform // 先定平台，配置加载与生成都基于它
 		if err := generator.LoadPrintConfig(printConfigPath); err != nil {
 			return err
+		}
+		if printConfigPath != "" {
+			fmt.Printf("打印版配置已加载: %s → %s\n", printConfigPath, generator.CurrentConfigSummary())
+		} else {
+			fmt.Printf("打印版配置: 默认 → %s（可用 --config print-config.json 自定义）\n", generator.CurrentConfigSummary())
 		}
 
 		// 收集所有凭证

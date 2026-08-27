@@ -93,6 +93,14 @@ func currentFonts() FontConfig {
 	return platformConfig().Fonts
 }
 
+// CurrentConfigSummary 当前平台配置摘要（供 generate 打印确认加载状态）。
+func CurrentConfigSummary() string {
+	plat := currentPlatform()
+	cfg := platformConfig()
+	return fmt.Sprintf("平台=%s 列宽系数=%.4f 行高系数=%.4f 字体(normal=%s digit=%s title=%s default=%s)",
+		plat, cfg.ColScale, cfg.RowScale, cfg.Fonts.Normal, cfg.Fonts.Digit, cfg.Fonts.Title, cfg.Fonts.Default)
+}
+
 // LoadPrintConfig 从 JSON 文件加载打印版配置（可选，缺省用默认值）。
 // 未配置的平台/字段保持默认值不变。
 func LoadPrintConfig(path string) error {

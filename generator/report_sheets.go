@@ -98,33 +98,56 @@ func (wb *Workbook) writeBalanceSheet(initials map[string]int64, activity map[st
 	}
 	row := startRow
 	var leftTotal, rightTotal int64
+	var pnlNet int64 // 损益净额（收入贷余为负 + 费用借余为正，取负=收入-费用）
+	var unclassified []repRow
 	for _, r := range rows {
 		t, ok := balance.AccountTypeOf(r.gen)
-		left := ok && (t == "资产" || t == "费用")
 		if !ok {
-			continue // 未分类科目不列入资产负债表
+			unclassified = append(unclassified, r)
+			continue // 未分类科目单独列出（不入左右列）
 		}
 		amt := r.final
+		sign := int64(1)
 		if amt < 0 {
-			amt = -amt
+			amt, sign = -amt, -1
 		}
-		if left {
+		switch t {
+		case "资产":
+			// 左列：资产类（借余为正；贷余红字显负）
 			wb.File.SetCellValue(sheet, cellName(1, row), r.account)
-			if r.final < 0 {
-				amt = -amt // 方向相反显负（红字科目）
+			val := amt
+			if sign < 0 {
+				val = -val
 			}
-			wb.File.SetCellValue(sheet, cellName(2, row), centsToYuan(amt))
+			wb.File.SetCellValue(sheet, cellName(2, row), centsToYuan(val))
 			wb.setMoneyStyle(sheet, row, 2)
-			leftTotal += amt
-		} else {
+			leftTotal += val
+			row++
+		case "负债", "权益":
+			// 右列：负债/权益类（贷余为正；借余红字显负）
 			wb.File.SetCellValue(sheet, cellName(3, row), r.account)
-			if r.final > 0 {
-				amt = -amt
+			val := amt
+			if sign > 0 {
+				val = -val
 			}
-			wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(amt))
+			wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(val))
 			wb.setMoneyStyle(sheet, row, 4)
-			rightTotal += amt
+			rightTotal += val
+			row++
+		case "收入":
+			pnlNet += r.final // 贷余为负
+		case "费用":
+			pnlNet += r.final // 借余为正
 		}
+	}
+	// 本年收益（= 收入 - 费用），列权益侧（会计专家复核：损益科目不进资产负债左右列，
+	// 以"本年收益"单行汇总——未结转月份报表才平衡且口径规范）
+	yearProfit := -pnlNet
+	if yearProfit != 0 {
+		wb.File.SetCellValue(sheet, cellName(3, row), "本年收益")
+		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(yearProfit))
+		wb.setMoneyStyle(sheet, row, 4)
+		rightTotal += yearProfit
 		row++
 	}
 	// 合计
@@ -141,6 +164,18 @@ func (wb *Workbook) writeBalanceSheet(initials map[string]int64, activity map[st
 	wb.setMoneyStyle(sheet, row, 4)
 	if leftTotal != rightTotal {
 		wb.File.SetCellValue(sheet, cellName(1, row+1), fmt.Sprintf("差额（左-右）: %.2f 元——请检查红字/异常科目", float64(leftTotal-rightTotal)/100))
+	}
+	// 未分类科目单独列出（会计专家复核：不得静默跳过，需可定位）
+	if len(unclassified) > 0 {
+		row++
+		wb.File.SetCellValue(sheet, cellName(1, row), "未分类科目（类别未知，不计入左右合计）:")
+		row++
+		for _, r := range unclassified {
+			wb.File.SetCellValue(sheet, cellName(1, row), r.account)
+			wb.File.SetCellValue(sheet, cellName(2, row), centsToYuan(r.final))
+			wb.setMoneyStyle(sheet, row, 2)
+			row++
+		}
 	}
 	return nil
 }

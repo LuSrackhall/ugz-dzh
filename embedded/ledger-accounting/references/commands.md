@@ -97,6 +97,5 @@ bash scripts/rebuild.sh <凭证根目录> <输出目录>
 ./ledger install-skill --select 1,2             # 非交互指定
 ./ledger install-skill --real-workbuddy         # WorkBuddy 用真实复制（软链接不被加载时）
 ```
-- `.agents/skills/ledger-accounting/` 始终安装（真实文件，标准源：dsh/Cursor/Copilot 原生读）
-- 选中工具软链接接入（失败自动降级复制）；安装产物不进 git
-- 修改本技能：编辑项目 `embedded/ledger-accounting/` → `go build -o ledger .` → `install-skill` 全同步
+- 安装后，你的 agent 工具（WorkBuddy / Claude Code / Cursor / dsh 等）在对话中遇到记账、建账、结转等操作时会自动加载本技能来指导你
+- 标准源 `.agents/skills/` 始终安装（支持 Agent Skills 开放标准的工具原生读取）

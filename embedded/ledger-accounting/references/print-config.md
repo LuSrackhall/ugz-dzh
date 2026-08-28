@@ -148,13 +148,13 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 - **按平台独立**：`platforms.windows` 与 `platforms.mac` 各自完整配置（系数 + 字体），互不影响
 - **部分覆盖**：只写要改的字段，其余保持默认（如只调 windows 系数，mac 与字体不动）
 - **未知平台**：配置中未列出的平台（如 linux）按 mac 默认（系数 1.0）
-- **目标平台选择**：`--platform auto`（默认，按当前系统）/ `--platform windows` / `--platform mac`——在 Mac 上可用 `--platform windows` 生成 Windows 版测试（配合 `scripts/gen-win-test.sh`）
+- **目标平台选择**：`--platform auto`（默认，按当前系统）/ `--platform windows` / `--platform mac`——在任一平台都可用 `--platform windows` 生成 Windows 版（跨平台生成，改完配置重新 generate 即可）
 
 ## 为什么需要补偿系数
 
 WPS 各平台/各机器渲染列宽、行高存在差异（字体环境、渲染引擎不同）：同一份打印版 xlsx 在 Windows 上实测整体偏小（表格宽约 -12.5%、行高约 -6%）。补偿系数在生成时乘到列宽/行高值上，使目标平台的输出适配其页面。
 
-默认值（windows 平台级 1.1075 / 0.992；GL 独立 1.13595 / 0.99495）为多轮肉眼观察标定的收敛值；换环境后可自行调整（GL/ML 可独立调），观察方法见 `scripts/gen-win-test.sh` 顶部说明。
+默认值（windows 平台级 1.1075 / 0.992；GL 独立 1.13595 / 0.99495）为多轮肉眼观察标定的收敛值；换环境后可自行调整（GL/ML 可独立调），改完重新 `generate` 即可观察效果（免发版）。
 
 ## 完整示例
 

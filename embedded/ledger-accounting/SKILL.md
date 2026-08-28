@@ -2,7 +2,7 @@
 name: ledger-accounting
 description: 手工账电子化工具 ledger（Go CLI）的会计操作技能。当用户涉及建账（init）、生成月度账本（generate）、科目管理（map/add-manual）、期初调整、月结、年末损益结转（gen-close/year-close）、结账标记（lock）、账本检查（check/漂移/重建）、打印版、凭证格式与红字处理、git 管理 JSON 等一切会计记账操作时使用。技能指导 agent 全程协助用户完成村级/个人手工账电子化：凭证 Markdown → Excel 账本（总账/明细账/合并总账/现金银行日记账/期初期末表/资产负债表等）→ 打印装订 → 跨年结转。
 agent_created: true
-version: 0.7.11
+version: 0.7.12
 ---
 
 # ledger 会计记账操作
@@ -15,12 +15,12 @@ version: 0.7.11
 
 ## 概述
 
-`ledger` 是 Go 编写的 CLI（项目根编译产物，`go build -o ledger .`）。核心流程：
+`ledger` 是命令行工具（发布包提供 `ledger.exe` / `ledger`）。核心流程：
 **JSON 配置 + 凭证 Markdown → 每月 Excel 账本**。JSON 是唯一权威源，git 管理变更。
 
-- **本 skill 自包含**：所有文档（commands/print-config/workflows）、配置模板（examples/）、脚本（scripts/）都在本包内，生产环境（仅 ledger.exe + 本 skill）可直接查阅，不依赖源码项目
+- **本 skill 面向生产用户**：只含生产环境需要的内容（命令文档、打印版配置、业务流程、配置模板、全量重建脚本），**不含开发/标定工具**；不依赖源码项目，仅 ledger + 本 skill 即可运转
 - 产物：`<输出目录>/<年份>/{年份}.json`（配置权威源）+ `{年份}-{月}.xlsx`（账本）+ `print/`（打印版位格）
-- 二进制：项目根 `./ledger`（或 `go build -o ledger .` 重建）
+- 二进制：发布包内的 `ledger.exe`（Windows）/ `ledger`（Mac），无需源码、无需编译
 
 ### 按需查阅（渐进式，不要一次全读）
 
@@ -94,7 +94,7 @@ version: 0.7.11
   3. **正反面独立**：`{gl,ml}.frontColScale`/`backColScale`（ML 正反面结构不对称时用）
   4. **±px 精调**：`{front,back}{Summary,Binding,Outer}Delta` —— 最终 px 增量（`+1`=最终+1px），只动摘要列/装订边/非装订边（每边一列），**金额拆位列完全不参与**
   5. **字体**：`fonts.{normal,digit,title,default,labelFamily,digitSize,digitBold,labelSize,labelBold}`（默认 Win 表头=等线 Light、Mac=宋体）
-  - 标定顺序：系数粗调 → px 微调逼近；Mac 上可配合 `scripts/gen-win-test.sh` 生成 Windows 版供对比
+  - 标定顺序：系数粗调 → px 微调逼近；在 Windows 上改配置后重新 generate 即可观察效果（打印版只受 print-config.json 控制，改完重生成，免发版）
 - **⚠️ 配置自动发现**：`print-config.json` 放在**运行 ledger 的当前目录**即自动生效（无需 --config 传参；显式传参优先）；配置用英文键（中文键会报错）；文件须 UTF-8 无 BOM；只作用于打印版（查看版不变），须重新 generate 后看 `print/` 新文件。自检：generate 启动打印的 `打印版配置: 已加载/已自动发现当前目录/默认 → 平台=.. 列宽系数=..` 行
 - 日记账/期初期末表/报表：直接打印查看版 sheet
 

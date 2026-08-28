@@ -1,6 +1,6 @@
 # 命令详细用法（ledger CLI）
 
-二进制：项目根 `./ledger`（缺失时 `go build -o ledger .`）。
+二进制：发布包提供的 `ledger.exe` / `ledger`。
 
 ## init — 建账
 ```
@@ -21,7 +21,7 @@
 - `-v` 凭证目录：**该目录下所有凭证必须同一年同一月**（报错则检查是否混入其他月）
 - 无 `-f`：幂等保护——已生成月份（含"本月合计"）拒绝重跑
 - `-f`：覆盖重建当月（从当月删除重建，-f 级联需逐月或使用 rebuild.sh）
-- `-p/--platform <auto|mac|windows>`：打印版目标平台（默认 auto=当前系统；在 Mac 上可用 `--platform windows` 生成 Windows 版打印版，配合本 skill 包内 scripts/gen-win-test.sh 迭代标定（仅开发环境 Mac 需要））
+- `-p/--platform <auto|mac|windows>`：打印版目标平台（默认 auto=当前系统；在任一平台都可用 `--platform windows` 生成 Windows 版打印版（跨平台生成，便于在一台机器上产出两端账本））
 - `--config <print-config.json>`（可选）：打印版配置文件——平台补偿系数（colScale/rowScale）与分区域字体（fonts.normal/digit/title/default），解决 WPS 各平台/机器渲染尺寸不一致；不传用默认值（Windows 列宽×1.1075/行高×0.992，Mac 恒 1.0）。字段说明见 references/print-config.md，模板见 examples/print-config.example.json
   - **自动发现 + 自动创建**：未传 `--config` 时，依次查 **当前目录 → 输出根目录** 的 print-config.json；**都没有则自动创建默认模板**（输出根目录，含全部默认字段）——**不存在"无配置"状态**，删除文件下次生成自动重建
   - **必须是英文键**：`platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}`（中文键会报错）

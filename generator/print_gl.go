@@ -111,6 +111,13 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	}
 	cfg.labelBold = fc.LabelBold
 	cfg.labelFamily = fc.LabelFamily
+	// 表头区 = HeaderRow .. SubHeaderRow+1（含"摘要/借..方/贷..方/余..额"文字行 + 金额位数标签行）
+	cfg.isHeaderRow = func(r int) bool {
+		if r < lay.HeaderRow || blockRows <= 0 {
+			return false
+		}
+		return (r-lay.HeaderRow)%blockRows <= (lay.SubHeaderRow + 1 - lay.HeaderRow)
+	}
 	cfg.digitBold = fc.DigitBold
 	cfg.labelCols = map[int]bool{
 		lay.FrontStartCol + glColSummary: true, lay.FrontStartCol + glColDebit: true,

@@ -366,6 +366,9 @@ type printSheetConfig struct {
 	labelFamily string
 	// labelCols 摘要/借/贷/余额 表头目标列（查看版列号集合；labelBold 应用范围）。
 	labelCols map[int]bool
+	// isHeaderRow 表头区行判定（含"摘要/借方/贷方/余额"文字行 + 金额位数标签行；
+	// nil=仅按 isLabelRow 判定）。表头字体 labelFamily 作用于整个表头区，而非仅位数标签行。
+	isHeaderRow func(r int) bool
 	// postProcess 列展开变换后的额外后处理（如 ML 标题区合并/字体覆盖）。
 	// cm 为该 sheet 的列映射；maxRow 为变换后最大行号。
 	postProcess func(f *excelize.File, sheet string, cm colMap, maxRow int)

@@ -105,6 +105,14 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	}
 	cfg.labelBold = fc.LabelBold
 	cfg.labelFamily = fc.LabelFamily
+	// 表头区 = 四行表头（DataStartRow-4 .. DataStartRow-1）+ h4 标签行（DataStartRow）
+	cfg.isHeaderRow = func(r int) bool {
+		start := lay.DataStartRow - 4
+		if r < start || blockRows <= 0 {
+			return false
+		}
+		return (r-start)%blockRows <= 4
+	}
 	cfg.digitBold = fc.DigitBold
 	cfg.labelCols = map[int]bool{
 		lay.BackStartCol + mlOffSummary: true,

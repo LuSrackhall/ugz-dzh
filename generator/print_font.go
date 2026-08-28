@@ -44,8 +44,13 @@ func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetCon
 			if err != nil || sid == 0 {
 				continue // 无样式格跳过
 			}
+			// 表头区（含"摘要/借方/贷方/余额"文字行 + 金额位数标签行）且列∈labelCols → 表头样式
 			target := false
-			if cfg.isLabelRow(r) {
+			inHeader := cfg.isHeaderRow != nil && cfg.isHeaderRow(r)
+			if !inHeader && cfg.isHeaderRow == nil {
+				inHeader = cfg.isLabelRow(r) // 未填表头区判定时的兼容回退
+			}
+			if inHeader {
 				if view := printColToView(c, cm); cfg.labelCols[view] {
 					target = true
 				}

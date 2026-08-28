@@ -366,6 +366,13 @@ type printSheetConfig struct {
 	labelFamily string
 	// labelCols 摘要/借/贷/余额 表头目标列（查看版列号集合；labelBold 应用范围）。
 	labelCols map[int]bool
+	// frontColScale/backColScale 正面页（Front 半侧）/反面页（Back 半侧）独立列宽系数（0=用账本级 colScale）。
+	// 行高不支持正反面独立（正反面页共享同一批行）。
+	frontColScale float64
+	backColScale  float64
+	// isFrontCol/isBackCol 列归属半侧判定（查看版列号）。
+	isFrontCol func(viewCol int) bool
+	isBackCol  func(viewCol int) bool
 	// isHeaderRow 表头区行判定（含"摘要/借方/贷方/余额"文字行 + 金额位数标签行；
 	// nil=仅按 isLabelRow 判定）。表头字体 labelFamily 作用于整个表头区，而非仅位数标签行。
 	isHeaderRow func(r int) bool
@@ -411,7 +418,19 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	// 列宽：金额列 ÷n（n=该列展开数），其余原宽；零宽列显式设置 0（保持总宽守恒）
 	// 平台补偿：Windows 渲染偏小，列宽值 ×colScale（Mac=1）；GL/ML 可分账本独立系数
 	colScale, rowScale := sheetCompensate()
+	frontScale, backScale := sheetColScales()
+	// 正反面页独立列宽系数：该列属 Front/Back 半侧时用对应系数，否则用账本级
+	colScaleFor := func(c int) float64 {
+		if frontScale != 0 && cfg.isFrontCol != nil && cfg.isFrontCol(c) {
+			return frontScale
+		}
+		if backScale != 0 && cfg.isBackCol != nil && cfg.isBackCol(c) {
+			return backScale
+		}
+		return colScale
+	}
 	for c := 1; c <= cfg.totalViewCols; c++ {
+		cs := colScaleFor(c)
 		w := meta.colWidth[c]
 		if w <= 0 {
 			// 查看版显式 width=0 的列（GL 分页列 / ML 书口列）：打印版同样设 0，
@@ -442,7 +461,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 					sub = base + d/7
 				}
 				pc := cm.startCol(c) + k
-				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub*colScale)
+				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub*cs)
 			}
 		} else {
 			// 拆分非金额列（如 GL 摘要列 4 格）：n 子列按"原字符数 ÷ n"等分——
@@ -452,7 +471,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if n := cm.splitCols(c); n > 1 {
 				subW := (w*7 + cfg.splitNAPixelDelta[c]) / (7 * float64(n))
 				for k := 0; k < n; k++ {
-					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW*colScale)
+					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW*cs)
 				}
 				continue
 			}
@@ -465,7 +484,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if d, ok := cfg.nonAmountPixelDelta[c]; ok {
 				w = w + d/7
 			}
-			_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), w*colScale)
+			_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), w*cs)
 		}
 	}
 

@@ -116,3 +116,40 @@ func TestLoadPrintConfigGLML(t *testing.T) {
 		t.Errorf("ml:{} 应视为未配置: %+v", w.ML)
 	}
 }
+
+func TestFrontBackColScale(t *testing.T) {
+	printCfg = defaultPrintConfig()
+	printCfg.Platforms["windows"] = PlatformConfig{
+		ColScale: 1.1075, RowScale: 0.992, Fonts: defaultFonts(),
+		ML: &SheetConfig{ColScale: 1.1075, FrontColScale: 1.0, BackColScale: 1.2},
+	}
+	PrintPlatform = "windows"
+	printSheetType = "ml"
+	if f, b := sheetColScales(); f != 1.0 || b != 1.2 {
+		t.Errorf("ML 正反面系数 = (%v,%v), want (1.0,1.2)", f, b)
+	}
+	// GL 未配正反面 → 0（用账本级）
+	printSheetType = "gl"
+	if f, b := sheetColScales(); f != 0 || b != 0 {
+		t.Errorf("GL 无正反面配置应为 0: (%v,%v)", f, b)
+	}
+	printSheetType = ""
+	PrintPlatform = "auto"
+}
+
+func TestLoadPrintConfigFrontBack(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "print-config.json")
+	content := `{"platforms":{"windows":{"ml":{"colScale":1.1,"frontColScale":1.05,"backColScale":1.15}}}}`
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	printCfg = defaultPrintConfig()
+	if err := LoadPrintConfig(p); err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	ml := printCfg.Platforms["windows"].ML
+	if ml == nil || ml.FrontColScale != 1.05 || ml.BackColScale != 1.15 || ml.ColScale != 1.1 {
+		t.Errorf("ML 正反面系数未生效: %+v", ml)
+	}
+}

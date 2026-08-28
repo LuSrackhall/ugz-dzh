@@ -60,11 +60,18 @@ type SheetConfig struct {
 	ColScale float64    `json:"colScale"`
 	RowScale float64    `json:"rowScale"`
 	Fonts    FontConfig `json:"fonts"`
+	// FrontColScale/BackColScale：正面页（Front 半侧列区）/反面页（Back 半侧列区）
+	// 独立列宽系数（0=用本账本 colScale）。解决正反面页结构不对称（尤其 ML）时
+	// 同一系数无法让两页同时达到最佳长宽比的问题。
+	// 注意：行高不支持正反面独立——正反面页共享同一批行（行高按行设置，无法分半侧）。
+	FrontColScale float64 `json:"frontColScale"`
+	BackColScale  float64 `json:"backColScale"`
 }
 
 // empty 判断 sheet 配置是否全空（模板里 "gl": {} 视为未配置）。
 func (s *SheetConfig) empty() bool {
-	return s == nil || (s.ColScale == 0 && s.RowScale == 0 && s.Fonts == (FontConfig{}))
+	return s == nil || (s.ColScale == 0 && s.RowScale == 0 && s.Fonts == (FontConfig{}) &&
+		s.FrontColScale == 0 && s.BackColScale == 0)
 }
 
 // FontConfig 分区域字体（normal=列宽基准；digit=金额数字；title=大标题；default=其余）。
@@ -186,6 +193,14 @@ func currentFonts() FontConfig {
 }
 
 // sheetCompensate 当前账本类型的列宽/行高补偿系数（GL/ML 专用系数优先，0 回退平台级）。
+// sheetColScales 当前账本类型的正反面页独立列宽系数（0=用账本级 colScale）。
+func sheetColScales() (front, back float64) {
+	if sc := sheetConfig(); sc != nil {
+		return sc.FrontColScale, sc.BackColScale
+	}
+	return 0, 0
+}
+
 func sheetCompensate() (colScale, rowScale float64) {
 	cfg := platformConfig()
 	colScale, rowScale = cfg.ColScale, cfg.RowScale
@@ -291,11 +306,13 @@ func LoadPrintConfig(path string) error {
 		}
 		// GL/ML 分账本覆盖（全空视为未配置）
 		if !pc.GL.empty() {
-			sc := &SheetConfig{ColScale: pc.GL.ColScale, RowScale: pc.GL.RowScale, Fonts: mergeFonts(base.Fonts, pc.GL.Fonts)}
+			sc := &SheetConfig{ColScale: pc.GL.ColScale, RowScale: pc.GL.RowScale,
+				Fonts: mergeFonts(base.Fonts, pc.GL.Fonts), FrontColScale: pc.GL.FrontColScale, BackColScale: pc.GL.BackColScale}
 			base.GL = sc
 		}
 		if !pc.ML.empty() {
-			sc := &SheetConfig{ColScale: pc.ML.ColScale, RowScale: pc.ML.RowScale, Fonts: mergeFonts(base.Fonts, pc.ML.Fonts)}
+			sc := &SheetConfig{ColScale: pc.ML.ColScale, RowScale: pc.ML.RowScale,
+				Fonts: mergeFonts(base.Fonts, pc.ML.Fonts), FrontColScale: pc.ML.FrontColScale, BackColScale: pc.ML.BackColScale}
 			base.ML = sc
 		}
 		printCfg.Platforms[name] = base

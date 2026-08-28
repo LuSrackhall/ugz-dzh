@@ -111,6 +111,10 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	}
 	cfg.labelBold = fc.LabelBold
 	cfg.labelFamily = fc.LabelFamily
+	// 正反面页独立列宽系数（Front/Back 各 glColCount=12 列；装订/分页列不属任一半侧→用账本级）
+	cfg.frontColScale, cfg.backColScale = sheetColScales()
+	cfg.isFrontCol = func(c int) bool { return c >= lay.FrontStartCol && c < lay.FrontStartCol+glColCount }
+	cfg.isBackCol = func(c int) bool { return c >= lay.BackStartCol && c < lay.BackStartCol+glColCount }
 	// 表头区 = HeaderRow .. SubHeaderRow+1（含"摘要/借..方/贷..方/余..额"文字行 + 金额位数标签行）
 	cfg.isHeaderRow = func(r int) bool {
 		if r < lay.HeaderRow || blockRows <= 0 {

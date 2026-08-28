@@ -74,6 +74,33 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 | `platforms.<平台>.fonts.digitSize` | **金额区域列**数字字号（0=现状：GL 7pt / ML 6pt） | 0 |
 | `platforms.<平台>.fonts.digitBold` | **金额区域列**数字加粗（null=现状不加粗；true=加粗） | null |
 | `platforms.<平台>.gl` / `.ml` | **GL（总分类账）/ ML（多科目明细账）分账本覆盖**（可选）：单独设该账本的 colScale/rowScale/fonts，未填字段回退平台级 | Windows GL: 1.13595/0.99495（2026-08-28 标定）；ML/其余: 用平台级 |
+| `platforms.<平台>.{gl,ml}.frontColScale` | **正面页（Front 半侧列区）独立列宽系数**（0=用该账本 colScale） | 0 |
+| `platforms.<平台>.{gl,ml}.backColScale` | **反面页（Back 半侧列区）独立列宽系数**（0=用该账本 colScale） | 0 |
+
+### 正反面页独立列宽（frontColScale / backColScale）
+
+账簿是双面打印的：一个 sheet 里**左半侧（Back）= 反面页、右半侧（Front）= 正面页**，中间装订列分隔、垂直分页符在两者之间 → **打印时各成一页**。ML 正反面结构不对称（Back=借/贷/余+明细1-4，Front=明细5-14），同一系数往往无法让两页同时达到最佳长宽比。
+
+按半侧独立缩放即可解决（各页独立适配纸张，互不牵连）：
+
+```json
+{
+  "platforms": {
+    "windows": {
+      "ml": {
+        "colScale": 1.1075, "rowScale": 0.992,
+        "backColScale": 1.2,
+        "frontColScale": 1.0
+      }
+    }
+  }
+}
+```
+
+- **列宽：支持**正反面独立（列宽逐列设置，Back/Front 是不同列区）
+- **行高：不支持**正反面独立——正反面页**共享同一批行**（行高按行设置，物理上无法对同一行设两个值）。调整长宽比只需调列宽即可。
+- 装订列/分页列不属于任一半侧，始终用该账本的 `colScale`
+- GL 同样支持（每半侧 `glColCount`=12 列）
 
 ### GL/ML 分账本配置
 

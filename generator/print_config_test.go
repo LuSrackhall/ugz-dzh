@@ -73,7 +73,7 @@ func TestSheetConfigGLML(t *testing.T) {
 	}
 	f := currentFonts()
 	if f.Digit != "宋体" || f.Title != "黑体" || f.Normal != "Calibri" {
-		t.Errorf("GL 字体 = %+v, want digit=宋体 title=黑体 normal=Calibri", f)
+		t.Errorf("GL 字体 = %+v, want digit=宋体 title=黑体 normal=Calibri(回退测试平台级)", f)
 	}
 
 	// ML：无专用配置 → 平台级
@@ -109,7 +109,7 @@ func TestLoadPrintConfigGLML(t *testing.T) {
 	if w.GL == nil || w.GL.ColScale != 1.25 || w.GL.Fonts.Digit != "宋体" {
 		t.Errorf("GL 配置未生效: %+v", w.GL)
 	}
-	if w.GL.RowScale != 0 || w.GL.Fonts.Normal != "Calibri" {
+	if w.GL.RowScale != 0 || w.GL.Fonts.Normal != "宋体" {
 		t.Errorf("GL 未填字段应回退平台级默认: %+v", w.GL)
 	}
 	if w.ML != nil {

@@ -64,7 +64,7 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 |---|---|---|
 | `platforms.<平台>.colScale` | 该平台打印版**列宽补偿系数**（乘在列宽值上，适配该平台渲染） | 1.1075 / 1.0 |
 | `platforms.<平台>.rowScale` | 该平台打印版**行高补偿系数** | 0.992 / 1.0 |
-| `platforms.<平台>.fonts.normal` | Normal 默认字体——**列宽像素计算的基准字体**。如需跨机器/平台统一尺寸，可让各端安装同一字体文件（如开源 Arimo）并在此统一填 `"Arimo"` | Calibri |
+| `platforms.<平台>.fonts.normal` | Normal 默认字体——**列宽像素计算的基准字体**。Windows 默认宋体 / Mac 默认 Calibri（**两端隔离**）；如需跨机器统一尺寸可各端装同一字体文件（如 Arimo）并统一填 `"Arimo"` | Win 宋体 / Mac Calibri |
 | `platforms.<平台>.fonts.digit` | 数据区金额数字字体 | Noteworthy |
 | `platforms.<平台>.fonts.title` | 大标题字体 | 仿宋 |
 | `platforms.<平台>.fonts.default` | 表头/标签/摘要等其余区域字体 | 宋体 |

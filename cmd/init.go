@@ -136,7 +136,7 @@ const printConfigTemplate = `{
       "colScale": 1.1075,
       "rowScale": 0.992,
       "fonts": {
-        "normal": "Calibri",
+        "normal": "宋体",
         "digit": "Noteworthy",
         "title": "仿宋",
         "default": "宋体"

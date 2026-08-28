@@ -84,18 +84,23 @@ type FontConfig struct {
 // printCfg 全局打印版配置（默认值=当前标定行为）。
 var printCfg = defaultPrintConfig()
 
+// defaultFonts 两端共用基础字体默认：Normal=Calibri（Mac 端原效果）。
+// Windows 端 Normal 默认改宋体在 defaultPrintConfig 单独设置——两端隔离，互不影响。
 func defaultFonts() FontConfig {
 	return FontConfig{Normal: "Calibri", Digit: "Noteworthy", Title: "仿宋", Default: "宋体"}
 }
 
 func defaultPrintConfig() *PrintConfig {
 	cfg := &PrintConfig{Platforms: map[string]PlatformConfig{}}
-	// Windows：平台级补偿为肉眼标定收敛值（2026-08-28）；
-	// GL（总分类账）独立系数（列宽×1.13595、行高×0.99495，用户标定），ML 用平台级
+	// Windows：Normal 基础字体默认宋体（列宽像素基准，Win 中易宋体可解析；用户 2026-08-28 定）；
+	// 平台级补偿为肉眼标定收敛值（1.1075/0.992）；GL 独立系数（1.13595/0.99495），ML 用平台级
+	winFonts := defaultFonts()
+	winFonts.Normal = "宋体"
 	cfg.Platforms["windows"] = PlatformConfig{
-		ColScale: 1.1075, RowScale: 0.992, Fonts: defaultFonts(),
+		ColScale: 1.1075, RowScale: 0.992, Fonts: winFonts,
 		GL: &SheetConfig{ColScale: 1.13595, RowScale: 0.99495},
 	}
+	// Mac：保持原效果（Normal=Calibri，系数 1.0）——与 Windows 完全隔离
 	cfg.Platforms["mac"] = PlatformConfig{ColScale: 1.0, RowScale: 1.0, Fonts: defaultFonts()}
 	return cfg
 }

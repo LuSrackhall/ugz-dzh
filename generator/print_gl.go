@@ -110,6 +110,7 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		cfg.dataFontSize = fc.DigitSize
 	}
 	cfg.labelBold = fc.LabelBold
+	cfg.labelFamily = fc.LabelFamily
 	cfg.digitBold = fc.DigitBold
 	cfg.labelCols = map[int]bool{
 		lay.FrontStartCol + glColSummary: true, lay.FrontStartCol + glColDebit: true,

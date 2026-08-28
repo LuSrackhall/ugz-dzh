@@ -76,6 +76,10 @@ func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetCon
 					if cfg.labelSizeOverride {
 						font.Size = cfg.labelFontSize
 					}
+					// 表头字体覆盖（如 Windows 默认"等线 Light"）
+					if cfg.labelFamily != "" {
+						font.Family = cfg.labelFamily
+					}
 				}
 				st.Font = font
 				nid, err = f.NewStyle(st)

@@ -76,9 +76,11 @@ type FontConfig struct {
 	// 金额区域列数字：字号/加粗（0/null=现状：GL 7pt / ML 6pt，不加粗）
 	DigitSize float64 `json:"digitSize"`
 	DigitBold *bool   `json:"digitBold"`
-	// 摘要/借/贷/余额表头：字号/加粗（0/null=现状：GL 7pt / ML 6pt，加粗）
-	LabelSize float64 `json:"labelSize"`
-	LabelBold *bool   `json:"labelBold"`
+	// 摘要/借/贷/余额表头：字号/加粗/字体（0/null/空=现状：GL 7pt / ML 6pt，加粗，宋体）。
+	// labelFamily 非空时该表头字体用它覆盖（如 Windows 默认"等线 Light"）。
+	LabelSize   float64 `json:"labelSize"`
+	LabelBold   *bool   `json:"labelBold"`
+	LabelFamily string  `json:"labelFamily"`
 }
 
 // printCfg 全局打印版配置（默认值=当前标定行为）。
@@ -92,10 +94,12 @@ func defaultFonts() FontConfig {
 
 func defaultPrintConfig() *PrintConfig {
 	cfg := &PrintConfig{Platforms: map[string]PlatformConfig{}}
-	// Windows：Normal 基础字体默认宋体（列宽像素基准，Win 中易宋体可解析；用户 2026-08-28 定）；
+	// Windows：Normal 基础字体默认宋体（列宽像素基准，Win 中易宋体可解析）；
+	// 摘要/借/贷/余额表头字体默认"等线 Light"（Win 系统字体，用户 2026-08-28 定）；
 	// 平台级补偿为肉眼标定收敛值（1.1075/0.992）；GL 独立系数（1.13595/0.99495），ML 用平台级
 	winFonts := defaultFonts()
 	winFonts.Normal = "宋体"
+	winFonts.LabelFamily = "等线 Light"
 	cfg.Platforms["windows"] = PlatformConfig{
 		ColScale: 1.1075, RowScale: 0.992, Fonts: winFonts,
 		GL: &SheetConfig{ColScale: 1.13595, RowScale: 0.99495},
@@ -147,6 +151,9 @@ func mergeFonts(base FontConfig, over FontConfig) FontConfig {
 	}
 	if over.LabelBold != nil {
 		base.LabelBold = over.LabelBold
+	}
+	if over.LabelFamily != "" {
+		base.LabelFamily = over.LabelFamily
 	}
 	return base
 }
@@ -278,6 +285,9 @@ func LoadPrintConfig(path string) error {
 		}
 		if pc.Fonts.LabelBold != nil {
 			base.Fonts.LabelBold = pc.Fonts.LabelBold
+		}
+		if pc.Fonts.LabelFamily != "" {
+			base.Fonts.LabelFamily = pc.Fonts.LabelFamily
 		}
 		// GL/ML 分账本覆盖（全空视为未配置）
 		if !pc.GL.empty() {

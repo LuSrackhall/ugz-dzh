@@ -70,6 +70,7 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 | `platforms.<平台>.fonts.default` | 表头/标签/摘要等其余区域字体 | 宋体 |
 | `platforms.<平台>.fonts.labelSize` | **摘要/借/贷/余额 表头**字号（0=现状：GL 7pt / ML 6pt） | 0 |
 | `platforms.<平台>.fonts.labelBold` | **摘要/借/贷/余额 表头**加粗（null=现状加粗；false=不加粗） | null |
+| `platforms.<平台>.fonts.labelFamily` | **摘要/借/贷/余额 表头**字体（空=现状宋体；Win 默认"等线 Light"） | Win 等线 Light / Mac 空 |
 | `platforms.<平台>.fonts.digitSize` | **金额区域列**数字字号（0=现状：GL 7pt / ML 6pt） | 0 |
 | `platforms.<平台>.fonts.digitBold` | **金额区域列**数字加粗（null=现状不加粗；true=加粗） | null |
 | `platforms.<平台>.gl` / `.ml` | **GL（总分类账）/ ML（多科目明细账）分账本覆盖**（可选）：单独设该账本的 colScale/rowScale/fonts，未填字段回退平台级 | Windows GL: 1.13595/0.99495（2026-08-28 标定）；ML/其余: 用平台级 |

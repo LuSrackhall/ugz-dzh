@@ -362,6 +362,8 @@ type printSheetConfig struct {
 	digitBold *bool
 	// labelBold 摘要/借/贷/余额表头加粗（nil=现状加粗；false 时这些标签格不加粗）。
 	labelBold *bool
+	// labelFamily 摘要/借/贷/余额表头字体（空=现状宋体；如 Windows 默认"等线 Light"）。
+	labelFamily string
 	// labelCols 摘要/借/贷/余额 表头目标列（查看版列号集合；labelBold 应用范围）。
 	labelCols map[int]bool
 	// postProcess 列展开变换后的额外后处理（如 ML 标题区合并/字体覆盖）。

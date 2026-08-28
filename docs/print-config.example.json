@@ -11,7 +11,8 @@
         "labelSize": 0,
         "labelBold": null,
         "digitSize": 0,
-        "digitBold": null
+        "digitBold": null,
+        "labelFamily": "等线 Light"
       },
       "gl": {
         "colScale": 1.13595,

@@ -370,6 +370,8 @@ type printSheetConfig struct {
 	// 行高不支持正反面独立（正反面页共享同一批行）。
 	frontColScale float64
 	backColScale  float64
+	// colPxDelta 查看版列号 → 列宽微调增量（最终 px，在系数之后叠加；仅摘要列/边距列，金额列为 0）。
+	colPxDelta map[int]float64
 	// isFrontCol/isBackCol 列归属半侧判定（查看版列号）。
 	isFrontCol func(viewCol int) bool
 	isBackCol  func(viewCol int) bool
@@ -431,6 +433,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 	}
 	for c := 1; c <= cfg.totalViewCols; c++ {
 		cs := colScaleFor(c)
+		dpx := cfg.colPxDelta[c] // 该列微调增量（最终 px；摘要列拆格时按总量÷n）
 		w := meta.colWidth[c]
 		if w <= 0 {
 			// 查看版显式 width=0 的列（GL 分页列 / ML 书口列）：打印版同样设 0，
@@ -469,7 +472,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			// 总像素增量 splitNAPixelDelta 施加在真实总量（w×7+5n，含 n 份内边距）上：
 			// subW = (w×7 + delta) / (7n)，delta=0 时即 w/n（字符等分）。
 			if n := cm.splitCols(c); n > 1 {
-				subW := (w*7 + cfg.splitNAPixelDelta[c]) / (7 * float64(n))
+				subW := (w*7 + cfg.splitNAPixelDelta[c] + dpx) / (7 * float64(n))
 				for k := 0; k < n; k++ {
 					_ = f.SetColWidth(sheet, colLetter(cm.startCol(c)+k), colLetter(cm.startCol(c)+k), subW*cs)
 				}
@@ -484,7 +487,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if d, ok := cfg.nonAmountPixelDelta[c]; ok {
 				w = w + d/7
 			}
-			_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), w*cs)
+			_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), w*cs+dpx/7)
 		}
 	}
 

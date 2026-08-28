@@ -153,3 +153,24 @@ func TestLoadPrintConfigFrontBack(t *testing.T) {
 		t.Errorf("ML 正反面系数未生效: %+v", ml)
 	}
 }
+
+func TestWidthDeltas(t *testing.T) {
+	printCfg = defaultPrintConfig()
+	printCfg.Platforms["windows"] = PlatformConfig{
+		ColScale: 1.1075, RowScale: 0.992, Fonts: defaultFonts(),
+		ML: &SheetConfig{ColScale: 1.1075, BackSummaryDelta: 5, FrontOuterDelta: -2},
+	}
+	PrintPlatform = "windows"
+	printSheetType = "ml"
+	wd := sheetWidthDeltas()
+	if wd.BackSummary != 5 || wd.FrontOuter != -2 || wd.FrontSummary != 0 || wd.BackBinding != 0 {
+		t.Errorf("ML 微调值 = %+v, want BackSummary=5 FrontOuter=-2 其余 0", wd)
+	}
+	// GL 未配 → 全 0（走原有逻辑，零影响）
+	printSheetType = "gl"
+	if wd := sheetWidthDeltas(); wd != (widthDeltas{}) {
+		t.Errorf("GL 未配微调应为全 0: %+v", wd)
+	}
+	printSheetType = ""
+	PrintPlatform = "auto"
+}

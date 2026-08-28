@@ -66,12 +66,40 @@ type SheetConfig struct {
 	// 注意：行高不支持正反面独立——正反面页共享同一批行（行高按行设置，无法分半侧）。
 	FrontColScale float64 `json:"frontColScale"`
 	BackColScale  float64 `json:"backColScale"`
+	// 正反面页微调：**最终 px 增量**（在系数之后叠加，不被缩放；+1 = 最终 +1px；0=不动）。
+	// 摘要列（Back 有、Front 无）、装订边距列（靠装订线那列）、非装订边距列（书口列），
+	// 每个边只作用一列。金额拆位列完全不参与（保证组内等宽观感不受影响）。
+	FrontSummaryDelta float64 `json:"frontSummaryDelta"`
+	FrontBindingDelta float64 `json:"frontBindingDelta"`
+	FrontOuterDelta   float64 `json:"frontOuterDelta"`
+	BackSummaryDelta  float64 `json:"backSummaryDelta"`
+	BackBindingDelta  float64 `json:"backBindingDelta"`
+	BackOuterDelta    float64 `json:"backOuterDelta"`
+}
+
+// widthDeltas 正反面页微调增量（最终 px）。
+type widthDeltas struct {
+	FrontSummary, FrontBinding, FrontOuter float64
+	BackSummary, BackBinding, BackOuter    float64
+}
+
+// sheetWidthDeltas 当前账本类型的正反面页微调增量（未配置则全 0）。
+func sheetWidthDeltas() widthDeltas {
+	if sc := sheetConfig(); sc != nil {
+		return widthDeltas{
+			FrontSummary: sc.FrontSummaryDelta, FrontBinding: sc.FrontBindingDelta, FrontOuter: sc.FrontOuterDelta,
+			BackSummary: sc.BackSummaryDelta, BackBinding: sc.BackBindingDelta, BackOuter: sc.BackOuterDelta,
+		}
+	}
+	return widthDeltas{}
 }
 
 // empty 判断 sheet 配置是否全空（模板里 "gl": {} 视为未配置）。
 func (s *SheetConfig) empty() bool {
 	return s == nil || (s.ColScale == 0 && s.RowScale == 0 && s.Fonts == (FontConfig{}) &&
-		s.FrontColScale == 0 && s.BackColScale == 0)
+		s.FrontColScale == 0 && s.BackColScale == 0 &&
+		s.FrontSummaryDelta == 0 && s.FrontBindingDelta == 0 && s.FrontOuterDelta == 0 &&
+		s.BackSummaryDelta == 0 && s.BackBindingDelta == 0 && s.BackOuterDelta == 0)
 }
 
 // FontConfig 分区域字体（normal=列宽基准；digit=金额数字；title=大标题；default=其余）。
@@ -307,12 +335,18 @@ func LoadPrintConfig(path string) error {
 		// GL/ML 分账本覆盖（全空视为未配置）
 		if !pc.GL.empty() {
 			sc := &SheetConfig{ColScale: pc.GL.ColScale, RowScale: pc.GL.RowScale,
-				Fonts: mergeFonts(base.Fonts, pc.GL.Fonts), FrontColScale: pc.GL.FrontColScale, BackColScale: pc.GL.BackColScale}
+				Fonts: mergeFonts(base.Fonts, pc.GL.Fonts),
+				FrontColScale: pc.GL.FrontColScale, BackColScale: pc.GL.BackColScale,
+				FrontSummaryDelta: pc.GL.FrontSummaryDelta, FrontBindingDelta: pc.GL.FrontBindingDelta, FrontOuterDelta: pc.GL.FrontOuterDelta,
+				BackSummaryDelta: pc.GL.BackSummaryDelta, BackBindingDelta: pc.GL.BackBindingDelta, BackOuterDelta: pc.GL.BackOuterDelta}
 			base.GL = sc
 		}
 		if !pc.ML.empty() {
 			sc := &SheetConfig{ColScale: pc.ML.ColScale, RowScale: pc.ML.RowScale,
-				Fonts: mergeFonts(base.Fonts, pc.ML.Fonts), FrontColScale: pc.ML.FrontColScale, BackColScale: pc.ML.BackColScale}
+				Fonts: mergeFonts(base.Fonts, pc.ML.Fonts),
+				FrontColScale: pc.ML.FrontColScale, BackColScale: pc.ML.BackColScale,
+				FrontSummaryDelta: pc.ML.FrontSummaryDelta, FrontBindingDelta: pc.ML.FrontBindingDelta, FrontOuterDelta: pc.ML.FrontOuterDelta,
+				BackSummaryDelta: pc.ML.BackSummaryDelta, BackBindingDelta: pc.ML.BackBindingDelta, BackOuterDelta: pc.ML.BackOuterDelta}
 			base.ML = sc
 		}
 		printCfg.Platforms[name] = base

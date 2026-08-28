@@ -109,6 +109,18 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	cfg.frontColScale, cfg.backColScale = sheetColScales()
 	cfg.isBackCol = func(c int) bool { return c >= lay.BackStartCol && c < lay.BackStartCol+lay.BackColCount }
 	cfg.isFrontCol = func(c int) bool { return c >= lay.FrontStartCol && c < lay.FrontStartCol+lay.FrontColCount }
+	// 正反面页微调作用列（每个边只作用一列；金额拆位列不参与）
+	//   反面(Back)：摘要列6 / 装订边列16 / 非装订边(书口)列1
+	//   正面(Front)：无摘要列 / 装订边列17 / 非装订边(书口)列29
+	if wd := sheetWidthDeltas(); wd != (widthDeltas{}) {
+		cfg.colPxDelta = map[int]float64{
+			lay.BackStartCol + mlOffSummary: wd.BackSummary,
+			lay.PageGapStartCol + 1:         wd.BackBinding,  // 列16（Back 装订靠装订线）
+			lay.BindingLeftCols:             wd.BackOuter,    // 列1（Back 书口）
+			lay.PageGapStartCol + 2:         wd.FrontBinding, // 列17（Front 装订靠装订线）
+			lay.TotalCols:                   wd.FrontOuter,   // 列29（Front 书口）
+		}
+	}
 	// 表头区 = 四行表头（DataStartRow-4 .. DataStartRow-1）+ h4 标签行（DataStartRow）
 	cfg.isHeaderRow = func(r int) bool {
 		start := lay.DataStartRow - 4

@@ -115,6 +115,19 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	cfg.frontColScale, cfg.backColScale = sheetColScales()
 	cfg.isFrontCol = func(c int) bool { return c >= lay.FrontStartCol && c < lay.FrontStartCol+glColCount }
 	cfg.isBackCol = func(c int) bool { return c >= lay.BackStartCol && c < lay.BackStartCol+glColCount }
+	// 正反面页微调作用列（每个边只作用一列；金额拆位列不参与）
+	//   正面：摘要列7（拆4格）/ 装订边列1 / 非装订边(书口)列15
+	//   反面：摘要列21（拆4格）/ 装订边列30 / 非装订边(书口)列16
+	if wd := sheetWidthDeltas(); wd != (widthDeltas{}) {
+		cfg.colPxDelta = map[int]float64{
+			lay.FrontStartCol + glColSummary: wd.FrontSummary,
+			lay.BackStartCol + glColSummary:  wd.BackSummary,
+			lay.FrontStartCol - 2:            wd.FrontBinding, // 列1（装订边最外列）
+			lay.TotalCols:                    wd.BackBinding, // 列30（装订边最外列）
+			lay.PageGapStartCol:              wd.FrontOuter,   // 列15（正面书口）
+			lay.PageGapStartCol + 1:          wd.BackOuter,    // 列16（反面书口）
+		}
+	}
 	// 表头区 = HeaderRow .. SubHeaderRow+1（含"摘要/借..方/贷..方/余..额"文字行 + 金额位数标签行）
 	cfg.isHeaderRow = func(r int) bool {
 		if r < lay.HeaderRow || blockRows <= 0 {

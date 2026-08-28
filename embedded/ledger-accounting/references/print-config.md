@@ -11,7 +11,7 @@ ledger generate -v <凭证目录> -o <输出目录> --config print-config.json  
 ledger generate -v <凭证目录> -o <输出目录>                                # 自动发现
 ```
 
-**自动发现**：未传 `--config` 时，`generate` 自动加载**当前工作目录**下的 `print-config.json`（有则生效，无则用默认值）。把配置文件放在运行 ledger 的目录即可生效，无需传参（显式 `--config` 优先）。
+**自动发现 + 自动创建**：未传 `--config` 时，`generate` 依次查找 **当前工作目录 → 输出根目录** 的 `print-config.json`；**都找不到就自动创建默认模板到输出根目录**（含全部默认字段，可修改后重新 generate）——**不存在"无配置"状态**，配置永远显式存在、可见可改；删除文件后下次生成自动重建，行为与代码默认一致。
 
 ## ⚠️ 常见错误（agent 操作必读）
 

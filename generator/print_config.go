@@ -302,3 +302,47 @@ func LoadPrintConfig(path string) error {
 	}
 	return nil
 }
+
+// PrintConfigTemplate 打印版配置默认模板（= 代码内置默认值的完整显式表达）。
+// generate 无配置文件时自动创建、ledger init 时创建——保证"无配置"状态不存在：
+// 配置永远显式存在、可见可改；删除后下次生成自动重建，行为与代码默认一致。
+func PrintConfigTemplate() string {
+	return `{
+  "platforms": {
+    "windows": {
+      "colScale": 1.1075,
+      "rowScale": 0.992,
+      "fonts": {
+        "normal": "宋体",
+        "digit": "Noteworthy",
+        "title": "仿宋",
+        "default": "宋体",
+        "digitSize": 0,
+        "digitBold": null,
+        "labelSize": 0,
+        "labelBold": null,
+        "labelFamily": "等线 Light"
+      },
+      "gl": {
+        "colScale": 1.13595,
+        "rowScale": 0.99495
+      }
+    },
+    "mac": {
+      "colScale": 1.0,
+      "rowScale": 1.0,
+      "fonts": {
+        "normal": "Calibri",
+        "digit": "Noteworthy",
+        "title": "仿宋",
+        "default": "宋体",
+        "digitSize": 0,
+        "digitBold": null,
+        "labelSize": 0,
+        "labelBold": null
+      }
+    }
+  }
+}
+`
+}

@@ -38,7 +38,8 @@ var generateCmd = &cobra.Command{
 		platform, _ := cmd.Flags().GetString("platform")
 		printConfigPath, _ := cmd.Flags().GetString("config")
 		generator.PrintPlatform = platform // 先定平台，配置加载与生成都基于它
-		// 自动发现：未显式传 --config 时，依次查找 当前工作目录 → 输出根目录 下的 print-config.json
+		// 自动发现：未显式传 --config 时，依次查找 当前工作目录 → 输出根目录 下的 print-config.json；
+		// 都无 → 自动创建默认配置模板到输出根目录（不允许"无配置"状态：配置永远显式存在、可见可改）
 		autoConfig := ""
 		if printConfigPath == "" {
 			for _, dir := range []string{".", output} {
@@ -48,6 +49,15 @@ var generateCmd = &cobra.Command{
 					printConfigPath = cand
 					break
 				}
+			}
+			if printConfigPath == "" {
+				created := filepath.Join(output, "print-config.json")
+				if err := os.WriteFile(created, []byte(generator.PrintConfigTemplate()), 0o644); err != nil {
+					return fmt.Errorf("创建默认打印版配置 %s: %w", created, err)
+				}
+				fmt.Printf("已创建默认打印版配置（可修改后重新 generate）: %s\n", created)
+				autoConfig = created
+				printConfigPath = created
 			}
 		}
 		if err := generator.LoadPrintConfig(printConfigPath); err != nil {

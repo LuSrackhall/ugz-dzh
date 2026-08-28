@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ledger/generator"
+
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +47,7 @@ var initCmd = &cobra.Command{
 		// ② 打印版配置模板（幂等：已存在不覆盖，用户改过的保留）
 		printCfgPath := filepath.Join(output, "print-config.json")
 		if _, err := os.Stat(printCfgPath); os.IsNotExist(err) {
-			if err := os.WriteFile(printCfgPath, []byte(printConfigTemplate), 0o644); err != nil {
+			if err := os.WriteFile(printCfgPath, []byte(generator.PrintConfigTemplate()), 0o644); err != nil {
 				return fmt.Errorf("写入打印版配置模板: %w", err)
 			}
 			fmt.Printf("打印版配置模板: %s（generate 自动发现，改系数/字体后重新生成即生效）\n", printCfgPath)
@@ -128,34 +130,3 @@ const rootReadmeContent = `# 手工账本目录（ledger 管理体系）
 详细用法见项目 docs/ 目录（commands.md、print-config.md）。
 `
 
-// printConfigTemplate 打印版配置模板（init 创建 print-config.json）。
-// 默认值 = 内置标定：Windows 平台级 1.1075/0.992，GL 独立 1.13595/0.99495，ML 用平台级。
-const printConfigTemplate = `{
-  "platforms": {
-    "windows": {
-      "colScale": 1.1075,
-      "rowScale": 0.992,
-      "fonts": {
-        "normal": "宋体",
-        "digit": "Noteworthy",
-        "title": "仿宋",
-        "default": "宋体"
-      },
-      "gl": {
-        "colScale": 1.13595,
-        "rowScale": 0.99495
-      }
-    },
-    "mac": {
-      "colScale": 1.0,
-      "rowScale": 1.0,
-      "fonts": {
-        "normal": "Calibri",
-        "digit": "Noteworthy",
-        "title": "仿宋",
-        "default": "宋体"
-      }
-    }
-  }
-}
-`

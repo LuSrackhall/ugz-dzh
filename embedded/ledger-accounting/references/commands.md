@@ -23,7 +23,7 @@
 - `-f`：覆盖重建当月（从当月删除重建，-f 级联需逐月或使用 rebuild.sh）
 - `-p/--platform <auto|mac|windows>`：打印版目标平台（默认 auto=当前系统；在 Mac 上可用 `--platform windows` 生成 Windows 版打印版，配合本 skill 包内 scripts/gen-win-test.sh 迭代标定（仅开发环境 Mac 需要））
 - `--config <print-config.json>`（可选）：打印版配置文件——平台补偿系数（colScale/rowScale）与分区域字体（fonts.normal/digit/title/default），解决 WPS 各平台/机器渲染尺寸不一致；不传用默认值（Windows 列宽×1.1075/行高×0.992，Mac 恒 1.0）。字段说明见 references/print-config.md，模板见 examples/print-config.example.json
-  - **自动发现**：未传 `--config` 时，**自动加载当前工作目录下的 print-config.json**（有则生效，无则用默认值）——把配置文件放在运行 ledger 的目录即可生效，无需传参
+  - **自动发现 + 自动创建**：未传 `--config` 时，依次查 **当前目录 → 输出根目录** 的 print-config.json；**都没有则自动创建默认模板**（输出根目录，含全部默认字段）——**不存在"无配置"状态**，删除文件下次生成自动重建
   - **必须是英文键**：`platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}`（中文键会报错）
   - 文件须 **UTF-8 无 BOM** 编码（JSON 不能有注释/尾逗号）
   - **只作用于打印版** `输出目录/<年份>/print/*.xlsx`（查看版不变），须重新 generate 后看新文件

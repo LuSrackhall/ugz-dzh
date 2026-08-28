@@ -8,25 +8,35 @@
         "digit": "Noteworthy",
         "title": "仿宋",
         "default": "宋体",
-        "labelSize": 0,
-        "labelBold": null,
         "digitSize": 0,
         "digitBold": null,
+        "labelSize": 0,
+        "labelBold": null,
         "labelFamily": "等线 Light"
       },
       "gl": {
         "colScale": 1.13595,
-        "rowScale": 0.99495
+        "rowScale": 0.99495,
+        "frontColScale": 0,
+        "backColScale": 0,
+        "frontSummaryDelta": 0,
+        "frontBindingDelta": 0,
+        "frontOuterDelta": 0,
+        "backSummaryDelta": 0,
+        "backBindingDelta": 0,
+        "backOuterDelta": 0
       },
       "ml": {
-        "colScale": 1.1075,
-        "rowScale": 0.992,
-        "fonts": {
-          "normal": "宋体",
-          "digit": "Noteworthy",
-          "title": "仿宋",
-          "default": "宋体"
-        }
+        "colScale": 0,
+        "rowScale": 0,
+        "frontColScale": 0,
+        "backColScale": 0,
+        "frontSummaryDelta": 0,
+        "frontBindingDelta": 0,
+        "frontOuterDelta": 0,
+        "backSummaryDelta": 0,
+        "backBindingDelta": 0,
+        "backOuterDelta": 0
       }
     },
     "mac": {
@@ -37,11 +47,12 @@
         "digit": "Noteworthy",
         "title": "仿宋",
         "default": "宋体",
-        "labelSize": 0,
-        "labelBold": null,
         "digitSize": 0,
-        "digitBold": null
+        "digitBold": null,
+        "labelSize": 0,
+        "labelBold": null
       }
     }
   }
 }
+

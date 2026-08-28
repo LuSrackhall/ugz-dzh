@@ -22,12 +22,23 @@ version: 0.7.8
 - 产物：`<输出目录>/<年份>/{年份}.json`（配置权威源）+ `{年份}-{月}.xlsx`（账本）+ `print/`（打印版位格）
 - 二进制：项目根 `./ledger`（或 `go build -o ledger .` 重建）
 
+### 按需查阅（渐进式，不要一次全读）
+
+只读 SKILL.md 即可完成多数操作；**遇到下列场景才读对应文件**：
+
+| 场景 | 读哪个文件 |
+|---|---|
+| 需要某命令的完整参数/行为 | `references/commands.md` |
+| **调打印版尺寸/字体/正反面/微调** | `references/print-config.md`（全部可配字段 + 默认值 + 示例） |
+| 建账→生成→月结→结转的完整流程、常见问题处理 | `references/workflows.md` |
+| 需要配置模板原文 | `examples/print-config.example.json`（= `ledger init` / 无配置自动创建时生成的模板，含全部字段） |
+
 ## 命令总览
 
 | 命令 | 用途 |
 |---|---|
 | `ledger init -s <YYYY-MM> -o <输出目录>` | 建账（设置建账月=启动月，生成 {year}.json，并建好 vouchers/ 凭证目录 + print-config.json 打印版配置模板 + README，完整管理体系一次到位） |
-| `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数+分区域字体，见 references/print-config.md） |
+| `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数 + 分区域字体 + GL/ML 分账本 + 正反面独立 + ±px 微调，见 references/print-config.md） |
 | `ledger map -a <错名> -b <对名> -j <json>` | 科目名称映射纠错 |
 | `ledger add-manual -a <科目> -m <月> -n <金额> -t <备注> -j <json>` | 期初调整（**只作用于建账月**，-m 仅记录） |
 | `ledger year-close -j <json> -o <输出>` | 跨年结转（生成新年 JSON + 空账本 + 损益结转草稿 + 三告警） |
@@ -77,7 +88,13 @@ version: 0.7.8
 
 ### 6. 打印
 - GL/ML 账页：打印版位格 xlsx（`print/` 子目录，金额拆位、红字红色字体）
-- 打印版尺寸跨平台不一致（WPS Mac/Windows 渲染差异）时：用 `generate --platform <mac|windows>` 指定目标平台，或 `--config print-config.json` 调平台补偿系数（colScale/rowScale）与分区域字体（默认 Windows 列宽×1.1075/行高×0.992）；字段说明见 references/print-config.md，模板见 examples/print-config.example.json，Mac 上可配合 scripts/gen-win-test.sh 生成 Windows 版测试
+- **打印版尺寸不符**时（WPS Mac/Windows 渲染差异）按需深入，用 `generate --platform <mac|windows>` 指定目标平台，改 `print-config.json` 调（**全部字段见 references/print-config.md，模板见 examples/print-config.example.json**）：
+  1. **平台系数**（粗调）：`colScale`/`rowScale`（默认 Windows 1.1075/0.992、Mac 1.0）
+  2. **分账本**：`gl`/`ml` 各自覆盖（默认 Windows GL 1.13595/0.99495）
+  3. **正反面独立**：`{gl,ml}.frontColScale`/`backColScale`（ML 正反面结构不对称时用）
+  4. **±px 精调**：`{front,back}{Summary,Binding,Outer}Delta` —— 最终 px 增量（`+1`=最终+1px），只动摘要列/装订边/非装订边（每边一列），**金额拆位列完全不参与**
+  5. **字体**：`fonts.{normal,digit,title,default,labelFamily,digitSize,digitBold,labelSize,labelBold}`（默认 Win 表头=等线 Light、Mac=宋体）
+  - 标定顺序：系数粗调 → px 微调逼近；Mac 上可配合 `scripts/gen-win-test.sh` 生成 Windows 版供对比
 - **⚠️ 配置自动发现**：`print-config.json` 放在**运行 ledger 的当前目录**即自动生效（无需 --config 传参；显式传参优先）；配置用英文键（中文键会报错）；文件须 UTF-8 无 BOM；只作用于打印版（查看版不变），须重新 generate 后看 `print/` 新文件。自检：generate 启动打印的 `打印版配置: 已加载/已自动发现当前目录/默认 → 平台=.. 列宽系数=..` 行
 - 日记账/期初期末表/报表：直接打印查看版 sheet
 

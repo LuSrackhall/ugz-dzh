@@ -376,7 +376,27 @@ func PrintConfigTemplate() string {
       },
       "gl": {
         "colScale": 1.13595,
-        "rowScale": 0.99495
+        "rowScale": 0.99495,
+        "frontColScale": 0,
+        "backColScale": 0,
+        "frontSummaryDelta": 0,
+        "frontBindingDelta": 0,
+        "frontOuterDelta": 0,
+        "backSummaryDelta": 0,
+        "backBindingDelta": 0,
+        "backOuterDelta": 0
+      },
+      "ml": {
+        "colScale": 0,
+        "rowScale": 0,
+        "frontColScale": 0,
+        "backColScale": 0,
+        "frontSummaryDelta": 0,
+        "frontBindingDelta": 0,
+        "frontOuterDelta": 0,
+        "backSummaryDelta": 0,
+        "backBindingDelta": 0,
+        "backOuterDelta": 0
       }
     },
     "mac": {

@@ -347,8 +347,12 @@ type printSheetConfig struct {
 	// 各 +0.5px（正反面 14 列）。
 	nonAmountPixelDelta map[int]float64
 	// labelFontSize 表头单位行标签字号（pt）。0 = 沿用 printDigitFontSize(7)。ML 设 6。
-	// 可被 print-config.json fonts.labelSize 覆盖（摘要/借/贷/余额表头字号）。
-	labelFontSize float64
+	// labelSizeOverride=true 时（print-config.json fonts.labelSize 已配置）labelSize 仅作用于
+	// 摘要/借/贷/余额表头（labelCols），其余金额列表头（如 ML 明细区）用 labelFontSizeDefault；
+	// 未配置时所有金额列表头用 labelFontSize（与变更前一致）。
+	labelFontSize       float64
+	labelSizeOverride   bool
+	labelFontSizeDefault float64
 	// dataFontFamily/dataFontSize 数据区金额数字字体（仅数据格，不含表头标签）。
 	// Family 非空时 applyPrintFont 跳过（不统一宋体）。ML：Noteworthy / 6pt。
 	// dataFontSize 可被 fonts.digitSize 覆盖（金额区域列数字字号）。
@@ -553,10 +557,11 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 			if sid != 0 {
 				for k := 0; k < n; k++ {
 					pc := cm.startCol(c) + k
-					// labelSize 仅作用于 摘要/借/贷/余额 表头（labelCols）；其他标签格字号沿用现状
-					ls := float64(0)
-					if cfg.labelCols[c] {
-						ls = cfg.labelFontSize
+					// labelSize 仅作用于 摘要/借/贷/余额 表头（labelCols）；未配置时全量用
+					// cfg.labelFontSize（与变更前一致：GL 7 / ML 6）；配置过但非目标列 → 原默认
+					ls := cfg.labelFontSize
+					if cfg.labelSizeOverride && !cfg.labelCols[c] {
+						ls = cfg.labelFontSizeDefault
 					}
 					lid := amountSubStyle(f, sid, k, labelCache, n, ls, 0, "", false, false)
 					_ = f.SetCellValue(sheet, cellAxis(pc, r), labels[k])

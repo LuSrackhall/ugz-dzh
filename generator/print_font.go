@@ -72,7 +72,8 @@ func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetCon
 					if cfg.labelBold != nil {
 						font.Bold = *cfg.labelBold
 					}
-					if cfg.labelFontSize > 0 {
+					// 仅配置过 labelSize 才应用（未配置不设 Size，摘要标签保持查看版原字号）
+					if cfg.labelSizeOverride {
 						font.Size = cfg.labelFontSize
 					}
 				}

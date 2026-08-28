@@ -95,8 +95,10 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 	}
 	// 摘要/借/贷/余额 表头字体样式 + 金额区域列数字样式（print-config.json fonts 扩展）
 	fc := currentFonts()
+	cfg.labelFontSizeDefault = 6 // ML 原默认标签字号（配置过 labelSize 时非目标列回退用）
 	if fc.LabelSize != 0 {
 		cfg.labelFontSize = fc.LabelSize
+		cfg.labelSizeOverride = true // 配置过：labelSize 仅作用于摘要/借/贷/余额表头
 	}
 	if fc.DigitSize != 0 {
 		cfg.dataFontSize = fc.DigitSize

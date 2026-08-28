@@ -104,6 +104,7 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 	fc := currentFonts()
 	if fc.LabelSize != 0 {
 		cfg.labelFontSize = fc.LabelSize
+		cfg.labelSizeOverride = true // 配置过：labelSize 仅作用于摘要/借/贷/余额表头
 	}
 	if fc.DigitSize != 0 {
 		cfg.dataFontSize = fc.DigitSize

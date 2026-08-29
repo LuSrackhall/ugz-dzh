@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -62,8 +63,11 @@ func TestMergeGLNoDoubleClose(t *testing.T) {
 		t.Fatalf("写凭证: %v", err)
 	}
 
-	// 2. JSON 配置：合并总账科目=["内部往来"]，科目树"内部往来"父级有历史余额 5000 元
-	//    （模拟旧版本回写/year-close 跨年结转写入父级的余额，让 initials[父级]≠0 触发 M4）
+	// 2. JSON 配置：合并总账科目=["内部往来"]，子科目"内部往来-张三"有历史余额 5000 元
+	//    （余额挂在子科目上，与真实账本一致；父级是汇总视图不落余额）。
+	//    覆盖点：① 同月只允许一套月结（WriteMonthClosings 不得对合并父级双写）；
+	//    ② 新建合并页必须写期初行，分录余额从期初起算（链不断）；
+	//    ③ 月结行自带完整边框（无分录月无账页预置框可依赖）。
 	jsonContent := `{
   "全局设置": {
     "启动月": "2026-02",
@@ -76,13 +80,13 @@ func TestMergeGLNoDoubleClose(t *testing.T) {
   },
   "科目树": {
     "库存现金": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2026-02", "金额": 0}, "余额": {}},
-    "内部往来": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2026-02", "金额": 0}, "余额": {"2026-01": {"期初": 500000, "借方": 0, "贷方": 0, "期末": 500000}}},
-    "内部往来-张三": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2026-02", "金额": 0}, "余额": {}}
+    "内部往来": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2025-12", "金额": 0}, "余额": {}},
+    "内部往来-张三": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2025-12", "金额": 0}, "余额": {"2026-01": {"期初": 500000, "借方": 0, "贷方": 0, "期末": 500000}}}
   },
   "自动识别科目": [
     {"科目": "库存现金", "首次月份": "2026-02", "期初调整额": 0},
-    {"科目": "内部往来", "首次月份": "2026-02", "期初调整额": 0},
-    {"科目": "内部往来-张三", "首次月份": "2026-02", "期初调整额": 0}
+    {"科目": "内部往来", "首次月份": "2025-12", "期初调整额": 0},
+    {"科目": "内部往来-张三", "首次月份": "2025-12", "期初调整额": 0}
   ],
   "手动调整科目": [],
   "明细列顺序": {}
@@ -97,7 +101,7 @@ func TestMergeGLNoDoubleClose(t *testing.T) {
 		t.Fatalf("generate 失败: %v\n%s", err, out)
 	}
 
-	// 4. 断言合并 sheet 只有一套月结
+	// 4. 断言合并 sheet 只有一套月结 + 期初行 + 余额链连续
 	f, err := excelize.OpenFile(filepath.Join(yearDir, "2026-02.xlsx"))
 	if err != nil {
 		t.Fatalf("打开 xlsx: %v", err)
@@ -115,12 +119,21 @@ func TestMergeGLNoDoubleClose(t *testing.T) {
 	}
 	// 统计月结四件套标签出现次数（合并 sheet 月结在摘要列，遍历所有单元格）
 	counts := map[string]int{}
-	for _, r := range rows {
-		for _, c := range r {
+	initRowIdx, endRowIdx := -1, -1
+	for i, r := range rows {
+		for j, c := range r {
 			c = strings.TrimSpace(c)
 			switch c {
 			case "本月合计", "本季合计", "本年累计", "期末余额":
 				counts[c]++
+			case "期初余额", "上年结转":
+				counts[c]++
+				if j == 6 { // 摘要列（正面区 GetRows 索引）
+					initRowIdx = i
+				}
+			}
+			if c == "期末余额" && j == 6 {
+				endRowIdx = i
 			}
 		}
 	}
@@ -130,7 +143,214 @@ func TestMergeGLNoDoubleClose(t *testing.T) {
 	if got := counts["期末余额"]; got != 1 {
 		t.Errorf("合并 sheet 期末余额应出现 1 次，实际 %d 次", got)
 	}
-	// 合并父级期初≠0 时，M4 那套期末=期初（5000）、未计入当月发生额（错误）；修复后仅 WriteMergeGLClosings 一套（含发生额）
-	// 期末余额应为 期初5000 + 当月净发生（1000贷→内部往来借方科目余额减少？此处仅断言唯一性，数值正确性由会计审查保证）
-	t.Logf("合并 sheet 月结标签次数: %v（应各 1 次）", counts)
+	// D2 固化：新建合并页必须写期初行（余额挂子科目，汇总=5000 借）
+	if initRowIdx < 0 {
+		t.Fatalf("新建合并页缺少期初/结转行 —— isNew 误判导致期初丢失，分录从 0 起算链断")
+	}
+	if bal := yuanVal(rows, initRowIdx, 12); bal != 5000 {
+		t.Errorf("期初行余额应为 5000 元，实际 %v", bal)
+	}
+	// 余额链：期末 = 期初 5000 + 本月借 0 - 本月贷 1000 = 4000
+	if endRowIdx < 0 {
+		t.Fatalf("缺少期末余额行")
+	}
+	if bal := yuanVal(rows, endRowIdx, 12); bal != 4000 {
+		t.Errorf("期末余额应为 4000 元（期初5000-贷1000），实际 %v —— 余额链断裂", bal)
+	}
+	// D3 固化：月结行自带完整四边框（无分录月无账页预置框可依赖）
+	assertCellFramed(t, f, sheet, endRowIdx, 6)  // 摘要列
+	assertCellFramed(t, f, sheet, endRowIdx, 12) // 余额列
+	t.Logf("合并 sheet 月结标签次数: %v（应各 1 次）；期初行+期末余额链连续", counts)
+}
+
+// TestMergeGLInitialOnlyPage 固化"有余额无分录也须建页"（D1，2026-08-30 第二次修复）：
+// 合并父级的子科目有期初（Tree.Balances）但当月（跨年 1 月）无分录时，合并账页必须存在：
+// 上年结转行 + 一套月结（期末=期初）。4b696b4 将合并父级排除出普通路径后此场景账页整体消失。
+func TestMergeGLInitialOnlyPage(t *testing.T) {
+	root, err := findProjectRoot()
+	if err != nil {
+		t.Fatalf("找不到项目根目录: %v", err)
+	}
+	bin := filepath.Join(t.TempDir(), "ledger")
+	buildCmd := exec.Command("go", "build", "-o", bin, ".")
+	buildCmd.Dir = root
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("编译失败: %s", out)
+	}
+
+	output := t.TempDir()
+	yearDir := filepath.Join(output, "2026")
+	if err := os.MkdirAll(yearDir, 0o755); err != nil {
+		t.Fatalf("创建输出目录: %v", err)
+	}
+
+	// 1. 最小凭证：仅库存现金/经营收入，不涉及合并父级"内部往来"（当月无分录）
+	voucherDir := filepath.Join(t.TempDir(), "vouchers")
+	if err := os.MkdirAll(voucherDir, 0o755); err != nil {
+		t.Fatalf("创建凭证目录: %v", err)
+	}
+	voucher := `红旗路办事处
+
+记字第0001号 1/1
+
+记帐凭证
+
+2026年01月15日
+
+附件 张
+
+<table><thead><tr><th>摘要</th><th>总帐科目</th><th>明细科目</th><th>借方</th><th>贷方</th></tr></thead><tbody><tr><td>收经营款</td><td>库存现金</td><td></td><td>800.00</td><td></td></tr><tr><td>收经营款</td><td>经营收入</td><td></td><td></td><td>800.00</td></tr><tr><td>合计</td><td></td><td></td><td>800.00</td><td>800.00</td></tr></tbody></table>
+
+1
+
+会计主管
+
+记帐
+
+审核
+
+制单`
+	if err := os.WriteFile(filepath.Join(voucherDir, "记字第0001号.md"), []byte(voucher), 0o644); err != nil {
+		t.Fatalf("写凭证: %v", err)
+	}
+
+	// 2. JSON：启动月 2026-01；子科目"内部往来-张三"有 2025-12 期末 5000 元（跨年结转）
+	jsonContent := `{
+  "全局设置": {
+    "启动月": "2026-01",
+    "科目顺序": ["库存现金", "内部往来", "经营收入"],
+    "科目映射表": {},
+    "合并总账科目": ["内部往来"],
+    "总分类账忽略科目": [],
+    "多科目明细账忽略科目": [],
+    "结账月": ""
+  },
+  "科目树": {
+    "库存现金": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2026-01", "金额": 0}, "余额": {}},
+    "内部往来": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2025-12", "金额": 0}, "余额": {}},
+    "内部往来-张三": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2025-12", "金额": 0}, "余额": {"2025-12": {"期初": 500000, "借方": 0, "贷方": 0, "期末": 500000}}},
+    "经营收入": {"科目属性": "贷", "首次记录": {"方式": "自动识别", "月份": "2026-01", "金额": 0}, "余额": {}}
+  },
+  "自动识别科目": [
+    {"科目": "库存现金", "首次月份": "2026-01", "期初调整额": 0},
+    {"科目": "内部往来", "首次月份": "2025-12", "期初调整额": 0},
+    {"科目": "内部往来-张三", "首次月份": "2025-12", "期初调整额": 0}
+  ],
+  "手动调整科目": [],
+  "明细列顺序": {}
+}`
+	if err := os.WriteFile(filepath.Join(yearDir, "2026.json"), []byte(jsonContent), 0o644); err != nil {
+		t.Fatalf("写配置: %v", err)
+	}
+
+	// 3. 生成
+	cmd := exec.Command(bin, "generate", "-v", voucherDir, "-o", output, "-f")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generate 失败: %v\n%s", err, out)
+	}
+
+	// 4. 断言合并账页存在：上年结转 5000 + 一套月结（期末 5000，当月无发生）
+	f, err := excelize.OpenFile(filepath.Join(yearDir, "2026-01.xlsx"))
+	if err != nil {
+		t.Fatalf("打开 xlsx: %v", err)
+	}
+	defer f.Close()
+
+	sheet := "总分类账-内部往来"
+	if idx, err := f.GetSheetIndex(sheet); err != nil || idx < 0 {
+		t.Fatalf("合并 sheet %q 不存在 —— 有余额无分录的合并账页被整体删除（D1 回归）", sheet)
+	}
+	rows, err := f.GetRows(sheet)
+	if err != nil {
+		t.Fatalf("读取 sheet: %v", err)
+	}
+	initRowIdx, endRowIdx, closingCount := -1, -1, 0
+	for i, r := range rows {
+		for j, c := range r {
+			c = strings.TrimSpace(c)
+			if j != 6 { // 摘要列
+				continue
+			}
+			switch c {
+			case "上年结转", "期初余额":
+				initRowIdx = i
+			case "本月合计":
+				closingCount++
+			case "期末余额":
+				endRowIdx = i
+			}
+		}
+	}
+	if initRowIdx < 0 {
+		t.Fatalf("合并账页缺少上年结转/期初行（子科目期初合计 5000 应入页）")
+	}
+	if bal := yuanVal(rows, initRowIdx, 12); bal != 5000 {
+		t.Errorf("上年结转行余额应为 5000 元，实际 %v", bal)
+	}
+	if closingCount != 1 {
+		t.Errorf("无分录月应有且仅有一套月结（本月合计 1 次），实际 %d 次", closingCount)
+	}
+	if bal := yuanVal(rows, endRowIdx, 12); bal != 5000 {
+		t.Errorf("期末余额应为 5000 元（期初+0发生），实际 %v —— 余额链断裂", bal)
+	}
+	// D3 固化：无分录月的月结行边框必须自包含完整
+	assertCellFramed(t, f, sheet, endRowIdx, 6)
+	assertCellFramed(t, f, sheet, endRowIdx, 12)
+	t.Logf("有余额无分录月：合并账页存在，上年结转 5000 → 期末 5000，月结边框完整")
+}
+
+// yuanVal 读 GetRows 指定单元格的金额并解析为元（容逗号/空；解析失败返回 -1）。
+func yuanVal(rows [][]string, rowIdx, colIdx int) float64 {
+	raw := strings.ReplaceAll(cellVal(rows, rowIdx, colIdx), ",", "")
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return -1
+	}
+	return v
+}
+
+// cellVal 读 GetRows 行的指定索引（越界返回空串）。
+func cellVal(rows [][]string, rowIdx, colIdx int) string {
+	if rowIdx < 0 || rowIdx >= len(rows) || colIdx >= len(rows[rowIdx]) {
+		return ""
+	}
+	return strings.TrimSpace(rows[rowIdx][colIdx])
+}
+
+// assertCellFramed 断言单元格样式含四边边框（GetRows 索引转 Excel 列号 = 索引+1）。
+func assertCellFramed(t *testing.T, f *excelize.File, sheet string, rowIdx, colIdx int) {
+	t.Helper()
+	col, _ := excelize.ColumnNumberToName(colIdx + 1)
+	cell := col + itoa(rowIdx+1)
+	st, err := f.GetCellStyle(sheet, cell)
+	if err != nil || st == 0 {
+		t.Fatalf("单元格 %s!%s 无样式", sheet, cell)
+	}
+	s, err := f.GetStyle(st)
+	if err != nil {
+		t.Fatalf("读取 %s!%s 样式: %v", sheet, cell, err)
+	}
+	has := map[string]bool{}
+	for _, b := range s.Border {
+		if b.Style != 0 {
+			has[b.Type] = true
+		}
+	}
+	for _, side := range []string{"left", "right", "top", "bottom"} {
+		if !has[side] {
+			t.Errorf("%s!%s 缺少 %s 边框 —— 月结行边框不自包含，打印版列线断裂", sheet, cell, side)
+		}
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	digits := []byte{}
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	return string(digits)
 }

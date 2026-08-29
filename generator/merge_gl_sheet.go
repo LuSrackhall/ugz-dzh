@@ -51,7 +51,72 @@ func (wb *Workbook) AppendMergeEntries(entries []voucher.Entry, initials map[str
 		}
 	}
 
+	// 有子科目余额但当月无分录的合并父级：仍须建页并写期初/结转行。
+	// 合并账页是子科目汇总视图——父级汇总期初非零时账页必须存在，否则跨年 1 月
+	// 等无分录月份的合并账页整体消失（4b696b4 将合并父级排除出普通建页路径后，
+	// "有余额无分录建页"这条职责由合并路径承担）。跨月累积的已有数据页跳过，
+	// 期初链由页内上月末余额自持。
+	for _, general := range wb.Config.Settings.MergeGLAccounts {
+		if _, ok := groups[general]; ok {
+			continue
+		}
+		if err := wb.ensureMergeGLPageWithInitial(general, initials); err != nil {
+			return fmt.Errorf("合并总分类账 %s 期初建页: %w", general, err)
+		}
+	}
+
 	return nil
+}
+
+// glSheetHasData 判断 GL sheet 表头以下是否已有数据行（分录/期初/月结/过次页均算）。
+// writeGLTitle 预置的标题与表头行不算数据——旧的 len(rows)<=2 新页判定在标题写完后恒为 false。
+func glSheetHasData(rows [][]string) bool {
+	lay := glLayout()
+	dataStart := lay.DataStartRow + 1 + lay.TopMarginRows // 首个数据行（Excel 行号）
+	for i, r := range rows {
+		if i+1 < dataStart {
+			continue
+		}
+		for _, c := range r {
+			if strings.TrimSpace(c) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// mergeGLCarryForwardLabel 期初行摘要：1 月跨年延续且调整额未生效 → "上年结转"，否则 "期初余额"。
+// （合并父级禁止直接设期初调整额，InitialAdjust[父级] 恒 false，此处与普通 GL 语义保持一致。）
+func (wb *Workbook) mergeGLCarryForwardLabel(general string) string {
+	if !wb.InitialAdjust[general] && strings.HasSuffix(wb.Month, "-01") {
+		return "上年结转"
+	}
+	return "期初余额"
+}
+
+// ensureMergeGLPageWithInitial 确保有汇总期初的合并父级存在账页：
+// 无页则建页并在数据区首行写期初/结转行（金额=子科目期初之和）；已有数据页不动。
+func (wb *Workbook) ensureMergeGLPageWithInitial(general string, initials map[string]int64) error {
+	var parentInitial int64
+	for k, v := range initials {
+		if isChildOf(k, general) {
+			parentInitial += v
+		}
+	}
+	if parentInitial == 0 {
+		return nil
+	}
+	sheet, err := wb.ensureMergeGLSheet(general)
+	if err != nil {
+		return err
+	}
+	rows, _ := wb.File.GetRows(sheet)
+	if glSheetHasData(rows) {
+		return nil
+	}
+	pageNum := wb.getPageNum(sheet)
+	return wb.insertCarryForwardAtRow(sheet, parentInitial, pageNum, wb.mergeGLCarryForwardLabel(general))
 }
 
 // ensureMergeGLSheet 确保合并 GL Sheet 存在并已初始化标题。
@@ -83,7 +148,10 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 
 	lay := glLayout()
 	rows, _ := wb.File.GetRows(sheet)
-	isNew := len(rows) <= 2
+	// 新页判定：表头以下无任何数据行。旧判断 len(rows)<=2 在 ensureMergeGLSheet 写完
+	// 标题（占 6 行）后恒为 false → 新建合并页永远不写期初行，分录从 0 起算，
+	// 与月结期末（=父级期初+当月发生）余额链断裂（铁律二）。
+	isNew := !glSheetHasData(rows)
 
 	// 计算页码：已有过次页数 + 1
 	pageNum := 1
@@ -101,13 +169,14 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 		}
 	}
 
-	if isNew && parentInitial != 0 {
-		label := "期初余额"
-		if !wb.InitialAdjust[general] && strings.HasSuffix(wb.Month, "-01") {
-			label = "上年结转"
-		}
-		if err := wb.insertCarryForward(sheet, parentInitial, pageNum, label); err != nil {
-			return err
+	// 期初行：新页汇总期初≠0 必写；已有页在 1 月跨年延续或调整额生效时续写
+	// （与普通 GL appendToGLSheet 语义一致）。统一走数据区下一行（AtRow），
+	// 避免落到子表头行上。
+	if parentInitial != 0 {
+		if isNew || strings.HasSuffix(wb.Month, "-01") || wb.InitialAdjust[general] {
+			if err := wb.insertCarryForwardAtRow(sheet, parentInitial, pageNum, wb.mergeGLCarryForwardLabel(general)); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -116,7 +185,7 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 
 	balance := parentInitial
 	var pageDebit, pageCredit int64
-	if !isNew {
+	if !isNew && parentInitial == 0 {
 		balance = wb.lastPageBalance(sheet)
 	}
 
@@ -204,6 +273,39 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 // isChildOf 判断 account 是否为 parent 的子科目（account 以 "parent-" 开头）。
 func isChildOf(account, parent string) bool {
 	return len(account) > len(parent) && account[:len(parent)] == parent && account[len(parent)] == '-'
+}
+
+// applyGLClosingRowStyle 为合并 GL 月结行应用整行样式：完整绿框（#006100 thin，四边），
+// 页内每第 5 行底边加粗，金额列套 #,##0.00 格式——与普通 GL 月结（WriteMonthClosings）一致。
+// 样式必须自包含：无分录月 appendToMergeGLSheet 不执行，账页没有预置绿框可依赖，
+// 否则打印版月结行列线断裂。范围用 dataCol 按当前页奇偶取列，避免反页样式写进正面区。
+func (wb *Workbook) applyGLClosingRowStyle(sheet string, row, pageNum int) {
+	lay := glLayout()
+	thick := glRowInPage(lay, row)%5 == 0
+	bottomStyle := 1
+	if thick {
+		bottomStyle = 2
+	}
+	st, _ := wb.File.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 10},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#006100", Style: 1},
+			{Type: "right", Color: "#006100", Style: 1},
+			{Type: "bottom", Color: "#006100", Style: bottomStyle},
+			{Type: "left", Color: "#006100", Style: 1},
+		},
+	})
+	wb.File.SetCellStyle(sheet, cellName(dataCol(lay, pageNum, 0), row),
+		cellName(dataCol(lay, pageNum, glColCount-1), row), st)
+	if thick {
+		wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColDebit))
+		wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColCredit))
+		wb.setMoneyStyleThick(sheet, row, dataCol(lay, pageNum, glColBalance))
+	} else {
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
+		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	}
 }
 
 // sortEntries 按日期、凭证号排序分录。
@@ -367,17 +469,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, account string, mtdDeb
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(mtdCredit))
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
-
-	monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10},
-		Border: []excelize.Border{
-			{Type: "top", Color: "#808080", Style: 1},
-		},
-	})
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColDir), row), monthlyStyle)
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	wb.applyGLClosingRowStyle(sheet, row, pageNum)
 	closingDebit += mtdDebit
 	closingCredit += mtdCredit
 	row++
@@ -392,14 +484,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, account string, mtdDeb
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(qtCredit))
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
-
-		qtStyle, _ := wb.File.NewStyle(&excelize.Style{
-			Font: &excelize.Font{Bold: true, Size: 10},
-		})
-		wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColDir), row), qtStyle)
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-		wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+		wb.applyGLClosingRowStyle(sheet, row, pageNum)
 		row++
 	}
 
@@ -412,17 +497,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, account string, mtdDeb
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColCredit), row), centsToYuan(cumCredit))
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
-
-	cumStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#808080", Style: 1},
-		},
-	})
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColDir), row), cumStyle)
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	wb.applyGLClosingRowStyle(sheet, row, pageNum)
 	row++
 
 	// 期末余额
@@ -435,15 +510,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, account string, mtdDeb
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), periodEndLabel)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), endDir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(endDisp))
-
-	endStyle, _ := wb.File.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#000000", Style: 2},
-		},
-	})
-	wb.File.SetCellStyle(sheet, cellName(lay.FrontStartCol, row), cellName(dataCol(lay, pageNum, glColDir), row), endStyle)
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	wb.applyGLClosingRowStyle(sheet, row, pageNum)
 
 	return nil
 }

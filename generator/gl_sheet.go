@@ -692,7 +692,8 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 // insertCarryForward 在新科目首行插入期初行（摘要由 label 指定："上年结转"或"期初余额"）。
 func (wb *Workbook) insertCarryForward(sheet string, amount int64, pageNum int, label string) error {
 	lay := glLayout()
-	row := lay.DataStartRow + 1
+	// 首个数据行 = DataStartRow + 1 + TopMarginRows；少加 TopMarginRows 会落在子表头行上
+	row := lay.DataStartRow + 1 + lay.TopMarginRows
 	dir, dispBal := directionFor(amount, 0)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")

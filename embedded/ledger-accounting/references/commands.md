@@ -104,6 +104,19 @@ bash scripts/rebuild.sh <凭证根目录> <输出目录>
 - `reset`：重置相关状态（按需）
 - 帮助：`./ledger <命令> --help`
 
+## config — 打印版配置模板库（list 列出 / apply 应用）
+
+```bash
+./ledger config list                                          # 列出内置模板 + 适用说明
+./ledger config apply mac-win-common -o <输出根目录>           # 应用模板（-f 覆盖已有）
+./ledger config apply win-standard -o <输出根目录> -f          # 覆盖式应用
+```
+
+- 模板库：技能包内 `templates/*.json`（win-standard / mac-standard / mac-win-common，随版本发布）
+- 模板名支持：简称（`mac-win-common`）/ 带后缀（`mac-win-common.json`）/ 全名（`print-config.mac-win-common.json`）
+- 已有 `print-config.json` 时需 `-f` 覆盖（防误毁已标定配置）；应用后重新 `generate` 即生效（自动发现，无需 `--config`）
+- 贡献：机器上标定完美后把 print-config.json 交开发方入库，下版 `config list` 可见
+
 ## doctor — 环境自检（agent 排障先跑这个）
 ```
 ./ledger doctor [-o <输出根目录>]

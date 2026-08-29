@@ -1,0 +1,20 @@
+{
+  "_comment": "【配置模板库】mac-standard：Mac 标准（系数恒 1.0、Normal Calibri，无需补偿）。Windows 用户请用 win-standard 或你的机器适配模板。",
+  "platforms": {
+    "mac": {
+      "_comment": "Mac 平台：系数恒 1.0（不补偿）；字体/样式与 Windows 完全隔离",
+      "colScale": 1.0,
+      "rowScale": 1.0,
+      "fonts": {
+        "normal": "Calibri",
+        "digit": "Noteworthy",
+        "title": "仿宋",
+        "default": "宋体",
+        "digitSize": 0,
+        "digitBold": null,
+        "labelSize": 0,
+        "labelBold": null
+      }
+    }
+  }
+}

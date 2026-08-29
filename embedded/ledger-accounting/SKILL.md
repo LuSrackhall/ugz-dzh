@@ -2,7 +2,7 @@
 name: ledger-accounting
 description: 手工账电子化工具 ledger（Go CLI）的会计操作技能。当用户涉及建账（init）、生成月度账本（generate）、科目管理（map/add-manual）、期初调整、月结、年末损益结转（gen-close/year-close）、结账标记（lock）、账本检查（check/漂移/重建）、打印版、凭证格式与红字处理、git 管理 JSON 等一切会计记账操作时使用。技能指导 agent 全程协助用户完成村级/个人手工账电子化：凭证 Markdown → Excel 账本（总账/明细账/合并总账/现金银行日记账/期初期末表/资产负债表等）→ 打印装订 → 跨年结转。
 agent_created: true
-version: 0.7.15
+version: 0.7.16
 ---
 
 # ledger 会计记账操作
@@ -32,6 +32,21 @@ version: 0.7.15
 | **调打印版尺寸/字体/正反面/微调** | `references/print-config.md`（全部可配字段 + 默认值 + 示例） |
 | 建账→生成→月结→结转的完整流程、常见问题处理 | `references/workflows.md` |
 | 需要配置模板原文 | `examples/print-config.example.json`（= `ledger init` / 无配置自动创建时生成的模板，含全部字段） |
+| **机器尺寸不匹配、需要现成模板** | `templates/`（配置模板库：已验证的不同机器标定，见下） |
+
+### 配置模板库（templates/）
+
+不同机器（屏幕缩放/WPS 版本差异）导致同一份系数显示效果不同——把**已验证的完美配置**沉淀为模板，直接选用免微调：
+
+| 模板 | 适用 |
+|---|---|
+| `templates/print-config.win-standard.json` | Windows 标准标定（默认值：平台 1.1075/0.992、GL 1.13595/0.99495、Normal 宋体、表头等线 Light） |
+| `templates/print-config.mac-standard.json` | Mac 标准（系数 1.0、Calibri，无需补偿） |
+| （未来按贡献补充） | 某机器适配版本（`_comment` 里写适用条件） |
+
+**选用**（二选一）：① `cp templates/print-config.win-standard.json <输出根目录>/print-config.json`（自动发现生效）② `generate --config <模板路径>`。改模板后重新 generate 生效（免发版）。
+
+**贡献**：你在某台机器上标定出完美尺寸后，把该机器的 `print-config.json` 交给开发方 → 入库（命名带环境特征 + `_comment` 写适用条件）→ 随下版发布，其他用户可直接选用。
 
 ## 命令总览
 

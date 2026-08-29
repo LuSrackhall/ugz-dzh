@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -353,4 +354,150 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+// TestMergeGLPageCrossing 固化"合并账页翻页列区错位"修复（2026-08-30 第七轮）：
+// 合并账页分录跨页时，翻页分支此前缺三步（页码不更新/不写新页头/不跳数据首行），
+// 导致承前页与后续分录带着旧页码写进旧列区——反面页一部分被写入左侧正面页列数中，
+// 且新页无表头，逐月月结视觉上连成一片。
+// 构造 25 条分录（首页 20 行满 + 翻页）断言：第 2 页带正面区无任何内容、
+// 反面区有页头与承前页、承前页承接过次页余额。
+func TestMergeGLPageCrossing(t *testing.T) {
+	root, err := findProjectRoot()
+	if err != nil {
+		t.Fatalf("找不到项目根目录: %v", err)
+	}
+	bin := filepath.Join(t.TempDir(), "ledger")
+	buildCmd := exec.Command("go", "build", "-o", bin, ".")
+	buildCmd.Dir = root
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("编译失败: %s", out)
+	}
+
+	output := t.TempDir()
+	yearDir := filepath.Join(output, "2026")
+	if err := os.MkdirAll(yearDir, 0o755); err != nil {
+		t.Fatalf("创建输出目录: %v", err)
+	}
+
+	// 1. 25 张凭证：库存现金 借100 / 内部往来-张三 贷100（合并页 25 行分录，必翻页）
+	voucherDir := filepath.Join(t.TempDir(), "vouchers")
+	if err := os.MkdirAll(voucherDir, 0o755); err != nil {
+		t.Fatalf("创建凭证目录: %v", err)
+	}
+	tpl := `红旗路办事处
+
+记字第%04d号 1/1
+
+记帐凭证
+
+2026年02月%02d日
+
+附件 张
+
+<table><thead><tr><th>摘要</th><th>总帐科目</th><th>明细科目</th><th>借方</th><th>贷方</th></tr></thead><tbody><tr><td>收还款%02d</td><td>库存现金</td><td></td><td>100.00</td><td></td></tr><tr><td>收还款%02d</td><td>内部往来</td><td>张三</td><td></td><td>100.00</td></tr><tr><td>合计</td><td></td><td></td><td>100.00</td><td>100.00</td></tr></tbody></table>
+
+1
+
+会计主管
+
+记帐
+
+审核
+
+制单`
+	for i := 1; i <= 25; i++ {
+		name := fmt.Sprintf("记字第%04d号.md", i)
+		if err := os.WriteFile(filepath.Join(voucherDir, name), []byte(fmt.Sprintf(tpl, i, i%28+1, i, i)), 0o644); err != nil {
+			t.Fatalf("写凭证 %s: %v", name, err)
+		}
+	}
+
+	// 2. JSON：合并总账科目=["内部往来"]，无历史余额（链从 0 起算）
+	jsonContent := `{
+  "全局设置": {
+    "启动月": "2026-02",
+    "科目顺序": ["库存现金", "内部往来"],
+    "科目映射表": {},
+    "合并总账科目": ["内部往来"],
+    "总分类账忽略科目": [],
+    "多科目明细账忽略科目": [],
+    "结账月": ""
+  },
+  "科目树": {
+    "库存现金": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2026-02", "金额": 0}, "余额": {}},
+    "内部往来": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2026-02", "金额": 0}, "余额": {}},
+    "内部往来-张三": {"科目属性": "借", "首次记录": {"方式": "自动识别", "月份": "2026-02", "金额": 0}, "余额": {}}
+  },
+  "自动识别科目": [
+    {"科目": "库存现金", "首次月份": "2026-02", "期初调整额": 0},
+    {"科目": "内部往来", "首次月份": "2026-02", "期初调整额": 0},
+    {"科目": "内部往来-张三", "首次月份": "2026-02", "期初调整额": 0}
+  ],
+  "手动调整科目": [],
+  "明细列顺序": {}
+}`
+	if err := os.WriteFile(filepath.Join(yearDir, "2026.json"), []byte(jsonContent), 0o644); err != nil {
+		t.Fatalf("写配置: %v", err)
+	}
+
+	// 3. 生成
+	cmd := exec.Command(bin, "generate", "-v", voucherDir, "-o", output, "-f")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generate 失败: %v\n%s", err, out)
+	}
+
+	// 4. 结构断言
+	f, err := excelize.OpenFile(filepath.Join(yearDir, "2026-02.xlsx"))
+	if err != nil {
+		t.Fatalf("打开 xlsx: %v", err)
+	}
+	defer f.Close()
+
+	sheet := "总分类账-内部往来"
+	if idx, err := f.GetSheetIndex(sheet); err != nil || idx < 0 {
+		t.Fatalf("合并 sheet %q 不存在", sheet)
+	}
+	rows, err := f.GetRows(sheet)
+	if err != nil {
+		t.Fatalf("读取 sheet: %v", err)
+	}
+	if len(rows) <= 28 {
+		t.Fatalf("25 条分录应触发翻页（总行数 %d ≤ 28，未翻页）", len(rows))
+	}
+	// 第 2 页带（R29-R56）：正面列区（GetRows 索引 0..13）必须无任何内容
+	frontContent := 0
+	sample := ""
+	for i := 28; i < 56 && i < len(rows); i++ {
+		for j := 0; j <= 13 && j < len(rows[i]); j++ {
+			if strings.TrimSpace(rows[i][j]) != "" {
+				frontContent++
+				if sample == "" {
+					sample = fmt.Sprintf("R%d [%d]%s", i+1, j, strings.TrimSpace(rows[i][j]))
+				}
+			}
+		}
+	}
+	if frontContent > 0 {
+		t.Errorf("第 2 页带正面列区出现 %d 处内容（首处 %s）—— 翻页未更新页码，反面页内容写进正面列", frontContent, sample)
+	}
+	// 反面区：新页头标题（R30，索引16）+ 承前页（数据区，索引20）
+	if cellVal(rows, 29, 16) == "" || !strings.Contains(cellVal(rows, 29, 16), "总") {
+		t.Errorf("第 2 页 R30 反面区缺少页头标题（翻页未写新页头）: %q", cellVal(rows, 29, 16))
+	}
+	carryIdx := -1
+	for i := 28; i < len(rows) && i < 56; i++ {
+		if cellVal(rows, i, 20) == "承前页" {
+			carryIdx = i
+			break
+		}
+	}
+	if carryIdx < 0 {
+		t.Fatalf("第 2 页反面区（索引20）未找到承前页")
+	}
+	// 承前页承接过次页余额：20 条 × 100 贷 = 2000（借方向列应为 贷）
+	if bal := yuanVal(rows, carryIdx, 26); bal != 2000 {
+		t.Errorf("承前页余额应为 2000 元（20×100 贷），实际 %v", bal)
+	}
+	t.Logf("翻页结构正确：第 2 页反面区页头+承前页 2000，正面列区无错位内容")
 }

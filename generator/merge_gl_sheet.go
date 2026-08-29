@@ -195,28 +195,40 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 			return err
 		}
 
-		// 补承前页
+		// 上一生成月以孤立过次页结尾：补新页头 + 承前页。
+		// 必须与翻页分支同款定位（越过边距 → 新页标题行 → 数据首行），
+		// 并先更新页码——否则承前页带着旧页码写进旧列区（反页内容错位到正面列）。
 		if wb.lastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.lastBreakTotals(sheet)
-			row += lay.TopMarginRows
-			for d := row - lay.TopMarginRows + 1; d <= row; d++ {
-				wb.File.SetRowHeight(sheet, d, 25)
-			}
+			pageNum = wb.getPageNum(sheet)
+			row += lay.BottomMarginRows + lay.TopMarginRows
+			wb.writePageHeader(sheet, row, pageNum, general)
+			row += lay.DataStartRow
 			wb.writeCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pageNum)
 			row++
 			pageDebit = 0
 			pageCredit = 0
 		}
 
-		// 页满 → 过次页 + 承前页
+		// 页满 → 过次页 + 新页头 + 承前页（与普通 GL appendToGLSheet 一致）。
+		// 此前缺三步：页码不更新（承前页/后续分录带着旧页码写进旧列区——
+		// 反面页一部分被写进左侧正面页列数中）、不写新页头（新页无标题表头，
+		// 逐月月结视觉上连成一片）、不跳数据首行（承前页落在新页边距上）。
 		if wb.rowIsPageBreak(sheet, row) {
 			wb.writePageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
+			pageNum = wb.getPageNum(sheet)
 			row += lay.BottomMarginRows + lay.TopMarginRows
 			marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
 			for d := marginStart; d < row; d++ {
-				wb.File.SetRowHeight(sheet, d, 25)
+				h := 19.0 // 下边距（与 GL 其他翻页统一）
+				if d >= row-lay.TopMarginRows {
+					h = 16.0 // 下页上边距（与 GL 其他翻页统一）
+				}
+				wb.File.SetRowHeight(sheet, d, h)
 			}
+			wb.writePageHeader(sheet, row, pageNum, general)
+			row += lay.DataStartRow
 			wb.writeCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageNum)
 			row++
 			pageDebit = 0

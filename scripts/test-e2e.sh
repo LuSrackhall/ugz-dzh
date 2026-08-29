@@ -133,6 +133,7 @@ import json
 with open('$OUT/2025/2025.json') as f:
     cfg = json.load(f)
 cfg.setdefault('全局设置', {})['多科目明细账忽略科目'] = $ML_SUPPRESS
+cfg.setdefault('全局设置', {})['合并总账科目'] = ['应收款', '应付款', '内部往来', '固定资产']
 with open('$OUT/2025/2025.json', 'w') as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)
 print('  MLSuppressAccounts 已写入')

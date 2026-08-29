@@ -75,6 +75,10 @@ type SheetConfig struct {
 	BackSummaryDelta  float64 `json:"backSummaryDelta"`
 	BackBindingDelta  float64 `json:"backBindingDelta"`
 	BackOuterDelta    float64 `json:"backOuterDelta"`
+	// FrontDigitDelta 正面页（Front 半侧）金额分位尺寸微调（最终 px 增量）：
+	// 作用于所有明细列的同一位（×列数放大），其余位不动。键：base（基础位 14px）/ k0/k1/k4/k9（特例位 16px）。
+	// 解决正面页无摘要列、缺大缓冲列的问题——单拎代表位比全部位一起变精细得多。
+	FrontDigitDelta map[string]float64 `json:"frontDigitDelta"`
 }
 
 // widthDeltas 正反面页微调增量（最终 px）。
@@ -99,7 +103,8 @@ func (s *SheetConfig) empty() bool {
 	return s == nil || (s.ColScale == 0 && s.RowScale == 0 && s.Fonts == (FontConfig{}) &&
 		s.FrontColScale == 0 && s.BackColScale == 0 &&
 		s.FrontSummaryDelta == 0 && s.FrontBindingDelta == 0 && s.FrontOuterDelta == 0 &&
-		s.BackSummaryDelta == 0 && s.BackBindingDelta == 0 && s.BackOuterDelta == 0)
+		s.BackSummaryDelta == 0 && s.BackBindingDelta == 0 && s.BackOuterDelta == 0 &&
+		len(s.FrontDigitDelta) == 0)
 }
 
 // FontConfig 分区域字体（normal=列宽基准；digit=金额数字；title=大标题；default=其余）。
@@ -221,6 +226,14 @@ func currentFonts() FontConfig {
 }
 
 // sheetCompensate 当前账本类型的列宽/行高补偿系数（GL/ML 专用系数优先，0 回退平台级）。
+// sheetFrontDigitDelta 当前账本类型的正面页金额分位尺寸微调（键 base/k0/k1/k4/k9 → 最终 px 增量）。
+func sheetFrontDigitDelta() map[string]float64 {
+	if sc := sheetConfig(); sc != nil {
+		return sc.FrontDigitDelta
+	}
+	return nil
+}
+
 // sheetColScales 当前账本类型的正反面页独立列宽系数（0=用账本级 colScale）。
 func sheetColScales() (front, back float64) {
 	if sc := sheetConfig(); sc != nil {
@@ -338,7 +351,8 @@ func LoadPrintConfig(path string) error {
 				Fonts: mergeFonts(base.Fonts, pc.GL.Fonts),
 				FrontColScale: pc.GL.FrontColScale, BackColScale: pc.GL.BackColScale,
 				FrontSummaryDelta: pc.GL.FrontSummaryDelta, FrontBindingDelta: pc.GL.FrontBindingDelta, FrontOuterDelta: pc.GL.FrontOuterDelta,
-				BackSummaryDelta: pc.GL.BackSummaryDelta, BackBindingDelta: pc.GL.BackBindingDelta, BackOuterDelta: pc.GL.BackOuterDelta}
+				BackSummaryDelta: pc.GL.BackSummaryDelta, BackBindingDelta: pc.GL.BackBindingDelta, BackOuterDelta: pc.GL.BackOuterDelta,
+				FrontDigitDelta: pc.GL.FrontDigitDelta}
 			base.GL = sc
 		}
 		if !pc.ML.empty() {
@@ -346,7 +360,8 @@ func LoadPrintConfig(path string) error {
 				Fonts: mergeFonts(base.Fonts, pc.ML.Fonts),
 				FrontColScale: pc.ML.FrontColScale, BackColScale: pc.ML.BackColScale,
 				FrontSummaryDelta: pc.ML.FrontSummaryDelta, FrontBindingDelta: pc.ML.FrontBindingDelta, FrontOuterDelta: pc.ML.FrontOuterDelta,
-				BackSummaryDelta: pc.ML.BackSummaryDelta, BackBindingDelta: pc.ML.BackBindingDelta, BackOuterDelta: pc.ML.BackOuterDelta}
+				BackSummaryDelta: pc.ML.BackSummaryDelta, BackBindingDelta: pc.ML.BackBindingDelta, BackOuterDelta: pc.ML.BackOuterDelta,
+				FrontDigitDelta: pc.ML.FrontDigitDelta}
 			base.ML = sc
 		}
 		printCfg.Platforms[name] = base

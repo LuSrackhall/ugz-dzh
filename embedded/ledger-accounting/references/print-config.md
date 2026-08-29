@@ -121,6 +121,10 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 - 默认 0 → 所有平台输出与配置前**完全一致**（零风险）
 - 装订边与非装订边是**镜像**的（正面装订在左、反面装订在右），必须分开配置
 - ML 正面页无摘要列（正面全是明细金额列），用 `frontOuterDelta`（书口列29）微调内容占宽
+- **正面页金额分位微调** `frontDigitDelta`：单拎代表位（`base` 基础位 14px / `k0` 千万 / `k1` 百万 / `k4` 千位 / `k9` 分位，特例位 16px），作用于**所有明细列的同一位**（×列数放大）、其余位与反面页不动：
+  ```json
+  "ml": { "frontDigitDelta": { "k9": 3, "base": 1 } }
+  ```
 
 ### GL/ML 分账本配置
 
@@ -148,13 +152,13 @@ ledger generate -v <凭证目录> -o <输出目录>                             
 - **按平台独立**：`platforms.windows` 与 `platforms.mac` 各自完整配置（系数 + 字体），互不影响
 - **部分覆盖**：只写要改的字段，其余保持默认（如只调 windows 系数，mac 与字体不动）
 - **未知平台**：配置中未列出的平台（如 linux）按 mac 默认（系数 1.0）
-- **目标平台选择**：`--platform auto`（默认，按当前系统）/ `--platform windows` / `--platform mac`——在任一平台都可用 `--platform windows` 生成 Windows 版（跨平台生成，改完配置重新 generate 即可）
+- **目标平台选择**：`--platform auto`（默认，按当前系统）/ `--platform windows` / `--platform mac`——在 Mac 上可用 `--platform windows` 生成 Windows 版测试（配合 `scripts/gen-win-test.sh`）
 
 ## 为什么需要补偿系数
 
 WPS 各平台/各机器渲染列宽、行高存在差异（字体环境、渲染引擎不同）：同一份打印版 xlsx 在 Windows 上实测整体偏小（表格宽约 -12.5%、行高约 -6%）。补偿系数在生成时乘到列宽/行高值上，使目标平台的输出适配其页面。
 
-默认值（windows 平台级 1.1075 / 0.992；GL 独立 1.13595 / 0.99495）为多轮肉眼观察标定的收敛值；换环境后可自行调整（GL/ML 可独立调），改完重新 `generate` 即可观察效果（免发版）。
+默认值（windows 平台级 1.1075 / 0.992；GL 独立 1.13595 / 0.99495）为多轮肉眼观察标定的收敛值；换环境后可自行调整（GL/ML 可独立调），观察方法见 `scripts/gen-win-test.sh` 顶部说明。
 
 ## 完整示例
 

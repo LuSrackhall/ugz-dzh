@@ -174,3 +174,41 @@ func TestWidthDeltas(t *testing.T) {
 	printSheetType = ""
 	PrintPlatform = "auto"
 }
+
+func TestFrontDigitDelta(t *testing.T) {
+	printCfg = defaultPrintConfig()
+	printCfg.Platforms["windows"] = PlatformConfig{
+		ColScale: 1.1075, RowScale: 0.992, Fonts: defaultFonts(),
+		ML: &SheetConfig{ColScale: 1.1075, FrontDigitDelta: map[string]float64{"k9": 3, "base": 1}},
+	}
+	PrintPlatform = "windows"
+	printSheetType = "ml"
+	fd := sheetFrontDigitDelta()
+	if fd == nil || fd["k9"] != 3 || fd["base"] != 1 || fd["k0"] != 0 {
+		t.Errorf("frontDigitDelta = %v, want k9=3 base=1 k0=0", fd)
+	}
+	// GL 未配 → nil（不启用）
+	printSheetType = "gl"
+	if fd := sheetFrontDigitDelta(); fd != nil {
+		t.Errorf("GL 未配 frontDigitDelta 应为 nil: %v", fd)
+	}
+	printSheetType = ""
+	PrintPlatform = "auto"
+}
+
+func TestLoadPrintConfigFrontDigit(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "print-config.json")
+	content := `{"platforms":{"windows":{"ml":{"frontDigitDelta":{"k4":2}}}}}`
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	printCfg = defaultPrintConfig()
+	if err := LoadPrintConfig(p); err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	ml := printCfg.Platforms["windows"].ML
+	if ml == nil || ml.FrontDigitDelta["k4"] != 2 {
+		t.Errorf("frontDigitDelta 未生效: %+v", ml)
+	}
+}

@@ -372,6 +372,8 @@ type printSheetConfig struct {
 	backColScale  float64
 	// colPxDelta 查看版列号 → 列宽微调增量（最终 px，在系数之后叠加；仅摘要列/边距列，金额列为 0）。
 	colPxDelta map[int]float64
+	// amountPxDelta (金额列, k) → 该分位小列宽度微调增量（最终 px；如 ML 正面页 frontDigitDelta）。
+	amountPxDelta map[[2]int]float64
 	// isFrontCol/isBackCol 列归属半侧判定（查看版列号）。
 	isFrontCol func(viewCol int) bool
 	isBackCol  func(viewCol int) bool
@@ -464,7 +466,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 					sub = base + d/7
 				}
 				pc := cm.startCol(c) + k
-				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub*cs)
+				_ = f.SetColWidth(sheet, colLetter(pc), colLetter(pc), sub*cs+cfg.amountPxDelta[[2]int{c, k}]/7)
 			}
 		} else {
 			// 拆分非金额列（如 GL 摘要列 4 格）：n 子列按"原字符数 ÷ n"等分——

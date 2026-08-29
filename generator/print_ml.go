@@ -121,6 +121,28 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 			lay.TotalCols:                   wd.FrontOuter,   // 列29（Front 书口）
 		}
 	}
+	// 正面页金额分位尺寸微调（frontDigitDelta）：单拎代表位，作用于所有明细列的同一位
+	if fd := sheetFrontDigitDelta(); len(fd) > 0 {
+		cfg.amountPxDelta = map[[2]int]float64{}
+		for i := 4; i < mlMaxDetails; i++ { // 明细5-14（Front 半侧）
+			c := mlDetailCol(lay, i)
+			for k := 0; k < 10; k++ {
+				key := "base"
+				if k == 0 {
+					key = "k0"
+				} else if k == 1 {
+					key = "k1"
+				} else if k == 4 {
+					key = "k4"
+				} else if k == 9 {
+					key = "k9"
+				}
+				if d, ok := fd[key]; ok && d != 0 {
+					cfg.amountPxDelta[[2]int{c, k}] = d
+				}
+			}
+		}
+	}
 	// 表头区 = 四行表头（DataStartRow-4 .. DataStartRow-1）+ h4 标签行（DataStartRow）
 	cfg.isHeaderRow = func(r int) bool {
 		start := lay.DataStartRow - 4

@@ -118,8 +118,6 @@ func (wb *Workbook) appendToMergeGLSheet(general string, entries []voucher.Entry
 	var pageDebit, pageCredit int64
 	if !isNew {
 		balance = wb.lastPageBalance(sheet)
-		if !wb.pageHasBreakRow(sheet) {
-		}
 	}
 
 	for _, e := range entries {
@@ -303,7 +301,7 @@ func (wb *Workbook) WriteMergeGLClosings(activity map[string]Activity, ytdDebit,
 			}
 		}
 
-		if err := wb.writeMergeGLClosingRows(sheet, mtdDebit, mtdCredit, qtDebit, qtCredit, cumDebit, cumCredit, parentInitial); err != nil {
+		if err := wb.writeMergeGLClosingRows(sheet, general, mtdDebit, mtdCredit, qtDebit, qtCredit, cumDebit, cumCredit, parentInitial); err != nil {
 			return fmt.Errorf("合并总分类账 %s 月结: %w", general, err)
 		}
 	}
@@ -312,7 +310,9 @@ func (wb *Workbook) WriteMergeGLClosings(activity map[string]Activity, ytdDebit,
 }
 
 // writeMergeGLClosingRows 写入合并 GL 的四行月结：本月合计、本季合计（仅季末）、本年累计、期末余额。
-func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, qtDebit, qtCredit, cumDebit, cumCredit int64, parentInitial int64) error {
+// 每写一行前检查页容量，满了就过次页翻页（审计 P1-1：补 checkBreak 翻页保护，保证每页恰好20数据行+1过次页行，
+// 避免末页剩余<4行时月结越界破坏余额链连续性——铁律二）。
+func (wb *Workbook) writeMergeGLClosingRows(sheet string, account string, mtdDebit, mtdCredit, qtDebit, qtCredit, cumDebit, cumCredit int64, parentInitial int64) error {
 	lay := glLayout()
 
 	// 计算末页页码
@@ -329,7 +329,37 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 		return err
 	}
 
+	// 期末余额 = 期初 + 本月借 - 本月贷（月结翻页时承前页承接此余额）
+	balance := parentInitial + mtdDebit - mtdCredit
+	var closingDebit, closingCredit int64
+
+	// 检查页容量，满了就翻页（照搬 WriteMonthClosings 的 checkBreak 模式）
+	checkBreak := func() {
+		pageStart := wb.pageStartRow(sheet)
+		if row-pageStart >= pageSize {
+			wb.writePageBreakRow(sheet, row, balance, closingDebit, closingCredit, pageNum)
+			row++
+			pageNum = wb.getPageNum(sheet)
+			row += lay.BottomMarginRows + lay.TopMarginRows
+			marginStart := row - lay.BottomMarginRows - lay.TopMarginRows
+			for d := marginStart; d < row; d++ {
+				h := 19.0 // 下边距（与 GL 其他翻页统一）
+				if d >= row-lay.TopMarginRows {
+					h = 16.0 // 下页上边距（与 GL 其他翻页统一）
+				}
+				wb.File.SetRowHeight(sheet, d, h)
+			}
+			wb.writePageHeader(sheet, row, pageNum, account)
+			row += lay.DataStartRow
+			wb.writeCarryForwardRow(sheet, row, balance, closingDebit, closingCredit, pageNum)
+			row++
+			closingDebit = 0
+			closingCredit = 0
+		}
+	}
+
 	// 本月合计
+	checkBreak()
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本月合计")
@@ -348,10 +378,13 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
+	closingDebit += mtdDebit
+	closingCredit += mtdCredit
 	row++
 
 	// 本季合计（仅季末）
 	if isQuarterEnd(wb.Month) {
+		checkBreak()
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
 		wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本季合计")
@@ -371,6 +404,7 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 	}
 
 	// 本年累计
+	checkBreak()
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), "本年累计")
@@ -389,19 +423,16 @@ func (wb *Workbook) writeMergeGLClosingRows(sheet string, mtdDebit, mtdCredit, q
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColDebit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColCredit))
 	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
-	wb.setMoneyStyle(sheet, row, dataCol(lay, pageNum, glColBalance))
 	row++
 
 	// 期末余额
+	checkBreak()
 	endBalance := parentInitial + mtdDebit - mtdCredit
 	endDir, endDisp := directionFor(endBalance, 0)
 
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 0), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 1), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, 4), row), periodEndLabel)
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
-	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), "")
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColDir), row), endDir)
 	wb.File.SetCellValue(sheet, cellName(dataCol(lay, pageNum, glColBalance), row), centsToYuan(endDisp))
 

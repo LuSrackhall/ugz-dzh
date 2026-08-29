@@ -71,8 +71,19 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	for _, account := range allAccounts {
 		initials[account] = balance.GetInitBalanceForGenerate(cfg, account, month, prevFinals)
 	}
-	// 补充：科目树中有非零余额但当月无分录的科目，也加入期初映射
+	// 合并总账父级不进 initials（审计 P1-2：父级是汇总视图，非叶子记账科目）。
+	// 若纳入 initials 会污染期初试算平衡（父级期初+子科目期初双算→假性不平衡告警），
+	// 且会让 M4/appendCarryForwardOnly 等普通流程误处理父级（月结侧已修，此为期初侧入口堵漏）。
+	// 合并父级期初由 WriteMergeGLClosings 经子科目汇总得出（parentInitial），不走 initials[父级]。
+	mergeSet := make(map[string]bool)
+	for _, g := range cfg.Settings.MergeGLAccounts {
+		mergeSet[g] = true
+	}
+	// 补充：科目树中有非零余额但当月无分录的科目，也加入期初映射（合并父级除外）
 	for k := range cfg.Tree {
+		if mergeSet[k] {
+			continue // 合并总账父级跳过（见上方注释）
+		}
 		if _, exists := initials[k]; !exists {
 			initials[k] = balance.GetInitBalanceForGenerate(cfg, k, month, prevFinals)
 		}
@@ -206,6 +217,14 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 
 // appendCarryForwardOnly 对仅有期初余额但无当月分录的科目写入上年结转行。
 func (wb *Workbook) appendCarryForwardOnly(entries []voucher.Entry, initials map[string]int64) error {
+	// 合并总账父级跳过：appendToGLSheet(account,nil) 会用 sheetNameGL(父级) 命中合并 sheet
+	// "总分类账-{父级}"，在合并视图里插入孤立的上年结转/期初余额行，污染合并分录与月结。
+	// 合并父级的期初由 WriteMergeGLClosings 经子科目汇总得出（parentInitial），不走此路径。
+	mergeSet := make(map[string]bool)
+	for _, g := range wb.Config.Settings.MergeGLAccounts {
+		mergeSet[g] = true
+	}
+
 	// 收集当月有分录的科目
 	hasEntries := make(map[string]bool)
 	for _, e := range entries {
@@ -218,6 +237,9 @@ func (wb *Workbook) appendCarryForwardOnly(entries []voucher.Entry, initials map
 	// 对仅期初非零但无分录的科目，写入期初行（1 月跨年延续 或 当月调整额生效）
 	for account, initial := range initials {
 		if initial != 0 && !hasEntries[account] && (strings.HasSuffix(wb.Month, "-01") || wb.InitialAdjust[account]) {
+			if mergeSet[account] {
+				continue // 合并总账父级跳过（见上方注释）
+			}
 			if err := wb.appendToGLSheet(account, nil, initial); err != nil {
 				return fmt.Errorf("追加上年结转 %s: %w", account, err)
 			}

@@ -359,6 +359,14 @@ func (wb *Workbook) WriteMergeGLClosings(activity map[string]Activity, ytdDebit,
 			mtdCredit += a.Credit
 		}
 
+		// 无发生额月份不写月结（与普通 GL 移除 M4 补月结一致）：零活动月份逐月
+		// 重复"本月合计 0/0 + 期末=期初"的空月结是噪音（用户实测反馈为重复连续
+		// 月结行）。账页余额由上年结转/上一发生月期末自持，账页存在性仍由
+		// ensureMergeGLPageWithInitial 保障（有汇总期初即建页写结转行）。
+		if mtdDebit == 0 && mtdCredit == 0 {
+			continue
+		}
+
 		// 汇总期初（第三轮审查 D1c：仅由子科目期初聚合；父级自身 initials 不再叠加——
 		// 合并父级不作叶子记账，叠加会虚增（initials[general] 可能来自合并视图污染或父级自身期初））
 		var parentInitial int64

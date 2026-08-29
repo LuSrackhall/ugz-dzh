@@ -8,54 +8,27 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// WriteMonthClosings 对有变化的 Sheet 追加"本月合计"、"本季合计"（仅季末）、"本年累计"和"期末余额"行。
+// WriteMonthClosings 对当月有分录发生的 Sheet 追加"本月合计"、"本季合计"（仅季末）、"本年累计"和"期末余额"行。
+// 无发生额的月份不写月结（2026-08-30 移除原 M4 补月结）：零活动月份逐月重复
+// "本月合计 0/0 + 期末=期初"的空月结，账面只见噪音（用户实测反馈为重复连续月结行）；
+// 余额链由账页自身延续（下个有发生月份的期初=上月末期末），本年累计口径不受影响。
 func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, ytdCredit, qtdDebit, qtdCredit map[string]int64, initials map[string]int64, changedSheets map[string]bool) error {
 	lay := glLayout()
 
 	// 合并总账父级科目的月结由 WriteMergeGLClosings 专职负责（其 sheet 名 = sheetNameGL(父级)，
-	// 与普通叶子同源命名）。此处必须排除合并父级，否则 M4 补月结 + WriteMergeGLClosings 会
-	// 对同一 sheet 各写一套月结 → 连续两套月结行，且 M4 那套期末=期初、未计入当月子科目发生额（错误数据）。
-	// 触发条件：合并父级期初≠0（来自科目树 Tree[父级].Balances 历史余额，D1a 未覆盖此路径）。
+	// 与普通叶子同源命名），此处一律跳过。
 	mergeSet := make(map[string]bool)
 	for _, g := range wb.Config.Settings.MergeGLAccounts {
 		mergeSet[g] = true
 	}
 
-	// M4 无活动月份补月结行：期初（上月末余额）≠0 但当月无分录、且存在 GL Sheet 的科目，
-	// 补"本月合计 0/0 + 本年累计 + 期末余额=期初"行，使账本逐月连续清晰。
-	// 使用副本扩展，不修改入参（不影响 MergeGL/ML 后续处理）。
-	extendedActivity := make(map[string]Activity, len(activity))
-	extendedChanged := make(map[string]bool, len(changedSheets))
-	for k, v := range activity {
-		extendedActivity[k] = v
-		extendedChanged[sheetNameGL(k)] = true
-	}
-	for account, init := range initials {
-		if init == 0 {
-			continue
-		}
-		if _, hasAct := extendedActivity[account]; hasAct {
-			continue
-		}
-		// 合并总账父级跳过（见上方注释：避免与 WriteMergeGLClosings 双写月结）
+	for account, act := range activity {
+		// 合并总账父级跳过（月结由 WriteMergeGLClosings 专职）
 		if mergeSet[account] {
 			continue
 		}
 		sheet := sheetNameGL(account)
-		if !wb.hasSheet(sheet) {
-			continue
-		}
-		extendedActivity[account] = Activity{}
-		extendedChanged[sheet] = true
-	}
-
-	for account, act := range extendedActivity {
-		// 合并总账父级跳过（双保险：即使被纳入 extendedActivity 也不在此写月结）
-		if mergeSet[account] {
-			continue
-		}
-		sheet := sheetNameGL(account)
-		if !extendedChanged[sheet] {
+		if !changedSheets[sheet] {
 			continue
 		}
 

@@ -265,7 +265,7 @@ func TestMergeGLInitialOnlyPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("读取 sheet: %v", err)
 	}
-	initRowIdx, endRowIdx, closingCount := -1, -1, 0
+	initRowIdx, closingCount := -1, 0
 	for i, r := range rows {
 		for j, c := range r {
 			c = strings.TrimSpace(c)
@@ -277,8 +277,6 @@ func TestMergeGLInitialOnlyPage(t *testing.T) {
 				initRowIdx = i
 			case "本月合计":
 				closingCount++
-			case "期末余额":
-				endRowIdx = i
 			}
 		}
 	}
@@ -288,16 +286,14 @@ func TestMergeGLInitialOnlyPage(t *testing.T) {
 	if bal := yuanVal(rows, initRowIdx, 12); bal != 5000 {
 		t.Errorf("上年结转行余额应为 5000 元，实际 %v", bal)
 	}
-	if closingCount != 1 {
-		t.Errorf("无分录月应有且仅有一套月结（本月合计 1 次），实际 %d 次", closingCount)
+	// 无发生额月份不写月结（移除 M4 后的行为）：连续空月结是噪音，已移除
+	if closingCount != 0 {
+		t.Errorf("无发生额月份不应写月结行，实际本月合计 %d 次", closingCount)
 	}
-	if bal := yuanVal(rows, endRowIdx, 12); bal != 5000 {
-		t.Errorf("期末余额应为 5000 元（期初+0发生），实际 %v —— 余额链断裂", bal)
-	}
-	// D3 固化：无分录月的月结行边框必须自包含完整
-	assertCellFramed(t, f, sheet, endRowIdx, 6)
-	assertCellFramed(t, f, sheet, endRowIdx, 12)
-	t.Logf("有余额无分录月：合并账页存在，上年结转 5000 → 期末 5000，月结边框完整")
+	// 期初/结转行边框必须自包含完整（该页无账页预置框可依赖）
+	assertCellFramed(t, f, sheet, initRowIdx, 6)
+	assertCellFramed(t, f, sheet, initRowIdx, 12)
+	t.Logf("有余额无分录月：合并账页存在，仅上年结转 5000，无空月结")
 }
 
 // yuanVal 读 GetRows 指定单元格的金额并解析为元（容逗号/空；解析失败返回 -1）。

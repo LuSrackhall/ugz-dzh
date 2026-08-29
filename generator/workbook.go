@@ -219,10 +219,22 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 		if err != nil {
 			continue
 		}
-		// 找到最后一个"期末余额"行（月结行），读有符号余额（借正贷负）
+		// 优先找最后一个"期末余额"行（月结行，权威运行余额）。
+		// 移除 M4 补月结后，无发生额月份的账页只有上年结转/期初行或分录行，没有
+		// 期末余额行——此时回退取账页上最后一条带符号余额的行：无发生额月份不改
+		// 变余额，账页上最后的余额即科目当前余额（借正贷负）。
 		var lastBalance int64
+		foundClosing := false
 		for _, row := range rows {
 			if glRowLabel(row, lay) == periodEndLabel {
+				if v, ok := glRowSignedBalance(row, lay); ok {
+					lastBalance = v
+					foundClosing = true
+				}
+			}
+		}
+		if !foundClosing {
+			for _, row := range rows {
 				if v, ok := glRowSignedBalance(row, lay); ok {
 					lastBalance = v
 				}

@@ -411,7 +411,14 @@ func PrintConfigTemplate() string {
         "frontOuterDelta": 0,
         "backSummaryDelta": 0,
         "backBindingDelta": 0,
-        "backOuterDelta": 0
+        "backOuterDelta": 0,
+        "frontDigitDelta": {
+          "base": 0,
+          "k0": 0,
+          "k1": 0,
+          "k4": 0,
+          "k9": 0
+        }
       }
     },
     "mac": {

@@ -1,9 +1,12 @@
 {
+  "_comment": "打印版配置（generate 自动发现）。字段含义见技能 references/print-config.md；0/空/null=保持默认（不配置时的行为）；改完重新 generate 生效（免发版）",
   "platforms": {
     "windows": {
+      "_comment": "Windows 平台：列宽/行高补偿系数 + 字体 + GL/ML 分账本覆盖",
       "colScale": 1.1075,
       "rowScale": 0.992,
       "fonts": {
+        "_comment": "normal=列宽基准字体；digit=金额数字；title=标题；default=其余区域；labelFamily=摘要/借/贷/余额表头字体（Win 默认等线 Light）；digitSize/labelSize=字号、digitBold/labelBold=加粗（0/null=现状）",
         "normal": "宋体",
         "digit": "Noteworthy",
         "title": "仿宋",
@@ -15,6 +18,7 @@
         "labelFamily": "等线 Light"
       },
       "gl": {
+        "_comment": "GL（总分类账）覆盖：colScale/rowScale=0 用平台级；front/backColScale=正反面页独立列宽系数；{front,back}{Summary,Binding,Outer}Delta=±px 精调（最终 px、0=不动，只动摘要列/装订边/非装订边各一列，金额列不参与）",
         "colScale": 1.13595,
         "rowScale": 0.99495,
         "frontColScale": 0,
@@ -27,6 +31,7 @@
         "backOuterDelta": 0
       },
       "ml": {
+        "_comment": "ML（多科目明细账）覆盖：字段同 gl；frontDigitDelta=正面页金额分位微调（base=基础位14px各位 / k0=千万 / k1=百万 / k4=千位 / k9=分位，特例位16px；作用于所有明细列同一位，0=不动）",
         "colScale": 0,
         "rowScale": 0,
         "frontColScale": 0,
@@ -47,6 +52,7 @@
       }
     },
     "mac": {
+      "_comment": "Mac 平台：系数恒 1.0（不补偿）；字体/样式与 Windows 完全隔离",
       "colScale": 1.0,
       "rowScale": 1.0,
       "fonts": {

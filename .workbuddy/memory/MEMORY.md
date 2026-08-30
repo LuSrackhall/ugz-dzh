@@ -1,5 +1,16 @@
 # 项目长期记忆（ugz-dzh 手工账电子化）
 
+## 合并总账月结职责划分（2026-08-30 连续月结行 bug 修复）
+
+- **架构教训**：合并总账父级 sheet 名 = `sheetNameGL(父级)` = "总分类账-{父级}"，与普通叶子 sheet 命名**同源**。`WriteMonthClosings` 的 M4 补月结逻辑（对"期初≠0 且当月无分录"科目补月结）**必须排除合并父级**（构建 mergeSet 跳过），否则与 `WriteMergeGLClosings` 对同一 sheet 双写月结 → 连续两套月结行，且 M4 那套期末=期初、未计入当月子科目发生额（**错误数据**）。修复点：monthly_close.go（M4+主循环）、generate.go appendCarryForwardOnly。
+- **D1a 拦截不完整（根因）**：generate.go:31-49 的 D1a 只拦"建账月期初调整额"这条让 initials[父级]≠0 的路径，漏了"科目树 Tree[父级].Balances 历史期末余额"这条路径（旧版本回写/year-close 跨年结转/手动编辑写入父级）。`GetInitBalanceForGenerate` 路径3 读 Tree[父级].Balances → initials[父级]≠0 → M4 触发。**根治**：GenerateWorkbook 构建 initials 时 Tree 遍历也跳过 mergeSet，合并父级不进 initials → 不进期初表/期末表/试算平衡/UpdateBalancesAfterGenerate 回写（合并父级是汇总视图，期初=子科目之和，列了重复）。
+- **e2e 覆盖缺口**：test/e2e 用例 `合并总账科目: []`（空），完全不覆盖合并路径，导致 bug 长期潜伏。已补 `test/e2e/merge_close_test.go` `TestMergeGLNoDoubleClose` 固化（构造合并科目+历史余额，断言合并 sheet 月结各1次）。
+- **P1-1 翻页保护（已修，2026-08-30）**：`writeMergeGLClosings`（merge_gl_sheet.go）原连写4行月结缺 checkBreak 翻页保护。已照搬 WriteMonthClosings 的 checkBreak 闭包：每行月结前检查页容量，满了过次页+承前页，保证余额链连续（铁律二）。writeMergeGLClosingRows 签名加 account 参数（用于 writePageHeader/writeCarryForwardRow）。
+- **isNew 判断修复（2026-08-30，合并账页首次新建期初丢失）**：`appendToMergeGLSheet` 原用 `len(rows)<=2` 判 isNew，但 `ensureMergeGLSheet` 新建时已写标题（行1-6有值）→ isNew 恒 false → 合并页**首次新建**（建账月配合并科目/普通科目转合并）时**不写期初行、余额链从0起算**，与期末余额表不一致（复现：固定资产分录余额25000 vs 期末25678，丢678期初）。修复：`ensureMergeGLSheet` 返回是否新建标志，`appendToMergeGLSheet` 用它替换 len(rows)<=2。
+- **insertCarryForward 行位修复（2026-08-30）**：`insertCarryForward` 原 `row := DataStartRow+1`=6 落在子表头行（SubHeaderRow+1），期初行与表头重叠（标签经 G5:G6 合并显示在表头行）。修复：`row := DataStartRow+1+TopMarginRows`（=7，数据首行，与 nextDataRow 空 sheet 分支一致）。影响普通 GL 全新 sheet 期初行位置（行6→行7，修正）。
+- **合并账页月结行边框修复（2026-08-30，打印版边框错乱）**：`writeMergeGLClosingRows` 的月结样式原为灰(808080)部分框（monthlyStyle 仅 top、qtStyle 无边框、cumStyle/endStyle 仅 bottom）。有分录月靠 appendToMergeGLSheet 的账页预置绿框(006100)打底掩盖；**无分录月**（appendToMergeGLSheet 不执行、无预置边框）月结行 L/R/T 缺失 → 打印版列线断裂/边框错乱。修复：4 个月结样式改为完整绿框（top/right/bottom/left #006100 thin），endStyle bottom #000000 medium，与普通 GL 月结样式一致。
+- **职责划分原则**：合并总账父级的月结/期初完全由 `WriteMergeGLClosings` 专职（汇总子科目），普通 GL 流程（WriteMonthClosings/appendCarryForwardOnly/initials）一律排除 mergeSet。新增任何对 GL sheet 写月结/期初的代码，必须检查是否排除合并父级。
+
 ## 打印版位格输出（2026-08-24）
 
 - 架构：**同文件复制 + 几何变换**（非记录器、非 InsertCols）。复制查看版 xlsx 为打印版，对 GL/ML Sheet delete+NewSheet+MoveSheet 重建，逐格复制（非金额复用 styleID，金额列展开 12 小列）。查看版生成代码 0 改动。
@@ -34,3 +45,4 @@
 - **CLI 产物（ledger 各子命令，尤其 generate）才是需要"绝对安全"的核心**；`scripts/test-e2e.sh` 只是开发测试工具，其便利（如 --keep-json 续跑）不能替代 CLI 内建的安全机制。
 - 安全必须内建于 CLI 强制执行，不能靠脚本传参/使用习惯约定：generate 幂等（检测"本月合计"行）、借贷平衡校验、期初机制正确（调整额生效/无幻影期初/属性不推断）、科目映射合并、跨年结转干净。
 - 用户工作流宗旨：json+凭证.md → 账本；JSON 唯一权威源；git 管变更（新增科目/期初调整/余额回写都要在 JSON diff 真实可见且真实生效）。
+- **合并账页最终修复（2026-08-30 第六轮，main=06ca20b）**：用户撤回 fix-merge-20260830 分支后，在 4b696b4 基线重新根治三缺陷——D1 有余额无分录合并账页整体消失（跨年 1 月主诉）、D2 新建页期初行丢失（isNew 恒 false）、D3 月结边框不自包含（打印列线断裂）。提交 1e50155 + 06ca20b；36 项全账本验证通过；详见 2026-08-30.md。

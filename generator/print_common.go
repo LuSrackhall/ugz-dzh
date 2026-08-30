@@ -325,6 +325,10 @@ type printSheetConfig struct {
 	isDataRow         func(r int) bool // 数据区（数据行+月结/过次页行，拆位生成分组竖线）；表头/标题/下边距区铺"仅继承边界"样式
 	breakViewCol      int              // 查看版垂直分页符所在列
 	applyPageLayout   func(f *excelize.File, sheet string, breakPrintCol, lastRow int)
+	// planAreas 非nil：规划多区域打印区域（每半块一页、按阅读顺序排列），由
+	// TransformToPrint 在全部 sheet 变换归位后统一写入（写 scope 依赖最终 sheet 顺序）。
+	// WPS/Excel 语义=每区域一页、按列出顺序打印（WPS Mac 实测）→ 导出 PDF 无空白页且正反配对。
+	planAreas func(breakPrintCol, maxCol, lastRow int) []areaRect
 	// amountColPixel 金额小列的目标渲染像素宽（>0 时启用，0 = 按查看版列宽均分/字符守恒）。
 	// 用户定值（ML）= 14：缓解 Excel 每列 +5px 像素取整导致的区域膨胀。
 	amountColPixel float64
@@ -397,10 +401,10 @@ type printSheetConfig struct {
 //   - 金额 + 空 + 数据行 + 有样式：拆位填 n 空格（分组竖线 + 继承边框）
 //   - 金额 + 空 + 非数据行 + 有样式：n 子格铺"仅继承边界"样式（不生成分组竖线、不复制红双线）
 //   - 金额 + 空 + 无样式：跳过
-func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error {
+func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) ([]areaRect, error) {
 	meta, err := readSheetMeta(f, sheet, cfg.totalViewCols)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	cm := buildColMap(cfg.totalViewCols, cfg.amountCols, cfg.splitCols, cfg.splitNA)
 
@@ -416,7 +420,7 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 
 	origIdx, err := recreateSheet(f, sheet)
 	if err != nil {
-		return fmt.Errorf("重建 Sheet %s: %w", sheet, err)
+		return nil, fmt.Errorf("重建 Sheet %s: %w", sheet, err)
 	}
 
 	// 列宽：金额列 ÷n（n=该列展开数），其余原宽；零宽列显式设置 0（保持总宽守恒）
@@ -667,13 +671,22 @@ func transformSheet(f *excelize.File, sheet string, cfg printSheetConfig) error 
 		cfg.applyPageLayout(f, sheet, cm.startCol(cfg.breakViewCol), meta.maxRow)
 	}
 
+	// 规划多区域打印区域（区域边界与垂直分页一致：左页=1..break-1，右页=break..maxCol）。
+	// 写入延迟到 TransformToPrint 末尾：此刻本 sheet 尚未归位（recreateSheet 把它移到了末尾），
+	// 且后续 sheet 的删除/重建会干扰已写 definedName 的 localSheetId（实测串位）。
+	var planned []areaRect
+	if cfg.planAreas != nil {
+		maxCol := cm.startCol(cfg.totalViewCols) + cm.splitCols(cfg.totalViewCols) - 1
+		planned = cfg.planAreas(cm.startCol(cfg.breakViewCol), maxCol, meta.maxRow)
+	}
+
 	// 字体统一（宋体+加粗；labelBold=false 时摘要/借/贷/余额表头标签不加粗）。
 	// 放在最后：postProcess 创建的标题样式带显式 Family（applyPrintFont 跳过），
 	// 金额数字格带显式 Family/加粗（跳过），其余区域统一宋体。
 	applyPrintFont(f, sheet, cm, cfg)
 
 	restoreSheetOrder(f, sheet, origIdx)
-	return nil
+	return planned, nil
 }
 
 // cellAxis 返回 (col,row) 的单元格地址。

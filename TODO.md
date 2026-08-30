@@ -26,3 +26,9 @@
 - [ ] R2 `ledger opening import -f 期初余额表.csv`：批量期初导入，写入时校验科目存在性 / 属性与方向一致 / 试算平衡（不平拒绝并列差额）；写入语义与 add-manual 一致（锚定建账月）
 - [ ] R3 `init` 生成 `.gitignore`（派生产物：xlsx、ledger/balance 汇总、print/、closing/、output-harvest/；幂等补缺失）
 - [ ] R4 迁移 SOP 沉淀进技能 `references/`（设计确认后实施；技能须自包含，不得引用仓库 docs/）
+
+## JSON 字段核实结论（2026-08-31 全库核查）
+
+- [ ] **`科目顺序` 未接线**：init 生成空数组、`check.go` 提示文案引用，但生成逻辑零消费——决策：实现（科目在账页/报表的排序）或移除（同步修正 check.go 提示文案，避免误导用户"改科目顺序就能进报表"）
+- [ ] **类别表硬编码**：报表归类按总账科目名精确匹配内置 17 类（`balance.go` 的 `accountTypes`），JSON 无扩展类别字段，新科目无法通过配置归类——与「小企业会计准则预设」合并处理（可配置类别表）
+- [x] 全字段文档：技能新增 `references/json-schema.md`（谁写谁读/字段状态/归类真相），README 样本补 `结账月`/`明细列顺序`

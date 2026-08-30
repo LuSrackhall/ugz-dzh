@@ -31,6 +31,7 @@ version: 0.7.18
 | 需要某命令的完整参数/行为 | `references/commands.md` |
 | **调打印版尺寸/字体/正反面/微调** | `references/print-config.md`（全部可配字段 + 默认值 + 示例） |
 | 建账→生成→月结→结转的完整流程、常见问题处理 | `references/workflows.md` |
+| 需要 {year}.json 全字段说明（谁写谁读/字段状态/报表归类规则） | `references/json-schema.md` |
 | 需要配置模板原文 | `examples/print-config.example.json`（= `ledger init` / 无配置自动创建时生成的模板，含全部字段） |
 | **机器尺寸不匹配、需要现成模板** | `templates/`（配置模板库：已验证的不同机器标定，见下） |
 

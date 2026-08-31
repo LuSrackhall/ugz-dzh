@@ -10,7 +10,7 @@ import "github.com/xuri/excelize/v2"
 // 交替 Front/Back，每块自有 HeaderRow（大标题，由文本标签分支合并 12 列）与 SubHeaderRow（标签行）。
 // 标签行 = 每块的 SubHeaderRow+1，即 (r - SubHeaderRow - 1) % blockRows == 0。
 // 垂直分页符在 PageGapStartCol+1（Front 与 Back 列区之间）。
-func transformGLSheet(f *excelize.File, sheet string) error {
+func transformGLSheet(f *excelize.File, sheet string) ([]areaRect, error) {
 	lay := glLayout()
 	amountCols := []int{
 		lay.FrontStartCol + glColDebit,
@@ -141,6 +141,10 @@ func transformGLSheet(f *excelize.File, sheet string) error {
 		lay.FrontStartCol + glColCredit: true, lay.FrontStartCol + glColBalance: true,
 		lay.BackStartCol + glColSummary: true, lay.BackStartCol + glColDebit: true,
 		lay.BackStartCol + glColCredit: true, lay.BackStartCol + glColBalance: true,
+	}
+	// 多区域打印区域：每块=一页（奇块正面左列区/偶块反面右列区），奇数块数补空白反面页
+	cfg.planAreas = func(breakPrintCol, maxCol, lastRow int) []areaRect {
+		return glAreaPlan(lastRow, blockRows, breakPrintCol, maxCol)
 	}
 	return transformSheet(f, sheet, cfg)
 }

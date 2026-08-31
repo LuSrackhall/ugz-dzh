@@ -41,18 +41,36 @@ func TransformToPrint(viewPath, printPath string) error {
 		fmt.Fprintf(os.Stderr, "警告: 设置基准字体失败: %v\n", err)
 	}
 
+	// 先变换并收集各 sheet 的打印区域规划，全部归位后统一写入——
+	// SetDefinedName 的 scope 依赖最终 sheet 顺序，且中途的删除/重建会
+	// 干扰已写 definedName 的 localSheetId（实测串位）。
+	pending := make(map[string][]areaRect)
 	for _, sheet := range f.GetSheetList() {
 		switch {
 		case strings.HasPrefix(sheet, sheetPrefixGL):
 			printSheetType = "gl" // GL/ML 分账本配置（printSheetType 驱动系数/字体按账本类型取）
-			if err := transformGLSheet(f, sheet); err != nil {
+			rects, err := transformGLSheet(f, sheet)
+			if err != nil {
 				return fmt.Errorf("变换总分类账 %s: %w", sheet, err)
+			}
+			if len(rects) > 0 {
+				pending[sheet] = rects
 			}
 		case strings.HasPrefix(sheet, sheetPrefixML):
 			printSheetType = "ml"
-			if err := transformMLSheet(f, sheet); err != nil {
+			rects, err := transformMLSheet(f, sheet)
+			if err != nil {
 				return fmt.Errorf("变换多科目明细账 %s: %w", sheet, err)
 			}
+			if len(rects) > 0 {
+				pending[sheet] = rects
+			}
+		}
+	}
+
+	for sheet, rects := range pending {
+		if err := writeSheetPrintArea(f, sheet, rects); err != nil {
+			return fmt.Errorf("写打印区域 %s: %w", sheet, err)
 		}
 	}
 

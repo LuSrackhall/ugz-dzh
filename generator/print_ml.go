@@ -9,7 +9,7 @@ import "github.com/xuri/excelize/v2"
 // 每页块（blockRows = DataStartRow+pageSize+1+BottomMarginRows = 30 行）均有独立四行表头，
 // 标签行 = 每块的 h4 = blockStart + 7，即 (r - DataStartRow) % blockRows == 0（DataStartRow=8 → r=8,38,68,...）。
 // 垂直分页符在 PageGapStartCol+2（Back 与 Front 装订区之间）。
-func transformMLSheet(f *excelize.File, sheet string) error {
+func transformMLSheet(f *excelize.File, sheet string) ([]areaRect, error) {
 	lay := mlLayout()
 	blockRows := lay.DataStartRow + pageSize + 1 + lay.BottomMarginRows
 
@@ -157,6 +157,10 @@ func transformMLSheet(f *excelize.File, sheet string) error {
 		lay.BackStartCol + mlOffDebit:   true,
 		lay.BackStartCol + mlOffCredit:  true,
 		lay.BackStartCol + mlOffBalance: true,
+	}
+	// 多区域打印区域：滑动窗口阅读序 [占位正面, 反1, 正2, 反2 …]，页数恒为偶数
+	cfg.planAreas = func(breakPrintCol, maxCol, lastRow int) []areaRect {
+		return mlAreaPlan(lastRow, blockRows, breakPrintCol, maxCol)
 	}
 	return transformSheet(f, sheet, cfg)
 }

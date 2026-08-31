@@ -16,6 +16,7 @@ import (
 func init() {
 	rootCmd.AddCommand(checkCmd)
 	checkCmd.Flags().StringP("json", "j", "", "科目余额总览.json 路径（必填）")
+	checkCmd.Flags().String("vs", "", "建账审核表 CSV 路径——逐项比对 JSON 期初调整额与老板批准的审核表（防录入漂移）")
 	checkCmd.MarkFlagRequired("json")
 }
 
@@ -52,10 +53,10 @@ var checkCmd = &cobra.Command{
 			if idx := strings.IndexByte(gen, '-'); idx > 0 {
 				gen = gen[:idx]
 			}
-			if balance.IsUnknownType(gen) {
-				unknown = true
-				fmt.Printf("提示: 科目 %s 类别未知（属性=未分类）——如需进入资产负债表/收支结余表，请在 JSON 科目顺序或类别中补充\n", account)
-			}
+				if balance.IsUnknownType(gen) {
+					unknown = true
+					fmt.Printf("提示: 科目 %s 类别未知（属性=未分类）——不计入资产负债表/收支结余表合计；总账科目请使用内置 17 类名称（或 map 映射到 17 类），余额方向可用 ledger subjects import 指定\n", account)
+				}
 		}
 		if unknown {
 			fmt.Println("（以上为未知类别提示，不影响余额计算）")
@@ -110,6 +111,57 @@ var checkCmd = &cobra.Command{
 					fmt.Printf("⚠ %d/%d 个科目 xlsx 与 JSON 漂移——以 JSON 为准，generate -f 可重建修复\n", drift, checked)
 				}
 			}
+		}
+
+		// 审核表逐项比对（迁移验收）：JSON 期初调整额 vs 建账审核表（权威批准件）
+		if vsPath, _ := cmd.Flags().GetString("vs"); vsPath != "" {
+			vsRows, err := parseReviewCSV(vsPath)
+			if err != nil {
+				return fmt.Errorf("加载审核表: %w", err)
+			}
+			actual := openingAdjustmentsOf(cfg)
+			mismatch := 0
+			unregistered := 0
+			for _, r := range vsRows {
+				expected := 0.0
+				if r.OpeningSet && r.OpeningYuan != 0 {
+					expected = r.OpeningYuan
+					if r.Direction == "贷" {
+						expected = -r.OpeningYuan
+					}
+				}
+				if _, ok := cfg.Tree[r.Account]; !ok {
+					unregistered++
+					fmt.Printf("✗ 审核表科目未登记: %s（先 subjects import）\n", r.Account)
+					continue
+				}
+				got := float64(actual[r.Account]) / 100
+				if math.Abs(got-expected) >= 0.005 {
+					mismatch++
+					fmt.Printf("✗ 期初与审核表不一致: %s 审核表=%.2f JSON=%.2f\n", r.Account, expected, got)
+				}
+			}
+			extra := 0
+			for a, v := range actual {
+				if v == 0 {
+					continue
+				}
+				listed := false
+				for _, r := range vsRows {
+					if r.Account == a {
+						listed = true
+						break
+					}
+				}
+				if !listed {
+					extra++
+					fmt.Printf("⚠ JSON 存在审核表未列出的期初调整: %s %+.2f 元（add-manual 补录？请同步审核表）\n", a, float64(v)/100)
+				}
+			}
+			if unregistered > 0 || mismatch > 0 {
+				return fmt.Errorf("期初与审核表比对失败: %d 项不一致, %d 个科目未登记——重跑 opening import 或修正审核表", mismatch, unregistered)
+			}
+			fmt.Printf("✓ 期初与审核表逐项一致（%d 个科目）\n", len(vsRows))
 		}
 
 		return nil

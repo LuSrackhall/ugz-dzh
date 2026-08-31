@@ -64,6 +64,8 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 | `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数 + 分区域字体 + GL/ML 分账本 + 正反面独立 + ±px 微调，见 references/print-config.md） |
 | `ledger map -a <错名> -b <对名> -j <json>` | 科目名称映射纠错 |
 | `ledger add-manual -a <科目> -m <月> -n <金额> -t <备注> -j <json>` | 期初调整（**只作用于建账月**，-m 仅记录） |
+| `ledger subjects import/list/export -f <审核表.csv> -j <json>` | 科目批量登记 + 属性（借/贷）设置（迁移科目建立入口；`--dry-run` 预演） |
+| `ledger opening import -f <审核表.csv> -j <json>` | 期初余额批量导入（替代逐条 add-manual；科目存在/属性一致/**试算平衡强制闸门**三重校验 + `--dry-run` 预演） |
 | `ledger year-close -j <json> -o <输出>` | 跨年结转（生成新年 JSON + 空账本 + 损益结转草稿 + 三告警） |
 | `ledger gen-close -j <json> -o <输出>` | 自动生成年末损益结转凭证到 `<输出>/<年份>/closing/`（不写手工凭证目录） |
 | `ledger lock -j <json> -m <YYYY-MM>` | 设置结账月（<=该月默认拒绝无 -f 生成；`-m ''` 解锁） |
@@ -104,7 +106,8 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 - 新科目出现即自动入科目树；凭证科目名写错用 `map` 纠错（合并到正确科目）
 - OCR 原始凭证先原样提交基线再纠错（map 或改 md，规则见 git 纪律第 5 条）
 - 未知科目（不在内置 17 类）属性显示"未分类"——如需进资产负债表/收支结余表，补充类别
-- 期初调整：`add-manual`（只作用于建账月；建账月账本已生成时，改后须 `-f` 从建账月重建）
+- 期初调整：`add-manual`（只作用于建账月；建账月账本已生成时，改后须 `-f` 从建账月重建）；**批量导入用 `opening import`（建账审核表 CSV，试算平衡闸门），迁移/初始化期初一律走它**
+- 迁移建账：科目建立与期初导入按建账审核表流程（格式见 commands.md 的 subjects/opening 章节）
 
 ### 4. 年末损益结转（"清零"，每年 12 月）
 ```bash

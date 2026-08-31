@@ -22,8 +22,8 @@
 
 设计全文见 `docs/migration-design.md`（六阶段流程 / 三种迁移模式 / CSV 模板 / 双闸门验收 / git 纪律）。待实现：
 
-- [ ] R1 `ledger subjects` 子命令组（list / export / import）：批量登记科目 + 设置科目属性——`SetAccountProperty` 目前有函数无 CLI 入口，类别指定只能直改 JSON
-- [ ] R2 `ledger opening import -f 期初余额表.csv`：批量期初导入，写入时校验科目存在性 / 属性与方向一致 / 试算平衡（不平拒绝并列差额）；写入语义与 add-manual 一致（锚定建账月）
+- [x] R1 `ledger subjects` 子命令组（list / export / import）：批量登记科目 + 设置科目属性——**已实现（2026-09-01，cmd/subjects.go）**；审核表 CSV 列序无关、--dry-run 预演、已存在科目只改属性不动期初
+- [x] R2 `ledger opening import -f 建账审核表.csv` + `check --vs`：批量期初（借+/贷-）+ 三重校验（科目存在/属性与方向一致/试算平衡强制闸门并列明细差额）+ --dry-run 预演 + 验收期逐项比对——**已实现（2026-09-01，cmd/opening.go / cmd/check.go）**；冒烟验证全链路（CSV→JSON→期初表/总账/明细账→check 一致→不平衡/未登记/方向反均正确拒绝）
 - [ ] R3 `init` 生成 `.gitignore`（派生产物：xlsx、ledger/balance 汇总、print/、closing/、output-harvest/；幂等补缺失）
 - [ ] R4 迁移 SOP 沉淀进技能 `references/`（设计确认后实施；技能须自包含，不得引用仓库 docs/）
 

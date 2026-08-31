@@ -128,13 +128,13 @@ git commit -m "迁移: ledger init 建账（启动月 …）"
 
 | 编号 | 内容 | 说明 |
 |---|---|---|
-| R1 | `ledger subjects` 子命令组（list / export / import） | 科目属性设置无 CLI 入口（`SetAccountProperty` 已有函数）；`export` 供盘点 diff 用；`import` 读建账审核表的「科目/方向」列 |
-| R2 | `ledger opening import -f 建账审核表.csv [--dry-run]` + `check --vs 建账审核表.csv` | 批量期初（读「期初余额」非空行）+ 写入时校验（存在性 / 属性一致 / 试算平衡拒绝并列差额）+ dry-run 预演 + 验收期与审核表逐项比对 |
+| R1 | ✅ 已实现（2026-09-01）`ledger subjects` 子命令组（list / export / import） | 审核表 CSV 列序无关；import 批量登记 + 属性设置（已存在科目只改属性不动期初）；export 供盘点 diff |
+| R2 | ✅ 已实现（2026-09-01）`ledger opening import -f 建账审核表.csv [--dry-run]` + `check --vs 建账审核表.csv` | 批量期初（借+/贷-）+ 三重校验（存在性 / 属性一致 / 试算平衡强制闸门并列明细差额）+ dry-run 预演 + 验收期与审核表逐项比对 |
 | R3 | `init` 生成 `.gitignore` | 幂等补缺失，与其他 init 产物一致 |
 | R4 | 迁移 SOP 沉淀进技能 `references/` | 设计确认后实施；注意技能自包含（install-skill 整目录分发），不得引用仓库 docs/ |
 
 ## 六、开放问题（评审时定）
 
-1. `subjects` / `opening` 的命令命名与参数风格（是否仿照 `map add/delete/list` 的二级子命令形式）；
+1. ~~`subjects` / `opening` 的命令命名与参数风格~~——已定（2026-09-01）：仿 `map` 的二级子命令形式（`subjects import/list/export`、`opening import`），`-f` 指审核表、`--dry-run` 预演；
 2. 建账审核表是否支持直接读 xlsx（代帐/农经站导出常见格式），还是坚持 CSV（git diff 友好）+ agent 转换；
 3. 模式 ② 下年度累计口径缺口，是否要在收支结余表上做显式标注（如「不含启动月前发生额」脚注行）。

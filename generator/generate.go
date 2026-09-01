@@ -204,6 +204,9 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("页末补齐: %w", err)
 	}
 
+	// 11.5 科目账页顺序归位（全局设置.科目顺序：GL→合并→ML 区块内自定义排序）
+	wb.reorderSubjectSheets()
+
 	// 12. 保存 xlsx（生产门槛：先落盘 xlsx、成功后回写 JSON——失败原子性）
 	if err := wb.Save(); err != nil {
 		return fmt.Errorf("保存 xlsx: %w", err)

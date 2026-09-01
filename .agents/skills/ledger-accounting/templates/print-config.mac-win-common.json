@@ -1,0 +1,35 @@
+{
+  "_comment": "【配置模板库】mac-win-common：两端通用标定（用户贡献，2026-08-30）。适用：Mac 上生成 Windows 版、或与贡献者环境相近的机器。关键标定值：GL 正反面前系数 1.13595、反面书口 -8px；ML 平台 1.1198/0.996、正反面 1.11809、正面装订边 -18px、分位 k9 -1px、反面书口 -9px、反面摘要 +12px。Mac 平台未配置（用代码默认）。",
+  "platforms": {
+    "windows": {
+      "colScale": 1.1075,
+      "rowScale": 0.992,
+      "fonts": {
+        "normal": "宋体",
+        "digit": "Noteworthy",
+        "title": "仿宋",
+        "default": "宋体",
+        "labelFamily": "等线 Light"
+      },
+      "gl": {
+        "colScale": 1.13595,
+        "rowScale": 0.99495,
+        "frontColScale": 1.13595,
+        "backColScale": 1.13595,
+        "backOuterDelta": -8
+      },
+      "ml": {
+        "colScale": 1.1198,
+        "rowScale": 0.996,
+        "frontColScale": 1.11809,
+        "backColScale": 1.11809,
+        "frontBindingDelta": -18,
+        "frontDigitDelta": {
+          "k9": -1
+        },
+        "backOuterDelta": -9,
+        "backSummaryDelta": 12
+      }
+    }
+  }
+}

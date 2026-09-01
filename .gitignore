@@ -49,8 +49,10 @@ test/e2e/test_data
 
 .claude/worktrees/
 
-# Installed skills（安装产物：ledger install-skill 从 embedded/ 重建）
-.agents/skills/
+# 技能真实源 .agents/skills/ 纳入 git（仓库级技能版本可追踪、可随仓库分发）；
+# VERSION 为 install-skill 写入的本地版本标记（每次安装刷新，doctor 校验用），不进 git
+.agents/skills/ledger-accounting/VERSION
+# 技能接入层软链接（指向 .agents/skills/，安装时创建），不进 git
 .claude/skills/
 .cursor/skills/
 .workbuddy/skills/

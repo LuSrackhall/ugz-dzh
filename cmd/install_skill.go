@@ -56,7 +56,7 @@ var installSkillCmd = &cobra.Command{
 		"交互：运行后按提示输入编号（逗号分隔）或 all；非终端环境（脚本/CI）默认接入全部。\n" +
 		"用户级残留：自动检测 home 下各 agent 用户级技能目录（历史版本/误操作残留），提示移除——\n" +
 		"技能应仅安装于仓库级（CLI 所在目录）；--keep-user-level 可保留。\n" +
-		"覆盖安装（幂等）；安装产物不进 git（可从二进制重建）。",
+		"覆盖安装（幂等）；技能文件（.agents/skills/）已纳入 git，升级后 git add/commit 即可追踪版本。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		realWorkbuddy, _ := cmd.Flags().GetBool("real-workbuddy")
 		selectFlag, _ := cmd.Flags().GetString("select")
@@ -124,7 +124,7 @@ var installSkillCmd = &cobra.Command{
 		if realWorkbuddy {
 			fmt.Printf("提示: 若 WorkBuddy 会话中未加载到该技能（软链接不被跟随），请重跑: ledger install-skill --real-workbuddy\n")
 		}
-		fmt.Printf("提示: 改技能内容后重跑本命令即可全工具同步；安装产物不进 git（embedded/ 为 git 源）\n")
+		fmt.Printf("提示: 改技能内容后重跑本命令即可全工具同步；技能已纳入 git——升级后执行 git add .agents/skills/ && git commit 追踪版本\n")
 		return nil
 	},
 }

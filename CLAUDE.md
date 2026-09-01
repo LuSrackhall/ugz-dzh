@@ -45,6 +45,7 @@ JSON `{year}/{year}.json` 中的以下字段直接影响代码路径：
 | `手动调整科目.期初调整额` | `GetInitBalanceForGenerate` | 同上 |
 | `科目树.余额` 历史 | `ExtractYtdTotals` / `ExtractQuarterlyTotals` | 影响本年累计/本季累计 |
 | `明细列顺序` | `ensureMLSheet` → `detailOrder` | 多科目明细账列序 |
+| `科目顺序` | `GenerateWorkbook` → `reorderSubjectSheets` | 科目账页 Sheet 排序（GL→合并→ML 分区块，未列出按名排序） |
 
 三个生成入口（`AppendEntries`、`AppendMergeEntries`、`AppendMLEntries`）共享同一个 `initials` 期初映射，修改生成逻辑时必须三路同步验证。
 

@@ -2,13 +2,14 @@
 name: ledger-accounting
 description: 手工账电子化工具 ledger（Go CLI）的会计操作技能。当用户涉及建账（init）、生成月度账本（generate）、科目管理（map/add-manual）、期初调整、月结、年末损益结转（gen-close/year-close）、结账标记（lock）、账本检查（check/漂移/重建）、打印版、凭证格式与红字处理、git 管理 JSON 等一切会计记账操作时使用。技能指导 agent 全程协助用户完成村级/个人手工账电子化：凭证 Markdown → Excel 账本（总账/明细账/合并总账/现金银行日记账/期初期末表/资产负债表等）→ 打印装订 → 跨年结转。
 agent_created: true
-version: 0.8.0
+version: 0.8.1
 ---
 
 # ledger 会计记账操作
 
 > **版本联动**：本技能与 ledger CLI 版本一一对应（install-skill 会把当前 ledger 版本写入安装目录 VERSION 文件）。
 > **CLI 更新后必须重跑 `ledger install-skill`**，否则技能与程序不匹配；用 `ledger doctor` 校验（版本不匹配会 [FAIL]）。
+> **仓库级安装**：技能仅装到 CLI 所在目录 `.agents/skills/`；账本目录若为 git 仓库，升级技能后执行 `git add .agents/skills/ && git commit` 纳入版本管理（详见 references/commands.md install-skill 节）。
 > **用户画像**：最终用户是"老板"（可能完全不懂会计，只看结果），本技能是给 agent（专属会计）看的操作手册——agent 负责把老板的问题翻译成 CLI 操作，把结果翻译回老板能懂的语言。
 
 # ledger 会计记账操作

@@ -153,7 +153,10 @@ bash scripts/rebuild.sh <凭证根目录> <输出目录>
 ./ledger install-skill                          # 交互选择接入 agent（1=WorkBuddy/2=Claude Code/3=Cursor）
 ./ledger install-skill --select 1,2             # 非交互指定
 ./ledger install-skill --real-workbuddy         # WorkBuddy 用真实复制（软链接不被加载时）
+./ledger install-skill --keep-user-level        # 保留用户级残留（不推荐，见下）
 ```
 - **版本联动**：安装时把当前 ledger 版本写入 `.agents/skills/ledger-accounting/VERSION`——**更新 ledger 后必须重跑 install-skill**，否则技能与程序不匹配；用 `ledger doctor` 校验（版本不一致会 [FAIL] 并提示重装）
+- **仓库级安装（唯一推荐）**：技能只装到 **CLI 所在目录**的 `.agents/skills/`（仓库级），配合 CLI 使用；用户级（home 下各 agent 目录）残留是历史版本/误操作产物，install-skill 会自动检测并提示移除（推荐移除，仅保留仓库级）
+- **纳入 git 管理**：账本目录若为 git 仓库，安装/升级技能后执行 `git add -f .agents/skills/ && git commit`（`-f` 因 .gitignore 默认忽略安装产物；若仓库未忽略则普通 add 即可），技能版本随仓库可追踪、可回滚、可随仓库分发（换机 clone 后重跑 install-skill 即恢复）
 - 安装后，你的 agent 工具（WorkBuddy / Claude Code / Cursor / dsh 等）在对话中遇到记账、建账、结转等操作时会自动加载本技能来指导你
 - 标准源 `.agents/skills/` 始终安装（支持 Agent Skills 开放标准的工具原生读取）

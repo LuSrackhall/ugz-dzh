@@ -52,7 +52,9 @@ func TestOfficialAccountsTableIntegrity(t *testing.T) {
 func TestOfficialAccountsSpotChecks(t *testing.T) {
 	cases := []struct{ name, wantType, wantProp string }{
 		{"专项应付款", "负债", "贷"},
-		{"累计折旧", "资产", "借"},
+		{"累计折旧", "资产", "贷"},        // 备抵科目：官方"期末贷方余额"（财务核对 2026-09-04）
+		{"生产性生物资产累计折旧", "资产", "贷"}, // 备抵科目
+		{"累计摊销", "资产", "贷"},        // 备抵科目
 		{"在建工程", "资产", "借"},
 		{"库存物资", "资产", "借"},
 		{"短期借款", "负债", "贷"},

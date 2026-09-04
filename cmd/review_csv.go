@@ -119,12 +119,12 @@ func generalOf(account string) string {
 	return account
 }
 
-// validateReviewRow 共享校验：科目不得为合并总账科目的父级（父级禁止直接记账/设期初）。
+// validateReviewRow 共享校验：科目本身不得为合并总账科目的父级（父级禁止直接记账/设期初，
+// 子科目合法——与"科目 X 配置为合并总账科目，不能直接记账 → 用子科目"口径一致）。
 func validateReviewRow(cfg *balance.GlobalConfig, r reviewRow) error {
-	gen := generalOf(r.Account)
 	for _, m := range cfg.Settings.MergeGLAccounts {
-		if m == gen {
-			return fmt.Errorf("科目 %s 的总账科目 %s 配置为合并总账科目，不能直接记账/设期初，请使用子科目（如 %s-明细）", r.Account, gen, gen)
+		if r.Account == m {
+			return fmt.Errorf("科目 %s 配置为合并总账科目，不能直接记账/设期初，请使用子科目（如 %s-明细）", r.Account, r.Account)
 		}
 	}
 	return nil

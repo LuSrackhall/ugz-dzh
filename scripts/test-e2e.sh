@@ -138,6 +138,26 @@ with open('$OUT/2025/2025.json', 'w') as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)
 print('  MLSuppressAccounts 已写入')
 "
+
+  # 先定义后生成（设计稿 v2 §2.4）：scan 全部凭证科目 → 补方向 → import 登记；
+  # 收紧后的 generate 拒绝未定义科目，登记必须先行。
+  echo "=== 2.5 科目登记（scan → import）==="
+  "$LEDGER" subjects scan -v "$TEST_DATA" -o "$OUT/scan-candidates.csv" -j "$OUT/2025/2025.json"
+  python3 - "$OUT/scan-candidates.csv" <<'PYEOF'
+import csv, sys
+path = sys.argv[1]
+with open(path, newline="") as f:
+    rows = list(csv.reader(f))
+filled = 0
+for r in rows[1:]:
+    if len(r) > 1 and r[1].strip() == "":
+        r[1] = "借"  # 兜底方向（test_data 科目均在官方 42 名单内，scan 已预填；防御性兜底）
+        filled += 1
+with open(path, "w", newline="") as f:
+    csv.writer(f).writerows(rows)
+print(f"  方向兜底填充 {filled} 行")
+PYEOF
+  "$LEDGER" subjects import -f "$OUT/scan-candidates.csv" -j "$OUT/2025/2025.json"
 fi
 
 echo "=== 3. 生成 2025-10 ~ 2025-12 ==="

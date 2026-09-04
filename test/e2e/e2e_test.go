@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -12,6 +13,40 @@ import (
 	"github.com/xuri/excelize/v2"
 	"testing"
 )
+
+// registerTestSubjects 先定义后生成（docs/account-code-design.md v2 §2.4）：
+// scan 全部 test_data 凭证 → 兜底补方向 → subjects import 登记进指定 JSON。
+// test_data 科目均在官方 42 名单内，scan 已预填方向；兜底仅防御未来数据。
+func registerTestSubjects(t *testing.T, run func(...string) (string, error), testData, jsonPath string) {
+	t.Helper()
+	candPath := filepath.Join(t.TempDir(), "scan-candidates.csv")
+	if out, err := run("subjects", "scan", "-v", testData, "-o", candPath, "-j", jsonPath); err != nil {
+		t.Fatalf("subjects scan 失败: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(candPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(string(data), "\ufeff"))).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range records[1:] {
+		if len(r) > 1 && strings.TrimSpace(r[1]) == "" {
+			r[1] = "借"
+		}
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.WriteAll(records)
+	w.Flush()
+	if err := os.WriteFile(candPath, []byte(buf.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run("subjects", "import", "-f", candPath, "-j", jsonPath); err != nil {
+		t.Fatalf("subjects import 失败: %v\n%s", err, out)
+	}
+}
 
 func TestCLI(t *testing.T) {
 	root, err := findProjectRoot()
@@ -42,6 +77,9 @@ func TestCLI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init 失败: %v\n%s", err, out)
 	}
+
+	// 先定义后生成：scan 全部凭证科目 → import 登记（收紧后的新工作流）
+	registerTestSubjects(t, run, testData, filepath.Join(output, "2026", "2026.json"))
 
 	tests := []struct {
 		name       string
@@ -310,6 +348,9 @@ func TestCLIOutputPath(t *testing.T) {
 			t.Fatalf("init 失败: %v\n%s", err, out)
 		}
 
+		// 先定义后生成：scan 全部凭证科目 → import 登记
+		registerTestSubjects(t, run, testData, filepath.Join(target, "2026", "2026.json"))
+
 		out, err = run("generate", "-v", filepath.Join(testData, "2026_01"), "-o", target)
 		if err != nil {
 			t.Fatalf("CLI 失败: %v\n%s", err, out)
@@ -371,6 +412,9 @@ func TestCLIFullWorkflow(t *testing.T) {
 	if _, err := os.Stat(configPath); err != nil {
 		t.Fatal("init 后配置文件不存在: " + configPath)
 	}
+
+	// 先定义后生成：scan 全部凭证科目 → import 登记
+	registerTestSubjects(t, run, testData, configPath)
 
 	// 2. Init overwrite protection
 	_, err = run("init", "-s", "2026-01", "-o", outputDir)
@@ -471,6 +515,11 @@ func TestJournalNoStaleAcrossMonths(t *testing.T) {
 	if err := run("init", "-s", "2025-10", "-o", output); err != nil {
 		t.Fatalf("init: %v", err)
 	}
+	registerTestSubjects(t, func(args ...string) (string, error) {
+		c := exec.Command(bin, args...)
+		out, err := c.CombinedOutput()
+		return string(out), err
+	}, testData, filepath.Join(output, "2025", "2025.json"))
 	if err := run("generate", "-v", filepath.Join(testData, "2025_10"), "-o", output, "-f"); err != nil {
 		t.Fatalf("generate 10月: %v", err)
 	}
@@ -537,6 +586,11 @@ func TestReportsNoStaleAcrossMonths(t *testing.T) {
 	if err := run("init", "-s", "2025-10", "-o", output); err != nil {
 		t.Fatalf("init: %v", err)
 	}
+	registerTestSubjects(t, func(args ...string) (string, error) {
+		c := exec.Command(bin, args...)
+		out, err := c.CombinedOutput()
+		return string(out), err
+	}, testData, filepath.Join(output, "2025", "2025.json"))
 	for _, m := range []string{"2025_10", "2025_11"} {
 		if err := run("generate", "-v", filepath.Join(testData, m), "-o", output, "-f"); err != nil {
 			t.Fatalf("generate %s: %v", m, err)

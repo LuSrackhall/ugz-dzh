@@ -36,6 +36,15 @@ type scanCandidate struct {
 // 借贷平衡/同年同月——必须能吃下原始 OCR md（否则重蹈 output-harvest 被 generate
 // 级阻断卡住的覆辙）。
 func scanVoucherSubjects(root string) ([]scanCandidate, error) {
+	// 根目录可能是符号链接（如工作树中 test_data → 主工作树）：WalkDir 的
+	// 根用 Lstat 不跟随符号链接，这里先解析，保证符号链接根也能递归扫描。
+	if fi, err := os.Stat(root); err != nil {
+		return nil, fmt.Errorf("凭证目录 %s 不可访问: %w", root, err)
+	} else if fi.IsDir() {
+		if resolved, err := filepath.EvalSymlinks(root); err == nil {
+			root = resolved
+		}
+	}
 	var files []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -66,15 +75,11 @@ func scanVoucherSubjects(root string) ([]scanCandidate, error) {
 		}
 		base := filepath.Base(f)
 		for _, e := range entries {
-			general := strings.TrimSpace(e.GeneralAccount)
-			if general == "" {
+			if strings.TrimSpace(e.GeneralAccount) == "" {
 				continue
 			}
-			detail := strings.TrimSpace(e.DetailAccount)
-			account := general
-			if detail != "" {
-				account = general + "-" + detail
-			}
+			account := entryFullPath(e)
+			general, detail := splitEntryPath(account)
 			c, ok := freq[account]
 			if !ok {
 				c = &scanCandidate{Account: account, General: general, Detail: detail, Sample: base}

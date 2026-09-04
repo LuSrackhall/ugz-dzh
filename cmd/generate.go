@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,7 @@ func init() {
 	generateCmd.Flags().BoolP("verbose", "V", false, "输出详细日志")
 	generateCmd.Flags().StringP("platform", "p", "auto", "打印版目标平台: auto(当前系统)/mac/windows")
 	generateCmd.Flags().String("config", "", "打印版配置文件 (print-config.json)：显式 --config 优先；未传则自动发现 当前工作目录 → 输出根目录（ledger init 会自动生成模板）。英文键格式 platforms.{windows,mac}.{colScale,rowScale,fonts.{normal,digit,title,default}}，文件须 UTF-8 无 BOM；只作用于打印版 print/ 目录，须重新 generate 后查看新文件")
+	generateCmd.Flags().Bool("allow-new", false, "显式允许自动登记凭证中未定义的新科目（旧行为：自动加入科目树，属性=名称匹配官方表或未分类；默认拒绝——先定义后生成）")
 	generateCmd.MarkFlagRequired("voucherDir")
 }
 
@@ -166,6 +168,22 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("月份 %s 没有匹配的凭证分录", month)
 		}
 
+		// 先定义后生成（docs/account-code-design.md v2 §2.4）：凭证科目必须已在
+		// 科目树中定义，未定义科目默认拒绝生成并输出清单与指引；--allow-new 显式
+		// 逃生（旧行为：静默自动登记）。
+		allowNew, _ := cmd.Flags().GetBool("allow-new")
+		if undefined := undefinedVoucherSubjects(cfg, entries); len(undefined) > 0 && !allowNew {
+			fmt.Printf("⚠ 凭证中存在 %d 个未定义科目（科目树中没有）：\n", len(undefined))
+			for _, u := range undefined {
+				fmt.Printf("  - %s（出现 %d 次，样例摘要：%s）\n", u.Account, u.Count, u.Sample)
+			}
+			fmt.Println("处理方式（二选一）：")
+			fmt.Println("  ① 登记: ledger subjects scan -v <凭证目录>（迁移场景以旧账期末科目余额表转录为基底，scan 产物并入双向 diff）→ 确认方向 → ledger subjects import -f 审核表.csv → 重新 generate")
+			fmt.Println("  ② 若为 OCR 错名: ledger map add -f <错名> -t <对名> 后重跑")
+			fmt.Println("  或显式使用 --allow-new 允许自动登记（不推荐：属性可能为未分类）")
+			return fmt.Errorf("存在 %d 个未定义科目，拒绝生成（先定义后生成）", len(undefined))
+		}
+
 		if err := os.MkdirAll(yearDir, 0o755); err != nil {
 			return fmt.Errorf("创建输出目录: %w", err)
 		}
@@ -254,6 +272,62 @@ var generateCmd = &cobra.Command{
 		fmt.Printf("已生成 %s/%s 工作薄，共 %d 条分录\n", year, month, len(entries))
 		return nil
 	},
+}
+
+// undefinedSubject 分录中科目树未定义的科目（先定义后生成，v2 §2.4）。
+type undefinedSubject struct {
+	Account string // 全路径
+	General string
+	Count   int    // 出现行数
+	Sample  string // 首次出现的摘要
+}
+
+// entryFullPath 拼科目全路径（与 balance.fullPath 同口径：明细空 → 仅总账）。
+func entryFullPath(e voucher.Entry) string {
+	general := strings.TrimSpace(e.GeneralAccount)
+	detail := strings.TrimSpace(e.DetailAccount)
+	if detail == "" {
+		return general
+	}
+	return general + "-" + detail
+}
+
+// undefinedVoucherSubjects 找出分录中科目树未定义的科目（按名称排序）。
+func undefinedVoucherSubjects(cfg *balance.GlobalConfig, entries []voucher.Entry) []undefinedSubject {
+	freq := map[string]*undefinedSubject{}
+	for _, e := range entries {
+		account := entryFullPath(e)
+		if strings.TrimSpace(e.GeneralAccount) == "" {
+			continue
+		}
+		c, ok := freq[account]
+		if !ok {
+			general, _ := splitEntryPath(account)
+			c = &undefinedSubject{Account: account, General: general, Sample: e.Summary}
+			freq[account] = c
+		}
+		c.Count++
+	}
+	accounts := make([]string, 0, len(freq))
+	for a := range freq {
+		accounts = append(accounts, a)
+	}
+	sort.Strings(accounts)
+	var out []undefinedSubject
+	for _, a := range accounts {
+		if _, ok := cfg.Tree[a]; !ok {
+			out = append(out, *freq[a])
+		}
+	}
+	return out
+}
+
+// splitEntryPath 按首个 '-' 切分全路径（与 balance.splitPath 同口径）。
+func splitEntryPath(path string) (string, string) {
+	if i := strings.IndexByte(path, '-'); i > 0 && i < len(path)-1 {
+		return path[:i], path[i+1:]
+	}
+	return path, ""
 }
 
 // isMonthXlsxName 判断文件名是否为账本文件（YYYY-MM.xlsx），避免 -f 级联删除误伤 ledger.xlsx / balance.xlsx 汇总文件。

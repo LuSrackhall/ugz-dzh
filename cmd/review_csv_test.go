@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"ledger/balance"
 )
 
 func writeTempCSV(t *testing.T, content string) string {
@@ -69,6 +71,21 @@ func TestGeneralOf(t *testing.T) {
 	}
 	if got := generalOf("库存现金"); got != "库存现金" {
 		t.Errorf("generalOf 无明细 = %q", got)
+	}
+}
+
+// TestValidateReviewRowMergeParent 合并总账父级：父级本身拒绝，子科目合法。
+func TestValidateReviewRowMergeParent(t *testing.T) {
+	cfg := &balance.GlobalConfig{}
+	cfg.Settings.MergeGLAccounts = []string{"应付款"}
+	if err := validateReviewRow(cfg, reviewRow{Account: "应付款"}); err == nil {
+		t.Error("合并父级本身应被拒绝")
+	}
+	if err := validateReviewRow(cfg, reviewRow{Account: "应付款-养老金"}); err != nil {
+		t.Errorf("合并父级的子科目应放行: %v", err)
+	}
+	if err := validateReviewRow(cfg, reviewRow{Account: "库存现金"}); err != nil {
+		t.Errorf("非合并科目应放行: %v", err)
 	}
 }
 

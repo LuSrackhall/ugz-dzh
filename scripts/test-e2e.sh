@@ -148,14 +148,19 @@ import csv, sys
 path = sys.argv[1]
 with open(path, newline="") as f:
     rows = list(csv.reader(f))
-filled = 0
+filled = []
 for r in rows[1:]:
     if len(r) > 1 and r[1].strip() == "":
         r[1] = "借"  # 兜底方向（test_data 科目均在官方 42 名单内，scan 已预填；防御性兜底）
-        filled += 1
+        filled.append(r[0])
 with open(path, "w", newline="") as f:
     csv.writer(f).writerows(rows)
-print(f"  方向兜底填充 {filled} 行")
+if filled:
+    # 兜底是测试专用捷径：生产迁移中空方向 = 确认闸门（subjects import 拒绝空方向），
+    # 必须逐科目确认，严禁模仿"兜底全填借"（错方向→报表归错类、结转清错科目）
+    print(f"  方向兜底填充 {len(filled)} 行（测试专用，生产禁用）: {'、'.join(filled)}")
+else:
+    print("  方向兜底填充 0 行（scan 已全量预填）")
 PYEOF
   "$LEDGER" subjects import -f "$OUT/scan-candidates.csv" -j "$OUT/2025/2025.json"
 fi

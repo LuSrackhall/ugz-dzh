@@ -52,6 +52,7 @@ func TestParseReviewCSVErrors(t *testing.T) {
 		content string
 	}{
 		{"缺方向列", "科目,期初余额\n库存现金,100\n"},
+		{"空方向（scan 未确认）", "科目,方向\n库存现金,\n"},
 		{"方向无效", "科目,方向\n库存现金,unknown\n"},
 		{"科目重复", "科目,方向\n资本,贷\n资本,贷\n"},
 		{"期初为负", "科目,方向,期初余额\n应付款,贷,-500\n"},

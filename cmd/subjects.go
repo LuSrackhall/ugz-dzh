@@ -82,6 +82,11 @@ var subjectsImportCmd = &cobra.Command{
 					if err := balance.AddManualAdjustment(cfg, r.Account, cfg.Settings.StartMonth, 0, r.Note); err != nil {
 						return fmt.Errorf("登记科目 %s: %w", r.Account, err)
 					}
+					// 「方向」列即科目属性——新登记科目同样应用（S3：此前只有已存在
+					// 科目才设置属性，自创名新科目的方向被静默丢弃，需二次 import）
+					if err := balance.SetAccountProperty(cfg, r.Account, r.Direction); err != nil {
+						return fmt.Errorf("设置新科目属性 %s: %w", r.Account, err)
+					}
 				}
 				created = append(created, r.Account)
 				continue
@@ -158,7 +163,7 @@ var subjectsListCmd = &cobra.Command{
 var subjectsExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "导出科目为建账审核表格式（供盘点 diff）",
-	Long: "把当前科目树导出为建账审核表 CSV（科目/方向/期初余额/备注；期初余额留空），供与旧账科目余额表做双向 diff。",
+	Long:  "把当前科目树导出为建账审核表 CSV（科目/方向/期初余额/备注；期初余额留空），供与旧账科目余额表做双向 diff。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("json")
 		out, _ := cmd.Flags().GetString("out")

@@ -29,13 +29,16 @@ func writeScanFixtures(t *testing.T) string {
 	if err := os.WriteFile(f1, []byte(content1), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	f2 := filepath.Join(dir, "记字第0002号.md")
-	// 无凭证号正文（宽容解析仍提取科目）；管理费用-办公费 重复出现计频
-	content2 := strings.Replace(scanTestVoucher,
-		"%s",
-		"<tr><td>购办公用品</td><td>管理费用</td><td>办公费</td><td>200.00</td><td></td></tr>"+
-			"<tr><td>提现</td><td>库存现金</td><td></td><td>200.00</td><td></td></tr>"+
-			"<tr><td>OCR错名</td><td>管埋费用</td><td></td><td></td><td>50.00</td></tr>", 1)
+	f2 := filepath.Join(dir, "无号凭证.md")
+	// 无凭证号正文 + 文件名亦无号（宽容解析仍提取科目；凭证号缺失仅告警不阻断）；
+	// 管理费用-办公费 重复出现计频
+	content2 := `2025年12月20日
+<table>
+<tr><td>摘要</td><td>总账科目</td><td>明细科目</td><td>借方</td><td>贷方</td></tr>
+<tr><td>购办公用品</td><td>管理费用</td><td>办公费</td><td>200.00</td><td></td></tr>
+<tr><td>提现</td><td>库存现金</td><td></td><td>200.00</td><td></td></tr>
+<tr><td>OCR错名</td><td>管埋费用</td><td></td><td></td><td>50.00</td></tr>
+</table>`
 	if err := os.WriteFile(f2, []byte(content2), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -149,5 +152,37 @@ func TestScanCSVRowsFeedableToImport(t *testing.T) {
 	}
 	if len(parsed) != len(rows)-1 {
 		t.Errorf("解析行数 = %d, want %d", len(parsed), len(rows)-1)
+	}
+}
+
+// TestSubjectsImportAppliesDirectionForNewSubjects S3：新登记科目同样应用
+// 审核表「方向」列（此前只有已存在科目才设置属性，自创名新科目的方向被静默
+// 丢弃，需二次 import）。
+func TestSubjectsImportAppliesDirectionForNewSubjects(t *testing.T) {
+	dir := t.TempDir()
+	if err := runCmd(t, "init", "-s", "2026-01", "-o", dir); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	configPath := filepath.Join(dir, "2026", "2026.json")
+
+	csvPath := filepath.Join(dir, "审核表.csv")
+	content := "科目,方向,期初余额,备注\n" +
+		"官司支出-律师费,贷,,自创科目名（非官方 42 表）\n" + // 官方表查无此名 → 属性不能靠推断
+		"累计折旧,贷,,备抵科目（官方表 Property=贷）\n"
+	if err := os.WriteFile(csvPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, "subjects", "import", "-f", csvPath, "-j", configPath); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	cfg, err := balance.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Tree["官司支出-律师费"].Property; got != "贷" {
+		t.Errorf("新登记自创科目属性 = %q, want 贷（方向列必须生效）", got)
+	}
+	if got := cfg.Tree["累计折旧"].Property; got != "贷" {
+		t.Errorf("累计折旧属性 = %q, want 贷（备抵科目）", got)
 	}
 }

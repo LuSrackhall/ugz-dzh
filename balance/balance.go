@@ -520,10 +520,14 @@ func ValidateAccountTree(cfg *GlobalConfig) error {
 
 // --- 期初迁移与校验 ---
 
-// inferPropertyByType 按总账科目类别推断属性：资产/费用→借，负债/权益/收入→贷，未知→未分类。
+// inferPropertyByType 按总账科目推断属性：优先官方科目表（财会〔2023〕14号）的
+// Property（含备抵科目 133/152/162 的"贷"——按大类映射会错标"借"）；未收录科目
+// 按官方大类映射：资产/费用→借，负债/权益/收入→贷，未知→未分类。
 // 替代按首月净额推断（审计 M1：银行存款曾因首月净额为负被标为"贷"）。
-// 未知科目返回"未分类"（设计专家审查 Change 11：防误归类，默认"借"会误导）。
 func inferPropertyByType(general string) string {
+	if a, ok := OfficialAccountByName(general); ok {
+		return a.Property
+	}
 	switch accountTypes[general] {
 	case "负债", "权益", "收入":
 		return "贷"
@@ -576,6 +580,23 @@ func LatestBalanceMonth(cfg *GlobalConfig) string {
 		}
 	}
 	return latest
+}
+
+// FinalAtOrBefore 返回科目在 month（含）之前最近一条余额记录的期末与记录月。
+// 与 GetInitBalanceForGenerate 的"最近月份期末"语义对齐——当月无发生的休眠科目
+// （此前月有发生）在快照月无记录，须回退取最近记录才能被告警/统计看见（v2 §2.2）。
+// 无任何 ≤month 记录返回 ok=false。
+func FinalAtOrBefore(node AccountNode, month string) (final int64, recMonth string, ok bool) {
+	best := ""
+	for m := range node.Balances {
+		if m <= month && m > best {
+			best = m
+		}
+	}
+	if best == "" {
+		return 0, "", false
+	}
+	return node.Balances[best].Final, best, true
 }
 
 // CheckInitialBalanceAt 校验某月快照的期初借贷平衡（借正贷负求和）。返回差额（分）。

@@ -48,7 +48,9 @@ var checkCmd = &cobra.Command{
 		}
 
 		// 未知类别科目提示 + 统计（v2 §2.5 可观测化：逐科目余额 + N 个/余额合计
-		// 统计行——"未分类余额>0 连续 3 个月未处理或跨年带入"即科目体系事故）
+		// 统计行——"未分类余额>0 连续 3 个月未处理或跨年带入"即科目体系事故）。
+		// 余额取 ≤最新月的最近记录（对齐 GetInitBalanceForGenerate 回退语义，
+		// 休眠科目不漏统计）
 		latest := balance.LatestBalanceMonth(cfg)
 		var unknownAccounts []string
 		var unknownBalance int64
@@ -60,7 +62,9 @@ var checkCmd = &cobra.Command{
 			if balance.IsUnknownType(gen) {
 				unknownAccounts = append(unknownAccounts, account)
 				if latest != "" {
-					unknownBalance += cfg.Tree[account].Balances[latest].Final
+					if bal, _, ok := balance.FinalAtOrBefore(cfg.Tree[account], latest); ok {
+						unknownBalance += bal
+					}
 				}
 			}
 		}
@@ -68,15 +72,19 @@ var checkCmd = &cobra.Command{
 		for _, account := range unknownAccounts {
 			bal := ""
 			if latest != "" {
-				if mb, ok := cfg.Tree[account].Balances[latest]; ok {
-					bal = fmt.Sprintf("（%s 余额 %+.2f 元）", latest, float64(mb.Final)/100)
+				if v, recMonth, ok := balance.FinalAtOrBefore(cfg.Tree[account], latest); ok {
+					bal = fmt.Sprintf("（%s 余额 %+.2f 元）", recMonth, float64(v)/100)
 				}
 			}
 			fmt.Printf("提示: 科目 %s 类别未知（属性=未分类）%s——不计入资产负债表/收支结余表合计；总账科目请使用官方科目表（财会〔2023〕14号）名称（或 map 映射到官方名），余额方向可用 ledger subjects import 指定\n", account, bal)
 		}
 		if len(unknownAccounts) > 0 {
-			fmt.Printf("⚠ 未分类科目 %d 个（%s 余额合计 %+.2f 元）——请补属性（subjects import）或纠名（map）；余额非 0 连续 3 个月未处理或跨年带入即科目体系事故\n",
-				len(unknownAccounts), latest, float64(unknownBalance)/100)
+			if latest == "" {
+				fmt.Printf("⚠ 未分类科目 %d 个（无余额记录）——请补属性（subjects import）或纠名（map）\n", len(unknownAccounts))
+			} else {
+				fmt.Printf("⚠ 未分类科目 %d 个（余额合计 %+.2f 元）——请补属性（subjects import）或纠名（map）；余额非 0 连续 3 个月未处理或跨年带入即科目体系事故\n",
+					len(unknownAccounts), float64(unknownBalance)/100)
+			}
 		}
 
 		// xlsx 漂移比对（Change 12）：读最新月 xlsx 期末表，与 JSON Balances 对比（防手工改表漂移）

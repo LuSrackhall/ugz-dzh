@@ -29,18 +29,23 @@ func TestCheckUnclassifiedStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 捕获 stdout（cmd 输出走 fmt → os.Stdout）
+	// 捕获 stdout（cmd 输出走 fmt → os.Stdout）；并发排水防大输出阻塞管道
 	old := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.Stdout = w
+	var buf bytes.Buffer
+	drained := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(&buf, r)
+		close(drained)
+	}()
 	execErr := runCmd(t, "check", "-j", configPath)
 	w.Close()
 	os.Stdout = old
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
+	<-drained
 	out := buf.String()
 
 	if execErr != nil {

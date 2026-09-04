@@ -112,6 +112,23 @@ var genCloseCmd = &cobra.Command{
 			fmt.Printf("无待结转的损益科目（closing/ 已含 %d 张凭证，余额均已结转或为 0）\n", existing)
 			return nil
 		}
+		// 结转目标科目"本年收益"必须已在科目树定义（先定义后生成，v2 §2.4）：
+		// gen-close 自产凭证会引用它，而新建账套通常没有该节点（年结后余额为 0，
+		// scan 与旧账余额表都看不见它）——不预登记则重新 generate 会被自家闸门
+		// 拦截（流程自锁，红队 2026-09-04 实测）。此处自动登记（官方表属性=贷），
+		// 属系统自洽行为，非静默长科目。
+		if _, ok := cfg.Tree["本年收益"]; !ok {
+			if err := balance.AddManualAdjustment(cfg, "本年收益", cfg.Settings.StartMonth, 0, "年末损益结转目标科目（gen-close 自动登记）"); err != nil {
+				return fmt.Errorf("登记结转目标科目 本年收益: %w", err)
+			}
+			if err := balance.SetAccountProperty(cfg, "本年收益", "贷"); err != nil {
+				return fmt.Errorf("设置本年收益属性: %w", err)
+			}
+			if err := balance.SaveConfig(configPath, cfg); err != nil {
+				return fmt.Errorf("保存配置: %w", err)
+			}
+			fmt.Println("已自动登记结转目标科目 本年收益（属性 贷）——先定义后生成要求其存在于科目树")
+		}
 		sort.Slice(lines, func(i, j int) bool { return lines[i].account < lines[j].account })
 
 		// 编号：已有文件数+1，避免重名

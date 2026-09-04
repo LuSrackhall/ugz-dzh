@@ -2,7 +2,7 @@
 name: ledger-accounting
 description: 手工账电子化工具 ledger（Go CLI）的会计操作技能。当用户涉及建账（init）、生成月度账本（generate）、科目管理（map/add-manual）、期初调整、月结、年末损益结转（gen-close/year-close）、结账标记（lock）、账本检查（check/漂移/重建）、打印版、凭证格式与红字处理、git 管理 JSON 等一切会计记账操作时使用。技能指导 agent 全程协助用户完成村级/个人手工账电子化：凭证 Markdown → Excel 账本（总账/明细账/合并总账/现金银行日记账/期初期末表/资产负债表等）→ 打印装订 → 跨年结转。
 agent_created: true
-version: 0.8.4
+version: 0.9.0
 ---
 
 # ledger 会计记账操作
@@ -71,9 +71,10 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 | 命令 | 用途 |
 |---|---|
 | `ledger init -s <YYYY-MM> -o <输出目录>` | 建账（设置建账月=启动月，生成 {year}.json，并建好 vouchers/ 凭证目录 + print-config.json 打印版配置模板 + README，完整管理体系一次到位） |
-| `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数 + 分区域字体 + GL/ML 分账本 + 正反面独立 + ±px 微调，见 references/print-config.md） |
+| `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>] [--allow-new]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数 + 分区域字体 + GL/ML 分账本 + 正反面独立 + ±px 微调，见 references/print-config.md；**先定义后生成：未定义科目拒绝生成并输出清单**，`--allow-new` 显式逃生） |
 | `ledger map -a <错名> -b <对名> -j <json>` | 科目名称映射纠错 |
 | `ledger add-manual -a <科目> -m <月> -n <金额> -t <备注> -j <json>` | 期初调整（**只作用于建账月**，-m 仅记录） |
+| `ledger subjects scan -v <凭证目录> -j <json> [-o <候选.csv>]` | 扫凭证提取科目清单 → 候选建账审核表（宽容解析 OCR md；权威基底=旧账期末科目余额表转录，scan 产物并入双向 diff） |
 | `ledger subjects import/list/export -f <审核表.csv> -j <json>` | 科目批量登记 + 属性（借/贷）设置（迁移科目建立入口；`--dry-run` 预演） |
 | `ledger opening import -f <审核表.csv> -j <json>` | 期初余额批量导入（替代逐条 add-manual；科目存在/属性一致/**试算平衡强制闸门**三重校验 + `--dry-run` 预演） |
 | `ledger year-close -j <json> -o <输出>` | 跨年结转（生成新年 JSON + 空账本 + 损益结转草稿 + 三告警） |
@@ -110,15 +111,16 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 ./ledger generate -v vouchers/2025_10 -o output
 ```
 - `print-config.json` 已在输出根目录，generate **自动发现**（无需 --config）；打印版尺寸不符时直接改它，免发版
-3. 复核：打开 xlsx 检查（总账/明细账/日记账/期初期末表/报表），`check` 校验
+- 凭证出现新科目 → generate 拒绝并给出清单：按提示 `subjects scan` → 确认 → `subjects import` → 重跑（先定义后生成）
+3. 复核：打开 xlsx 检查（总账/明细账/日记账/期初期末表/报表），`check` 校验（含未分类统计行）
 
 ### 3. 科目管理
-- 新科目出现即自动入科目树；凭证科目名写错用 `map` 纠错（合并到正确科目）
+- **先定义后生成（铁律）**：generate 遇科目树未定义的凭证科目会**拒绝生成**并输出清单（科目/出现次数/样例摘要）——按清单提示走 `subjects scan`（或旧账转录审核表）→ 确认方向 → `subjects import` → 重跑；OCR 错名先 `map` 纠错（合并到正确科目）。`--allow-new` 仅限临时场景（自动登记，属性可能未分类）
+- 科目属性对照官方科目表（财会〔2023〕14号 42 个一级科目已内置）——官方科目按名自动归类正确；自创总账名属性"未分类"，不进资产负债表/收支结余表合计、不参与年结转，`check` 会输出未分类统计（N 个+余额合计），须及时补属性
 - OCR 原始凭证先原样提交基线再纠错（map 或改 md，规则见 git 纪律第 5 条）
 - **账页顺序自定义**：`全局设置.科目顺序` 列科目名（总账名或全路径），决定账页 Sheet 排列（GL→合并→ML 分区块），打印版/PDF 自动跟随；改后重新 generate 生效（详见 references/json-schema.md）
-- 未知科目（不在内置 17 类）属性显示"未分类"——如需进资产负债表/收支结余表，补充类别
 - 期初调整：`add-manual`（只作用于建账月；建账月账本已生成时，改后须 `-f` 从建账月重建）；**批量导入用 `opening import`（建账审核表 CSV，试算平衡闸门），迁移/初始化期初一律走它**
-- 迁移建账：科目建立与期初导入按建账审核表流程（格式见 commands.md 的 subjects/opening 章节）
+- 迁移建账：**审核表基底=旧账期末科目余额表逐行转录**，`subjects scan` 产物并入双向 diff；科目建立与期初导入按建账审核表流程（格式见 commands.md 的 subjects/opening 章节）
 
 ### 4. 年末损益结转（"清零"，每年 12 月）
 ```bash
@@ -156,12 +158,15 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 5. **期初锚定建账月**：调整额只落建账月；跨年自动结转（year-close 生成新年 JSON）
 6. **凭证号防线**：未解析凭证号阻断生成；重号（文件名同号）告警
 7. **派生产物不入 git**：xlsx 账本、closing/ 结转凭证（可重建）；只 git 管 JSON 和手工凭证
+8. **先定义后生成**：凭证科目必须已在科目树定义——未定义科目 generate 拒绝并给清单（`--allow-new` 为显式逃生）；科目属性对照官方科目表（财会〔2023〕14号 42 科目内置）
 
 ## 常见错误与处理
 
 | 现象 | 原因与解法 |
 |---|---|
 | `凭证借贷平衡校验失败: N 条分录凭证号未解析` | 凭证正文无"记字第X号"且文件名无法解析 → 补凭证号 |
+| `存在 N 个未定义科目，拒绝生成`（清单已列出科目/次数/样例摘要） | 先定义后生成 → 按清单 `subjects scan`（迁移场景以旧账余额表转录为基底）→ 确认方向 → `subjects import` → 重跑；OCR 错名先 `map`；临时场景 `--allow-new` |
+| `⚠ 未分类科目 N 个（余额合计 X 元）`（check/gen-close/year-close 提示） | 科目总账名不在官方科目表（属性未指定）→ `subjects import` 补属性或 `map` 归并；未分类科目不进报表合计、不参与年结转，余额非 0 长期不处理会静默漏账 |
 | `月份 X 已结账（结账月 Y）` | lock 生效 → 确认后用 `-f` |
 | `X 已生成（本月合计）` 拒绝 | 幂等 → 确认后 `-f` 重建 |
 | `上月账本不存在，疑似跳月/漏月` | 缺月告警 → 补生成上月或确认 |

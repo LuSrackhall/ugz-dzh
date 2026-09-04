@@ -192,6 +192,32 @@ func (wb *Workbook) writeIncomeStatement(ytdDebit, ytdCredit map[string]int64, a
 	}
 	var rows []repRow
 	seen := make(map[string]bool)
+	// 未分类科目单列展示（v2 §2.2：此前对未分类科目静默 return，无痕丢行）
+	type unclassRow struct {
+		name   string
+		debit  int64
+		credit int64
+	}
+	var unclassified []unclassRow
+	uncSeen := make(map[string]bool)
+	addUnclassified := func(k string) {
+		if uncSeen[k] {
+			return
+		}
+		uncSeen[k] = true
+		gen := k
+		if idx := strings.IndexByte(gen, '-'); idx > 0 {
+			gen = gen[:idx]
+		}
+		if _, ok := balance.AccountTypeOf(gen); ok {
+			return
+		}
+		d, c := ytdDebit[k]+activity[k].Debit, ytdCredit[k]+activity[k].Credit
+		if d == 0 && c == 0 {
+			return
+		}
+		unclassified = append(unclassified, unclassRow{name: k, debit: d, credit: c})
+	}
 	add := func(k string, side string) {
 		if seen[k] {
 			return
@@ -203,6 +229,7 @@ func (wb *Workbook) writeIncomeStatement(ytdDebit, ytdCredit map[string]int64, a
 		}
 		t, ok := balance.AccountTypeOf(gen)
 		if !ok {
+			addUnclassified(k)
 			return
 		}
 		if t == "收入" || t == "费用" {
@@ -219,9 +246,14 @@ func (wb *Workbook) writeIncomeStatement(ytdDebit, ytdCredit map[string]int64, a
 	}
 	for k := range activity {
 		add(k, "")
+		addUnclassified(k)
 	}
 	for k := range ytdDebit {
 		add(k, "")
+		addUnclassified(k)
+	}
+	for k := range ytdCredit {
+		addUnclassified(k)
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
 
@@ -262,6 +294,18 @@ func (wb *Workbook) writeIncomeStatement(ytdDebit, ytdCredit map[string]int64, a
 	wb.File.SetCellValue(sheet, cellName(2, row), centsToYuan(incomeTotal-expenseTotal))
 	wb.setMoneyStyle(sheet, row, 2)
 	wb.File.SetCellStyle(sheet, cellName(1, row), cellName(4, row), totalStyle)
+	// 未分类科目单独列出（v2 §2.2：不得静默丢行，需可定位；不计入收入/支出合计）
+	if len(unclassified) > 0 {
+		sort.Slice(unclassified, func(i, j int) bool { return unclassified[i].name < unclassified[j].name })
+		row++
+		wb.File.SetCellValue(sheet, cellName(1, row), "未分类科目（类别未知，不计入合计）:")
+		row++
+		for _, u := range unclassified {
+			wb.File.SetCellValue(sheet, cellName(1, row), u.name)
+			wb.File.SetCellValue(sheet, cellName(2, row), fmt.Sprintf("借 %.2f / 贷 %.2f 元", float64(u.debit)/100, float64(u.credit)/100))
+			row++
+		}
+	}
 	return nil
 }
 

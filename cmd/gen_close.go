@@ -105,6 +105,9 @@ var genCloseCmd = &cobra.Command{
 			}
 			lines = append(lines, line{account: account, gen: gen, detail: detail, abs: abs, debit: mb.Final < 0})
 		}
+		// 类别未知且余额≠0 的科目显式告警（v2 §2.2：此类科目不结转、跨年带入，
+		// 此前静默跳过；须在提前返回之前打印）
+		printUnknownPnlWarning(unknownPnlAccounts(cfg.Tree, month))
 		if len(lines) == 0 {
 			fmt.Printf("无待结转的损益科目（closing/ 已含 %d 张凭证，余额均已结转或为 0）\n", existing)
 			return nil

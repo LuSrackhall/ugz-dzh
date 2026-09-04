@@ -85,6 +85,8 @@ var yearCloseCmd = &cobra.Command{
 		if hasUnclosedPnl {
 			fmt.Printf("提示: 可用 ledger gen-close -j %s -o %s 自动生成结转凭证到 closing/ 目录（不污染手工凭证目录）\n", configPath, output)
 		}
+		// 类别未知（未分类）且余额≠0 的科目显式告警（v2 §2.2：此前静默带入新账）
+		printUnknownPnlWarning(unknownPnlAccounts(cfg.Tree, lastMonth))
 
 		yy, _ := strconv.Atoi(lastMonth[:4])
 		nextYear := fmt.Sprintf("%04d-01", yy+1)

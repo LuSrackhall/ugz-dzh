@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -46,20 +47,36 @@ var checkCmd = &cobra.Command{
 			fmt.Printf("✓ 期初试算平衡校验通过（%s 快照）\n", month)
 		}
 
-		// 未知类别科目提示（属性=未分类，不影响余额计算；N6：删除误导的 SetAccountProperty 提示——无此命令）
-		unknown := false
+		// 未知类别科目提示 + 统计（v2 §2.5 可观测化：逐科目余额 + N 个/余额合计
+		// 统计行——"未分类余额>0 连续 3 个月未处理或跨年带入"即科目体系事故）
+		latest := balance.LatestBalanceMonth(cfg)
+		var unknownAccounts []string
+		var unknownBalance int64
 		for account := range cfg.Tree {
 			gen := account
 			if idx := strings.IndexByte(gen, '-'); idx > 0 {
 				gen = gen[:idx]
 			}
-				if balance.IsUnknownType(gen) {
-					unknown = true
-					fmt.Printf("提示: 科目 %s 类别未知（属性=未分类）——不计入资产负债表/收支结余表合计；总账科目请使用内置 17 类名称（或 map 映射到 17 类），余额方向可用 ledger subjects import 指定\n", account)
+			if balance.IsUnknownType(gen) {
+				unknownAccounts = append(unknownAccounts, account)
+				if latest != "" {
+					unknownBalance += cfg.Tree[account].Balances[latest].Final
 				}
+			}
 		}
-		if unknown {
-			fmt.Println("（以上为未知类别提示，不影响余额计算）")
+		sort.Strings(unknownAccounts)
+		for _, account := range unknownAccounts {
+			bal := ""
+			if latest != "" {
+				if mb, ok := cfg.Tree[account].Balances[latest]; ok {
+					bal = fmt.Sprintf("（%s 余额 %+.2f 元）", latest, float64(mb.Final)/100)
+				}
+			}
+			fmt.Printf("提示: 科目 %s 类别未知（属性=未分类）%s——不计入资产负债表/收支结余表合计；总账科目请使用官方科目表（财会〔2023〕14号）名称（或 map 映射到官方名），余额方向可用 ledger subjects import 指定\n", account, bal)
+		}
+		if len(unknownAccounts) > 0 {
+			fmt.Printf("⚠ 未分类科目 %d 个（%s 余额合计 %+.2f 元）——请补属性（subjects import）或纠名（map）；余额非 0 连续 3 个月未处理或跨年带入即科目体系事故\n",
+				len(unknownAccounts), latest, float64(unknownBalance)/100)
 		}
 
 		// xlsx 漂移比对（Change 12）：读最新月 xlsx 期末表，与 JSON Balances 对比（防手工改表漂移）

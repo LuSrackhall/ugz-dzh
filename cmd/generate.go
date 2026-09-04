@@ -148,8 +148,9 @@ var generateCmd = &cobra.Command{
 		if cfg.Settings.ClosingMonth != "" && month <= cfg.Settings.ClosingMonth && !force {
 			return fmt.Errorf("月份 %s 已结账（结账月 %s）——如确认需修改，请使用 -f 强制重建（从该月起级联）", month, cfg.Settings.ClosingMonth)
 		}
+		var appliedMap map[string]string
 		if len(cfg.Settings.AccountMap) > 0 {
-			ApplyAccountMap(entries, cfg.Settings.AccountMap)
+			appliedMap = ApplyAccountMap(entries, cfg.Settings.AccountMap)
 			if verbose {
 				fmt.Printf("已应用 %d 条科目名称映射\n", len(cfg.Settings.AccountMap))
 			}
@@ -175,7 +176,11 @@ var generateCmd = &cobra.Command{
 		if undefined := undefinedVoucherSubjects(cfg, entries); len(undefined) > 0 && !allowNew {
 			fmt.Printf("⚠ 凭证中存在 %d 个未定义科目（科目树中没有）：\n", len(undefined))
 			for _, u := range undefined {
-				fmt.Printf("  - %s（出现 %d 次，样例摘要：%s）\n", u.Account, u.Count, u.Sample)
+				if orig, mapped := appliedMap[u.Account]; mapped {
+					fmt.Printf("  - %s（映射自 %s；出现 %d 次，样例凭证 %s，样例摘要：%s）\n", u.Account, orig, u.Count, u.SampleFile, u.Sample)
+				} else {
+					fmt.Printf("  - %s（出现 %d 次，样例凭证 %s，样例摘要：%s）\n", u.Account, u.Count, u.SampleFile, u.Sample)
+				}
 			}
 			fmt.Println("处理方式（二选一）：")
 			fmt.Println("  ① 登记: ledger subjects scan -v <凭证目录>（迁移场景以旧账期末科目余额表转录为基底，scan 产物并入双向 diff）→ 确认方向 → ledger subjects import -f 审核表.csv → 重新 generate")
@@ -276,10 +281,10 @@ var generateCmd = &cobra.Command{
 
 // undefinedSubject 分录中科目树未定义的科目（先定义后生成，v2 §2.4）。
 type undefinedSubject struct {
-	Account string // 全路径
-	General string
-	Count   int    // 出现行数
-	Sample  string // 首次出现的摘要
+	Account    string // 全路径
+	Count      int    // 出现行数
+	SampleFile string // 首次出现的凭证文件名
+	Sample     string // 首次出现的摘要
 }
 
 // entryFullPath 拼科目全路径（与 balance.fullPath 同口径：明细空 → 仅总账）。
@@ -296,14 +301,13 @@ func entryFullPath(e voucher.Entry) string {
 func undefinedVoucherSubjects(cfg *balance.GlobalConfig, entries []voucher.Entry) []undefinedSubject {
 	freq := map[string]*undefinedSubject{}
 	for _, e := range entries {
-		account := entryFullPath(e)
 		if strings.TrimSpace(e.GeneralAccount) == "" {
 			continue
 		}
+		account := entryFullPath(e)
 		c, ok := freq[account]
 		if !ok {
-			general, _ := splitEntryPath(account)
-			c = &undefinedSubject{Account: account, General: general, Sample: e.Summary}
+			c = &undefinedSubject{Account: account, SampleFile: e.SourceFile, Sample: e.Summary}
 			freq[account] = c
 		}
 		c.Count++

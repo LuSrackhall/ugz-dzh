@@ -21,7 +21,7 @@ func TestUndefinedVoucherSubjects(t *testing.T) {
 	entries := []voucher.Entry{
 		{GeneralAccount: "库存现金", Summary: "提现"},
 		{GeneralAccount: "管理费用", DetailAccount: "办公费", Summary: "购办公用品"},
-		{GeneralAccount: "管埋费用", Summary: "OCR错名"},
+		{GeneralAccount: "管埋费用", Summary: "OCR错名", SourceFile: "记字第0009号.md"},
 		{GeneralAccount: "管埋费用", Summary: "OCR错名2"},
 		{GeneralAccount: "  应收款  ", DetailAccount: " 张三 ", Summary: "空白未归一"},
 	}
@@ -33,8 +33,8 @@ func TestUndefinedVoucherSubjects(t *testing.T) {
 	if got[0].Account != "应收款-张三" {
 		t.Errorf("got[0].Account = %q, want 应收款-张三", got[0].Account)
 	}
-	if got[1].Account != "管埋费用" || got[1].Count != 2 || got[1].Sample != "OCR错名" {
-		t.Errorf("got[1] = %+v, want 管埋费用/2/OCR错名", got[1])
+	if got[1].Account != "管埋费用" || got[1].Count != 2 || got[1].Sample != "OCR错名" || got[1].SampleFile != "记字第0009号.md" {
+		t.Errorf("got[1] = %+v, want 管埋费用/2/OCR错名/记字第0009号.md", got[1])
 	}
 }
 

@@ -21,6 +21,7 @@ type Entry struct {
 	Summary        string `json:"summary"`        // 摘要
 	DebitCents     int64  `json:"debitCents"`     // 借方金额（分）
 	CreditCents    int64  `json:"creditCents"`    // 贷方金额（分）
+	SourceFile     string `json:"-"`              // 来源凭证文件名（诊断/未定义清单用，不参与序列化）
 }
 
 // ParseFile parses a single .md file and returns all voucher entries.
@@ -33,6 +34,7 @@ func ParseFile(filePath string) ([]Entry, error) {
 	entries := parseVoucherText(content, filepath.Base(filePath))
 	for i := range entries {
 		entries[i].DetailAccount = cleanDetail(entries[i].DetailAccount)
+		entries[i].SourceFile = filepath.Base(filePath)
 	}
 	return entries, nil
 }

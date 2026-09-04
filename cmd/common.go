@@ -59,16 +59,24 @@ func CollectEntries(voucherDir string) ([]voucher.Entry, error) {
 
 // ApplyAccountMap applies OCR→standard name mapping to entries' GeneralAccount and DetailAccount.
 // Mapping keys are checked against individual field values AND the combined full path.
-func ApplyAccountMap(entries []voucher.Entry, accountMap map[string]string) {
+// 返回已生效的映射：映射后全路径 → 原全路径（供未定义清单解释"映射后名称"，
+// 红队 2026-09-04：默认输出不提示映射会误导排障）。
+func ApplyAccountMap(entries []voucher.Entry, accountMap map[string]string) map[string]string {
+	applied := map[string]string{}
 	if len(accountMap) == 0 {
-		return
+		return applied
+	}
+	origFullPath := func(e voucher.Entry) string {
+		p := e.GeneralAccount
+		if e.DetailAccount != "" {
+			p += "-" + e.DetailAccount
+		}
+		return p
 	}
 	for i := range entries {
-		fullPath := entries[i].GeneralAccount
-		if entries[i].DetailAccount != "" {
-			fullPath += "-" + entries[i].DetailAccount
-		}
-		if mapped, ok := accountMap[fullPath]; ok {
+		before := origFullPath(entries[i])
+		changed := false
+		if mapped, ok := accountMap[before]; ok {
 			parts := strings.SplitN(mapped, "-", 2)
 			entries[i].GeneralAccount = parts[0]
 			if len(parts) > 1 {
@@ -76,15 +84,26 @@ func ApplyAccountMap(entries []voucher.Entry, accountMap map[string]string) {
 			} else {
 				entries[i].DetailAccount = ""
 			}
-			continue
+			changed = true
+		} else {
+			if mapped, ok := accountMap[entries[i].GeneralAccount]; ok {
+				entries[i].GeneralAccount = mapped
+				changed = true
+			}
+			if entries[i].DetailAccount != "" {
+				if mapped, ok := accountMap[entries[i].DetailAccount]; ok {
+					entries[i].DetailAccount = mapped
+					changed = true
+				}
+			}
 		}
-		if mapped, ok := accountMap[entries[i].GeneralAccount]; ok {
-			entries[i].GeneralAccount = mapped
-		}
-		if mapped, ok := accountMap[entries[i].DetailAccount]; ok {
-			entries[i].DetailAccount = mapped
+		if changed {
+			if after := origFullPath(entries[i]); after != before {
+				applied[after] = before
+			}
 		}
 	}
+	return applied
 }
 
 // FilterByMonth filters entries to those whose date starts with the given month prefix.

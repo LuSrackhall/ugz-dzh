@@ -29,7 +29,22 @@ checksum:
 
 changelog:
   sort: asc
+  groups:
+    - title: '🚀 新增'
+      regexp: '^.*?feat(\(.+\))?!?:'
+      order: 0
+    - title: '🐛 修复'
+      regexp: '^.*?fix(\(.+\))?!?:'
+      order: 1
+    - title: '其他'
+      order: 999
   filters:
     exclude:
       - '^docs:'
       - '^test:'
+      - '^chore\(release\):'
+
+release:
+  header: |
+    📖 **人话版变更说明**（这一版讲了什么 / 行为变更与迁移注意 / 对账套的影响）见仓库 [CHANGELOG.md](https://github.com/LuSrackhall/ugz-dzh/blob/main/CHANGELOG.md) 对应版本小节。
+    下方清单为提交流水（自动生成）。

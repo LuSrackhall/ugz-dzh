@@ -248,7 +248,7 @@ go test ./...          # 运行所有测试
 go build -o ledger .   # 编译
 ```
 
-开发流程遵循 [OpenSpec](https://github.com/Fission-AI/OpenSpec) + [Superpowers](https://github.com/obra/superpowers) 桥接工作流。详见 `CLAUDE.md` 和 `openspec/project.md`。
+开发流程遵循 [OpenSpec](https://github.com/Fission-AI/OpenSpec) + [Superpowers](https://github.com/obra/superpowers) 桥接工作流。详见 `AGENTS.md` 和 `openspec/project.md`。
 
 ## License
 

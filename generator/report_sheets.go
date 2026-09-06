@@ -444,6 +444,17 @@ func (wb *Workbook) writeSubjectBalanceSheet(initials map[string]int64, activity
 					}
 				}
 			}
+			// 仍无属性（如 --allow-new 当月新科目：报表先于回写入树执行）——
+			// 按官方科目表的总账段属性兜底，与次月入树属性同源；非官方名留空（未分类如实显示）
+			if prop == "" {
+				gen := k
+				if i := strings.IndexByte(gen, '-'); i > 0 {
+					gen = gen[:i]
+				}
+				if a, ok := balance.OfficialAccountByName(gen); ok {
+					prop = a.Property
+				}
+			}
 		}
 		final := v.init + v.debit - v.credit
 		norm := func(x int64) int64 {

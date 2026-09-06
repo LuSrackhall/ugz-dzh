@@ -23,7 +23,8 @@ func TestWriteSubjectBalanceSheet(t *testing.T) {
 		"内部往来-张三":     {Property: "借"},
 		"经营收入":        {Property: "贷"},
 		// 树里只定义叶子 → 应自动补"补助收入"一级汇总行（真实迁移账套形态）
-		"补助收入-村级经费": {Property: "贷"},
+		"补助收入-村级经费":  {Property: "贷"},
+		"长期待摊费用-开办费": {Property: "借"}, // 全 0 树键：期初/发生/期末均为 0，不得成行
 	}}
 	wb := &Workbook{File: f, Month: "2026-01", Config: cfg}
 
@@ -95,9 +96,12 @@ func TestWriteSubjectBalanceSheet(t *testing.T) {
 	if got := num("内部往来", "C"); got != 1000 {
 		t.Errorf("内部往来 期初 = %v, want 1000（合并父级子树汇总）", got)
 	}
-	// 全 0 节点不显示
-	if row := findRow("应付款-不存在科目"); row > 0 {
-		t.Errorf("全 0 科目不应成行")
+	// 全 0 节点不显示（树键存在但期初/发生/期末均为 0）
+	if row := findRow("长期待摊费用-开办费"); row > 0 {
+		t.Errorf("全 0 树键科目不应成行（行号 %d）", row)
+	}
+	if row := findRow("长期待摊费用"); row > 0 {
+		t.Errorf("全 0 段的一级汇总行不应成行（行号 %d）", row)
 	}
 	// 合计：按实际记账科目求和，借贷平衡（500/500）无差额提示行
 	var totalRow = -1

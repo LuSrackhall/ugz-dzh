@@ -507,6 +507,18 @@ func isPeriodEnd(row []string, lay layout.GLLayout) bool {
 		(len(row) > lay.BackStartCol+3 && row[lay.BackStartCol+3] == periodEndLabel)
 }
 
+// glSuppressed 报告科目（全路径）是否被 全局设置.总分类账忽略科目 覆盖。
+// 名单项与科目全路径相等，或名单项是该科目的祖先段（父级名忽略整棵子树——json-schema.md 语义）。
+// 此前只匹配凭证总帐科目段：名单放叶子全路径永不命中（下游 v0.9.1 反馈）。
+func (wb *Workbook) glSuppressed(account string) bool {
+	for _, s := range wb.Config.Settings.GLSuppressAccounts {
+		if s != "" && (account == s || strings.HasPrefix(account, s+"-")) {
+			return true
+		}
+	}
+	return false
+}
+
 // AppendEntries 追加当月分录到对应的总分类账 Sheet。
 func (wb *Workbook) AppendEntries(entries []voucher.Entry, initials map[string]int64) error {
 	type entryGroup struct {
@@ -515,18 +527,13 @@ func (wb *Workbook) AppendEntries(entries []voucher.Entry, initials map[string]i
 	}
 	groups := make(map[string]*entryGroup)
 
-	glSuppress := make(map[string]bool)
-	for _, a := range wb.Config.Settings.GLSuppressAccounts {
-		glSuppress[a] = true
-	}
-
 	for _, e := range entries {
-		if glSuppress[e.GeneralAccount] {
-			continue
-		}
 		path := e.GeneralAccount
 		if e.DetailAccount != "" {
 			path += "-" + e.DetailAccount
+		}
+		if wb.glSuppressed(path) {
+			continue
 		}
 		g, ok := groups[path]
 		if !ok {

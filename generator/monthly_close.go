@@ -27,6 +27,9 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		if mergeSet[account] {
 			continue
 		}
+		if wb.glSuppressed(account) {
+			continue // 总分类账忽略科目：分录未入账页，月结也不写（sheet 可能不存在）
+		}
 		sheet := sheetNameGL(account)
 		if !changedSheets[sheet] {
 			continue

@@ -26,6 +26,29 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 	// 期初机制修复：清理历史幻影期初（幂等，自动科目 FirstRecord 置 0 + 删除回填记录）
 	balance.PurgePhantomInitials(cfg)
 
+	// 总分类账忽略科目——存量清理（下游 v0.9.1 反馈）：复制工作簿会把历史叶子 GL sheet
+	// 逐月带下去，-f 重建也保留；每次生成按当前配置删除被忽略叶子的 sheet，使忽略语义
+	// 对存量账本收敛。合并父级 sheet 是汇总视图（合并总账科目），不受忽略约束。
+	glMergeSet := make(map[string]bool)
+	for _, g := range cfg.Settings.MergeGLAccounts {
+		glMergeSet[g] = true
+	}
+	var glSheets []string
+	for _, s := range wb.File.GetSheetList() {
+		if strings.HasPrefix(s, sheetPrefixGL) {
+			glSheets = append(glSheets, s)
+		}
+	}
+	for _, s := range glSheets {
+		account := strings.TrimPrefix(s, sheetPrefixGL)
+		if glMergeSet[account] {
+			continue
+		}
+		if wb.glSuppressed(account) {
+			wb.File.DeleteSheet(s)
+		}
+	}
+
 	// 第三轮审查 D1a：合并总账科目禁止直接记账（无明细分录）——
 	// 否则 GL 与 MergeGL 共用同名 sheet 月结两遍、期初被合并视图污染。
 	for _, general := range cfg.Settings.MergeGLAccounts {
@@ -253,6 +276,9 @@ func (wb *Workbook) appendCarryForwardOnly(entries []voucher.Entry, initials map
 		if initial != 0 && !hasEntries[account] && (strings.HasSuffix(wb.Month, "-01") || wb.InitialAdjust[account]) {
 			if mergeSet[account] {
 				continue // 合并总账父级跳过（见上方注释）
+			}
+			if wb.glSuppressed(account) {
+				continue // 总分类账忽略科目：不建期初行/不建 sheet（下游 v0.9.1 反馈）
 			}
 			if err := wb.appendToGLSheet(account, nil, initial); err != nil {
 				return fmt.Errorf("追加上年结转 %s: %w", account, err)

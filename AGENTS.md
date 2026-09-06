@@ -84,7 +84,7 @@ JSON `{year}/{year}.json` 中的以下字段直接影响代码路径：
 
 ## 1.4 year_close.go 特殊约束
 
-`year_close.go` 直接操作 xlsx 文件（不是通过 Workbook 方法），写 `"上年结转"` 到 A1、余额到 G1。Layout 变更后这些坐标需修正为 Layout 坐标。
+`year_close.go` 不经 generator/Workbook 渲染——直接 excelize 生成新年首月**完全空工作薄**（无 sheet，跨年 1 月生成走纯 JSON 期初，prevMonthEnd 必空、双源比对不误报）+ 复制新年 JSON。它**不清零任何科目**：损益清零由 `gen-close` 两段结转凭证承担（一段 收入/费用→本年收益；二段 本年收益→收益分配-未分配收益，净亏损方向相反），结转后损益/本年收益年末=0、净额挂账收益分配。
 
 ## 1.5 modify 修改工作流
 

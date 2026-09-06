@@ -66,7 +66,8 @@ func TestGenCloseStrictChain(t *testing.T) {
 		t.Fatalf("结转后 generate 被拒（gen-close 自锁）: %v", err)
 	}
 
-	// ⑤ 损益归零 + 本年收益承接
+	// ⑤ 损益归零 + 两段结转终态：本年收益经二段归零，净额挂账 收益分配-未分配收益
+	// （v0.9.4 二段结转默认开启；本用例原断言"本年收益承接 -100000"为一段-only 旧规格）
 	cfg, err = balance.LoadConfig(configPath)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,14 @@ func TestGenCloseStrictChain(t *testing.T) {
 	if got := cfg.Tree["经营收入"].Balances["2026-01"].Final; got != 0 {
 		t.Errorf("经营收入期末 = %d, want 0（结转归零）", got)
 	}
-	if got := cfg.Tree["本年收益"].Balances["2026-01"].Final; got != -100000 {
-		t.Errorf("本年收益期末 = %d, want -100000（贷余承接净收益 1000.00 元，借正贷负）", got)
+	if got := cfg.Tree["本年收益"].Balances["2026-01"].Final; got != 0 {
+		t.Errorf("本年收益期末 = %d, want 0（二段结转归零）", got)
+	}
+	target, ok := cfg.Tree["收益分配-未分配收益"]
+	if !ok {
+		t.Fatal("gen-close 未预登记 收益分配-未分配收益")
+	}
+	if got := target.Balances["2026-01"].Final; got != -100000 {
+		t.Errorf("收益分配-未分配收益期末 = %d, want -100000（贷余承接净收益 1000.00 元，借正贷负）", got)
 	}
 }

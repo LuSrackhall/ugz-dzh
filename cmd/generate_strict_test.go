@@ -9,6 +9,9 @@ import (
 
 	"ledger/balance"
 	"ledger/voucher"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // TestUndefinedVoucherSubjects 未定义科目清单：排序、计数、样例摘要；
@@ -72,8 +75,27 @@ func strictTestVoucher(t *testing.T, dir string) string {
 	return vdir
 }
 
+// resetFlagsInProcess pflag 的值跨 Execute 持久（不重置默认值）——进程内多次
+// Execute 会把上一次调用的 bool/string flag 泄漏进下一次（实测：--no-transfer、
+// -f 均会泄漏）。每次 runCmd 前把全部命令的 flag 恢复默认值并清 Changed，
+// 对齐真实 CLI"每次调用=独立进程"的语义。
+func resetFlagsInProcess(c *cobra.Command) {
+	reset := func(fs *pflag.FlagSet) {
+		fs.VisitAll(func(f *pflag.Flag) {
+			_ = f.Value.Set(f.DefValue)
+			f.Changed = false
+		})
+	}
+	reset(c.Flags())
+	reset(c.PersistentFlags())
+	for _, sub := range c.Commands() {
+		resetFlagsInProcess(sub)
+	}
+}
+
 func runCmd(t *testing.T, args ...string) error {
 	t.Helper()
+	resetFlagsInProcess(rootCmd)
 	rootCmd.SetArgs(args)
 	return rootCmd.Execute()
 }

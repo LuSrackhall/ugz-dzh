@@ -360,51 +360,57 @@ func UpdateBalancesAfterGenerate(cfg *GlobalConfig, month string, activity map[s
 }
 
 // GetInitBalanceForGenerate 获取某科目在某月的期初余额（分）。
-// prevMonthEnd 为上月各科目的期末余额。
+// prevMonthEnd 为上月各科目的期末余额（取自复制工作簿的账页链）。
 // 期初来源优先级（期初锚定建账月，铁律二：除建账月当月外，一律走连续链）：
 //  1. 建账月（启动月==month）时：手动调整科目 / 自动识别科目 调整额≠0 → 期初=调整额
-//  2. 上月期末 prevMonthEnd
-//  3. 科目树中最近月份的期末余额（m < month）
-//  4. 0
-func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMonthEnd map[string]int64) int64 {
+//  2. 双源比对：上月期末（xlsx 账页链）vs JSON 余额链最近记录（含 0，审计 H1）。
+//     健康账本两源恒等（JSON 回写与账页月结同源同月）；不一致说明 xlsx 链已过期或
+//     被污染（典型：冲平/更正凭证未级联重建进 xlsx 链、手工修 JSON 未重建 xlsx）——
+//     按铁律三（JSON 是余额唯一权威源）采信 JSON 并经 warn 告警，使 -f 重建自愈
+//     而非从陈旧账页链复发（下游 0.9.0 实测：冲平科目静置重现后期初被重置回建账期初）。
+//  3. 仅单源存在时取该源；两源皆无 → 0。
+// 返回值 warn 非空表示发生双源冲突（已采信 JSON，调用方应打印告警）。
+func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMonthEnd map[string]int64) (int64, string) {
 	// 1. 期初调整额只锚定建账月（启动月）：生成启动月时直取，其余月份一律续链
 	if month == cfg.Settings.StartMonth {
 		for _, m := range cfg.ManualItems {
 			if m.Account == account && m.Adjustment != 0 {
-				return YuanToCents(m.Adjustment)
+				return YuanToCents(m.Adjustment), ""
 			}
 		}
 		for _, a := range cfg.AutoItems {
 			if a.Account == account && a.Adjustment != 0 {
-				return YuanToCents(a.Adjustment)
+				return YuanToCents(a.Adjustment), ""
 			}
 		}
 	}
 
-	// 2. 上月期末
-	if end, ok := prevMonthEnd[account]; ok {
-		return end
-	}
-
-	// 3. 从 JSON 科目树中取最近月份的期末余额作为期初
-	node, ok := cfg.Tree[account]
-	if ok {
-		// 取最新月份的期末余额（含 0）——不得跳过期末=0 的月份回退到更早非零月
-		// （审计二审 H1：年末结平科目跨年首月会凭空复活更早月余额）
-		var latestMonth string
-		var latestBal int64
-		for m, mb := range node.Balances {
-			if m < month && (latestMonth == "" || m > latestMonth) {
-				latestMonth = m
-				latestBal = mb.Final
-			}
+	// 2. 双源比对：xlsx 账页链 vs JSON 权威链（含 0）
+	jsonFinal, jsonMonth, hasJSON := latestFinalBefore(cfg.Tree[account], month)
+	if end, hasXlsx := prevMonthEnd[account]; hasXlsx {
+		if hasJSON && end != jsonFinal {
+			return jsonFinal, fmt.Sprintf(
+				"科目 %s 期初双源冲突：账本页链期末 %s 元，JSON 权威链 %s 月期末 %s 元（借正贷负）——已按铁律三采信 JSON；上月账本可能漏生成/未级联重建（如冲平凭证未 -f 进 xlsx 链），请核对后从冲突月 -f 重建",
+				account, CentsToYuan(end), jsonMonth, CentsToYuan(jsonFinal))
 		}
-		if latestMonth != "" {
-			return latestBal
+		return end, ""
+	}
+	if hasJSON {
+		return jsonFinal, ""
+	}
+	return 0, ""
+}
+
+// latestFinalBefore 返回 JSON 余额链中 month（不含）之前最近一条记录的期末与记录月。
+// 含期末=0 的记录，不得跳过 0 回退到更早非零月（审计二审 H1）。
+func latestFinalBefore(node AccountNode, month string) (final int64, recMonth string, ok bool) {
+	for m, mb := range node.Balances {
+		if m < month && (recMonth == "" || m > recMonth) {
+			recMonth = m
+			final = mb.Final
 		}
 	}
-
-	return 0
+	return final, recMonth, recMonth != ""
 }
 
 // HasInitialAdjustment 判断某科目在某月的期初是否来自期初调整额（仅建账月/启动月）。

@@ -443,23 +443,63 @@ func TestGetInitBalanceForGenerate(t *testing.T) {
 	}
 
 	// Priority 1: 建账月（启动月）→ 直取调整额
-	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-01", prev); got != 150000 {
-		t.Errorf("其他应收款-张三 init = %d, want 150000（建账月调整额）", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-01", prev); got != 150000 || warn != "" {
+		t.Errorf("其他应收款-张三 init = %d warn = %q, want 150000/无告警（建账月调整额）", got, warn)
 	}
 
 	// 非建账月续链：期初=上月期末，调整额不覆盖（铁律二）
-	if got := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-02", prev); got != 160000 {
-		t.Errorf("其他应收款-张三 2026-02 init = %d, want 160000（上月期末续链）", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "其他应收款-张三", "2026-02", prev); got != 160000 || warn != "" {
+		t.Errorf("其他应收款-张三 2026-02 init = %d warn = %q, want 160000/无告警（上月期末续链）", got, warn)
 	}
 
 	// Priority 2: prevMonthEnd
-	if got := GetInitBalanceForGenerate(cfg, "库存现金", "2026-02", prev); got != 500000 {
-		t.Errorf("库存现金 init = %d, want 500000", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "库存现金", "2026-02", prev); got != 500000 || warn != "" {
+		t.Errorf("库存现金 init = %d warn = %q, want 500000/无告警", got, warn)
 	}
 
 	// Priority 3: 0
-	if got := GetInitBalanceForGenerate(cfg, "未知科目", "2026-01", prev); got != 0 {
-		t.Errorf("未知科目 init = %d, want 0", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "未知科目", "2026-01", prev); got != 0 || warn != "" {
+		t.Errorf("未知科目 init = %d warn = %q, want 0/无告警", got, warn)
+	}
+}
+
+func TestGetInitBalanceDualSourceConflict(t *testing.T) {
+	// 铁律三：xlsx 账页链与 JSON 余额链冲突时采信 JSON 并告警。
+	// 下游 0.9.0 实测 bug：冲平凭证未级联重建进 xlsx 链（账页停在最早日余额），
+	// 手工修 JSON 后 -f 重跑又从陈旧账页链读回旧余额（复发）。
+	cfg := &GlobalConfig{
+		Settings: GlobalSettings{StartMonth: "2025-01"},
+		Tree: map[string]AccountNode{
+			"其他应收款-宏远公司1": {Balances: map[string]MonthBalance{
+				"2025-05": {Final: 1003000000},
+				"2025-06": {Final: 0}, // 冲平（只修了 JSON，xlsx 账页链仍停在 5 月）
+			}},
+		},
+	}
+	prev := map[string]int64{"其他应收款-宏远公司1": 1003000000} // 陈旧账页链
+	got, warn := GetInitBalanceForGenerate(cfg, "其他应收款-宏远公司1", "2025-08", prev)
+	if got != 0 {
+		t.Errorf("双源冲突应采信 JSON 权威链 = %d, want 0", got)
+	}
+	if warn == "" {
+		t.Error("双源冲突必须返回告警")
+	}
+
+	// 两源一致 → 无告警，行为不变
+	prev["其他应收款-宏远公司1"] = 0
+	if got, warn = GetInitBalanceForGenerate(cfg, "其他应收款-宏远公司1", "2025-08", prev); got != 0 || warn != "" {
+		t.Errorf("双源一致 init = %d warn = %q, want 0/无告警", got, warn)
+	}
+
+	// 仅 xlsx 单源（JSON 无记录）→ 沿用账页链
+	if got, warn = GetInitBalanceForGenerate(cfg, "无记录科目", "2025-08", map[string]int64{"无记录科目": 777}); got != 777 || warn != "" {
+		t.Errorf("单源 xlsx init = %d warn = %q, want 777/无告警", got, warn)
+	}
+
+	// 仅 JSON 单源（跨年 1 月不复制上年工作簿）→ 取 JSON 最近记录（含 0）
+	got, warn = GetInitBalanceForGenerate(cfg, "其他应收款-宏远公司1", "2026-01", map[string]int64{})
+	if got != 0 || warn != "" {
+		t.Errorf("单源 JSON init = %d warn = %q, want 0/无告警", got, warn)
 	}
 }
 
@@ -472,12 +512,12 @@ func TestGetInitBalanceCrossYearNoOverride(t *testing.T) {
 		},
 	}
 	prev := map[string]int64{"银行存款": 12345600} // 2025-12 期末
-	if got := GetInitBalanceForGenerate(cfg, "银行存款", "2026-01", prev); got != 12345600 {
-		t.Errorf("跨年 2026-01 init = %d, want 12345600（上年末，调整额不覆盖）", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "银行存款", "2026-01", prev); got != 12345600 || warn != "" {
+		t.Errorf("跨年 2026-01 init = %d warn = %q, want 12345600/无告警（上年末，调整额不覆盖）", got, warn)
 	}
 	// 建账月（=启动月 2025-10）命中调整额
-	if got := GetInitBalanceForGenerate(cfg, "银行存款", "2025-10", map[string]int64{}); got != 500000 {
-		t.Errorf("2025-10 init = %d, want 500000（建账月调整额）", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "银行存款", "2025-10", map[string]int64{}); got != 500000 || warn != "" {
+		t.Errorf("2025-10 init = %d warn = %q, want 500000/无告警（建账月调整额）", got, warn)
 	}
 }
 
@@ -548,13 +588,13 @@ func TestGetInitBalanceZeroBalanceRecent(t *testing.T) {
 			}},
 		},
 	}
-	if got := GetInitBalanceForGenerate(cfg, "应付款-某户", "2026-01", map[string]int64{}); got != 0 {
-		t.Errorf("结平科目跨年期初 = %d, want 0（不翻旧账）", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "应付款-某户", "2026-01", map[string]int64{}); got != 0 || warn != "" {
+		t.Errorf("结平科目跨年期初 = %d warn = %q, want 0/无告警（不翻旧账）", got, warn)
 	}
 	// 对照：最近月期末非零 → 取最近月
 	cfg.Tree["应付款-某户"].Balances["2025-12"] = MonthBalance{Final: 30000}
-	if got := GetInitBalanceForGenerate(cfg, "应付款-某户", "2026-01", map[string]int64{}); got != 30000 {
-		t.Errorf("非结平科目跨年期初 = %d, want 30000", got)
+	if got, warn := GetInitBalanceForGenerate(cfg, "应付款-某户", "2026-01", map[string]int64{}); got != 30000 || warn != "" {
+		t.Errorf("非结平科目跨年期初 = %d warn = %q, want 30000/无告警", got, warn)
 	}
 }
 

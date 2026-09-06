@@ -65,11 +65,19 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		}
 	}
 
-	// 构建期初映射
+	// 构建期初映射（双源冲突告警收集：见 GetInitBalanceForGenerate 铁律三注释）
 	initials := make(map[string]int64)
+	var initWarnings []string
+	addInitial := func(account string) {
+		init, warn := balance.GetInitBalanceForGenerate(cfg, account, month, prevFinals)
+		initials[account] = init
+		if warn != "" {
+			initWarnings = append(initWarnings, warn)
+		}
+	}
 	allAccounts := balance.GetLeafAccounts(entries)
 	for _, account := range allAccounts {
-		initials[account] = balance.GetInitBalanceForGenerate(cfg, account, month, prevFinals)
+		addInitial(account)
 	}
 	// 合并总账父级不进 initials（审计 P1-2：父级是汇总视图，非叶子记账科目）。
 	// 若纳入 initials 会污染期初试算平衡（父级期初+子科目期初双算→假性不平衡告警），
@@ -85,8 +93,11 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 			continue // 合并总账父级跳过（见上方注释）
 		}
 		if _, exists := initials[k]; !exists {
-			initials[k] = balance.GetInitBalanceForGenerate(cfg, k, month, prevFinals)
+			addInitial(k)
 		}
+	}
+	for _, w := range initWarnings {
+		fmt.Printf("⚠ %s\n", w)
 	}
 
 	// 记录当月期初来自调整额的科目（账页期初行摘要用：调整额→"期初余额"）

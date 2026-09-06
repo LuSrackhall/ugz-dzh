@@ -1,5 +1,11 @@
 # 项目长期记忆（ugz-dzh 手工账电子化）
 
+## 跨 agent 记忆接入：AGENTS.md 为入口正身（2026-09-06）
+
+- **入口改名**：`CLAUDE.md` → `AGENTS.md`（git mv 保历史），新增「项目记忆（跨 agent 共享）」节——开工前读本文件（MEMORY.md），完工后更新 MEMORY.md + `.workbuddy/memory/当天日期.md`，禁止另存副本分叉。
+- **CLAUDE.md 保留为一行垫片（内容仅 `@AGENTS.md`），勿"修复"删掉**：官方文档确认 Claude Code 不原生读 AGENTS.md，@import 是官方推荐共享方式（软链接有 Windows 权限坑且仓库惯例软链不进 git）。删垫片 = Claude Code 断供入口。
+- 生效路径：ZCode/Codex/Cursor 直读 AGENTS.md；Claude Code 经垫片 @import 同源；WorkBuddy 照旧 `.workbuddy/`；记忆本体 `.workbuddy/memory/`（git 已跟踪）不变。
+
 ## 科目体系 v0.9.0：先定义后生成 + 官方 42 科目表（2026-09-04）
 
 - **宪法级原则（openspec 铁律 3 已修订）**：generate 遇科目树未定义的凭证科目 → 输出清单并拒绝；`--allow-new` 为显式逃生。新工作流：scan（宽容吃 OCR md）→ 旧账期末余额表转录为权威基底双向 diff → subjects import（方向列对新登记科目同样生效）→ opening import（试算闸门）→ check --vs + 三数对平 → lock。

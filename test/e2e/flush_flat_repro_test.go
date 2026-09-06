@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -174,6 +175,42 @@ func TestFlushFlatSubjectOpeningChain(t *testing.T) {
 	}
 	if got := lastFinal("2025-08"); got != 500 {
 		t.Errorf("[顺序生成] 8 月期末应为 500（期初0+借500），实际 %v —— 期初被重置为建账期初的 bug 复现", got)
+	}
+
+	// 科目余额表（期初+发生+期末一体）：冲平科目 8 月行应为 期初空(0)/借500/期末500，父级汇总一致
+	subjBalance := func(month, account string) map[string]float64 {
+		f, err := excelize.OpenFile(filepath.Join(yearDir, month+".xlsx"))
+		if err != nil {
+			t.Fatalf("打开 %s: %v", month, err)
+		}
+		defer f.Close()
+		rows, err := f.GetRows("科目余额表")
+		if err != nil {
+			t.Fatalf("读取科目余额表: %v", err)
+		}
+		for _, r := range rows {
+			if len(r) > 0 && strings.TrimSpace(r[0]) == account {
+				val := func(i int) float64 {
+					if i >= len(r) || r[i] == "" {
+						return 0
+					}
+					v, err := strconv.ParseFloat(strings.ReplaceAll(r[i], ",", ""), 64)
+					if err != nil {
+						t.Fatalf("科目余额表 %s %q 列解析失败: %v", account, r[i], err)
+					}
+					return v
+				}
+				return map[string]float64{"init": val(2), "debit": val(3), "credit": val(4), "final": val(5)}
+			}
+		}
+		t.Fatalf("%s 科目余额表缺少行 %q", month, account)
+		return nil
+	}
+	for _, acct := range []string{"其他应收款-宏远公司1", "其他应收款"} {
+		b := subjBalance("2025-08", acct)
+		if b["debit"] != 500 || b["final"] != 500 || b["init"] != 0 {
+			t.Errorf("[科目余额表] %s 8月 = %v, want 期初0/借500/期末500", acct, b)
+		}
 	}
 
 	// 阶段 2：-f 重跑历史月（下游报告的复发路径）——从 6 月级联

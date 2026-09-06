@@ -35,8 +35,8 @@ go build -o ledger .
 - `output/2026/2026-01.xlsx` — 完整累计工作薄（总分类账 + 多科目明细账 + 期初表）
 - `output/2026/ledger.csv` — 凭证分录汇总（CSV）
 - `output/2026/ledger.xlsx` — 凭证分录汇总（Excel）
-- `output/2026/balance.csv` — 科目余额表（CSV）
-- `output/2026/balance.xlsx` — 科目余额表（Excel）
+- `output/2026/balance.csv` — 科目发生额汇总（CSV，当月发生额净额口径）
+- `output/2026/balance.xlsx` — 科目发生额汇总（Excel，当月发生额净额口径）
 - `output/2026/2026.json` — 年份配置文件
 
 ## 凭证格式
@@ -85,8 +85,8 @@ output/
     ├── 2026-02.xlsx       # 2 月累计工作薄
     ├── ledger.csv         # 当月分录汇总（CSV）
     ├── ledger.xlsx        # 当月分录汇总（Excel）
-    ├── balance.csv        # 当月科目余额表（CSV）
-    └── balance.xlsx       # 当月科目余额表（Excel）
+    ├── balance.csv        # 当月科目发生额汇总（CSV）
+    └── balance.xlsx       # 当月科目发生额汇总（Excel）
 ```
 
 - `init -s 2026-01` → 在 `{output}/2026/` 下创建 `2026.json`
@@ -210,7 +210,7 @@ OCR 识别凭证时可能产生错字（如"管埋费用"、"银杭存款"），
 每月 xlsx 仅标记有变化的账页为"需打印"。用户按标记打印后替换活页即可，无需重印整本账簿。
 
 - **总账/明细账（GL/ML）**：使用打印版位格 xlsx（`print/` 子目录，金额拆位、红字红色字体）。
-- **现金/银行日记账、期初/期末表、报表（资产负债表/收支结余表/科目汇总表/凭证序时簿）**：为普通表格，直接打印查看版 xlsx 对应 sheet 即可（无需位格）。
+- **现金/银行日记账、期初/期末表、报表（资产负债表/收支结余表/科目汇总表/科目余额表/凭证序时簿）**：为普通表格，直接打印查看版 xlsx 对应 sheet 即可（无需位格）。
 
 ## 备份与恢复（投产建议）
 

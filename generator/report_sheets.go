@@ -15,6 +15,7 @@ import (
 //   - 资产负债表：资产/费用→左，负债/权益/收入→右，金额=|期末|（方向相反显负），合计+差额
 //   - 收支结余表：收入类累计 - 费用类累计 = 本年收益
 //   - 科目汇总表：本月各科目借/贷发生额（试算平衡）
+//   - 科目余额表：期初+本月发生+期末 逐科目一体（对齐旧财务软件导出排版）
 //   - 凭证序时簿：按日期/凭证号列示每张凭证借贷合计
 func (wb *Workbook) WriteReportSheets(entries []voucher.Entry, activity map[string]Activity, initials map[string]int64, ytdDebit, ytdCredit map[string]int64) error {
 	if err := wb.writeBalanceSheet(initials, activity); err != nil {
@@ -24,6 +25,9 @@ func (wb *Workbook) WriteReportSheets(entries []voucher.Entry, activity map[stri
 		return err
 	}
 	if err := wb.writeSubjectSummary(activity); err != nil {
+		return err
+	}
+	if err := wb.writeSubjectBalanceSheet(initials, activity); err != nil {
 		return err
 	}
 	if err := wb.writeVoucherRegister(entries); err != nil {
@@ -351,6 +355,149 @@ func (wb *Workbook) writeSubjectSummary(activity map[string]Activity) error {
 	wb.File.SetCellStyle(sheet, cellName(1, row), cellName(3, row), totalStyle)
 	wb.setMoneyStyle(sheet, row, 2)
 	wb.setMoneyStyle(sheet, row, 3)
+	return nil
+}
+
+// writeSubjectBalanceSheet 科目余额表（期初+本月发生+期末 逐科目一体）。
+// 排版对齐旧财务软件导出的科目余额表（无科目编码列——编码主键化延后，见 docs/account-code-design.md）：
+//   - 每个科目树节点一行：叶子=自身值；父级=自身+全部 K- 后代汇总（与旧软件"上级行=下级合计"一致，
+//     中间层级同样成行）；树里只定义叶子时自动补一级科目汇总行；任一值全 0 的节点不显示。
+//   - 期初/期末按科目属性归一显示：借方科目借余为正、贷方科目贷余为正（反向余额显负，可暴露异常）。
+//   - 合计行借贷发生额取实际记账科目（activity 键）求和——既有直接发生又有子科目的父级不会被
+//     丢掉也不会双算；借≠贷时追加差额提示行。
+func (wb *Workbook) writeSubjectBalanceSheet(initials map[string]int64, activity map[string]Activity) error {
+	sheet := "科目余额表"
+	_, startRow, err := wb.reportSheet(sheet, "科目余额表（期初 + 本月发生 + 期末）",
+		[]string{"科目", "方向", "期初余额", "借方发生额", "贷方发生额", "期末余额"},
+		[]float64{40, 8, 16, 16, 16, 16})
+	if err != nil {
+		return err
+	}
+
+	// 账户全集 = 期初映射 ∪ 当月发生 ∪ 科目树键（合并父级不在 initials，靠树键补全为汇总行）
+	accts := make(map[string]bool)
+	for k := range initials {
+		accts[k] = true
+	}
+	for k := range activity {
+		accts[k] = true
+	}
+	for k := range wb.Config.Tree {
+		accts[k] = true
+	}
+	// 一级科目汇总行：真实迁移账套的科目树常常只定义叶子全路径（一级科目不是树键），
+	// 为每个总账段补一行汇总（对齐旧软件"一级科目行=下级合计"）；总账段本身是树键则不重复补。
+	generals := make([]string, 0)
+	for a := range accts {
+		if i := strings.IndexByte(a, '-'); i > 0 {
+			g := a[:i]
+			if _, exists := accts[g]; !exists {
+				generals = append(generals, g)
+			}
+		}
+	}
+	for _, g := range generals {
+		accts[g] = true
+	}
+
+	keys := make([]string, 0, len(accts))
+	for k := range accts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// 子树聚合：K 的值 = 自身 + 所有 K- 后代（内层对每个祖先前缀直接累加，与遍历顺序无关）
+	type nodeVals struct{ init, debit, credit int64 }
+	agg := make(map[string]nodeVals, len(keys))
+	for _, k := range keys {
+		agg[k] = nodeVals{init: initials[k], debit: activity[k].Debit, credit: activity[k].Credit}
+	}
+	for _, k := range keys {
+		for _, p := range keys {
+			if p != k && strings.HasPrefix(k, p+"-") {
+				v, kv := agg[p], agg[k]
+				v.init += kv.init
+				v.debit += kv.debit
+				v.credit += kv.credit
+				agg[p] = v
+			}
+		}
+	}
+
+	row := startRow
+	var totalDebit, totalCredit int64
+	for _, k := range keys {
+		v := agg[k]
+		if v.init == 0 && v.debit == 0 && v.credit == 0 {
+			continue
+		}
+		prop := ""
+		if node, ok := wb.Config.Tree[k]; ok {
+			prop = node.Property
+		} else {
+			// 合成的一级汇总行（非树键）：方向取子树内第一个已定义属性的后代科目
+			for _, d := range keys {
+				if d != k && strings.HasPrefix(d, k+"-") {
+					if node, ok := wb.Config.Tree[d]; ok && node.Property != "" {
+						prop = node.Property
+						break
+					}
+				}
+			}
+		}
+		final := v.init + v.debit - v.credit
+		norm := func(x int64) int64 {
+			if prop == "贷" {
+				return -x
+			}
+			return x
+		}
+		wb.File.SetCellValue(sheet, cellName(1, row), k)
+		wb.File.SetCellValue(sheet, cellName(2, row), prop)
+		if v.init != 0 {
+			wb.File.SetCellValue(sheet, cellName(3, row), centsToYuan(norm(v.init)))
+			wb.setMoneyStyle(sheet, row, 3)
+		}
+		if v.debit != 0 {
+			wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(v.debit))
+			wb.setMoneyStyle(sheet, row, 4)
+		}
+		if v.credit != 0 {
+			wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(v.credit))
+			wb.setMoneyStyle(sheet, row, 5)
+		}
+		if final != 0 {
+			wb.File.SetCellValue(sheet, cellName(6, row), centsToYuan(norm(final)))
+			wb.setMoneyStyle(sheet, row, 6)
+		}
+		row++
+	}
+
+	// 合计：借贷发生额按实际记账科目（activity 键）求和
+	for k, act := range activity {
+		totalDebit += act.Debit
+		totalCredit += act.Credit
+		_ = k
+	}
+	wb.File.SetCellValue(sheet, cellName(1, row), "合计")
+	if totalDebit != 0 {
+		wb.File.SetCellValue(sheet, cellName(4, row), centsToYuan(totalDebit))
+		wb.setMoneyStyle(sheet, row, 4)
+	}
+	if totalCredit != 0 {
+		wb.File.SetCellValue(sheet, cellName(5, row), centsToYuan(totalCredit))
+		wb.setMoneyStyle(sheet, row, 5)
+	}
+	totalStyle, _ := wb.File.NewStyle(&excelize.Style{
+		Font:   &excelize.Font{Bold: true, Size: 10},
+		Border: []excelize.Border{{Type: "top", Color: "#808080", Style: 2}},
+	})
+	wb.File.SetCellStyle(sheet, cellName(1, row), cellName(6, row), totalStyle)
+	if totalDebit != totalCredit {
+		row++
+		wb.File.SetCellValue(sheet, cellName(1, row),
+			fmt.Sprintf("借贷发生额差额: %.2f 元——凭证层面应已平衡，此差额提示发生额归属异常，请核对", float64(totalDebit-totalCredit)/100))
+	}
 	return nil
 }
 

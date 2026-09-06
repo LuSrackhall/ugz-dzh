@@ -221,7 +221,9 @@ func WriteBalanceXLSX(dir string, summaries []balance.LeafSummary) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	sheet := "科目余额表"
+	// sheet 名让给账本内的标准《科目余额表》（期初+发生+期末一体）；
+	// 本文件是当月发生额净额口径，命名为"科目发生额汇总"避免同名不同物
+	sheet := "科目发生额汇总"
 	f.SetSheetName("Sheet1", sheet)
 
 	headers := []string{"科目类别", "科目全路径", "借方合计", "贷方合计", "余额", "方向"}

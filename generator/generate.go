@@ -45,7 +45,9 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 			continue
 		}
 		if wb.glSuppressed(account) {
-			wb.File.DeleteSheet(s)
+			if err := wb.File.DeleteSheet(s); err != nil {
+				return fmt.Errorf("删除被忽略 sheet %s: %w", s, err)
+			}
 		}
 	}
 

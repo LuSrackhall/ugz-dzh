@@ -44,7 +44,7 @@ JSON `{year}/{year}.json` 中的以下字段直接影响代码路径：
 
 | 配置字段 | 影响函数 | 后果 |
 |---|---|---|
-| `总分类账忽略科目` | `AppendEntries` → `glSuppress` | 跳过叶子 GL Sheet |
+| `总分类账忽略科目` | `glSuppressed`（分录全路径/祖先段匹配）→ `AppendEntries`/`appendCarryForwardOnly`/`WriteMonthClosings`/存量清理 | 跳过叶子 GL Sheet（期初行/月结/存量清除四处；合并父级视图豁免；报表与 JSON 链数据保留） |
 | `多科目明细账忽略科目` | `AppendMLEntries` → `mlSuppress` | 跳过 ML Sheet |
 | `合并总账科目` | `AppendMergeEntries` → `mergeSet` | 为父级生成合并 GL |
 | `自动识别科目.期初调整额` | `GetInitBalanceForGenerate` | 影响所有期初余额 |

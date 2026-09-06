@@ -97,22 +97,26 @@ func signByDir(dir string, v int64) int64 {
 const carryForwardLabel = "承前页"
 
 // ensureGLSheet 确保总分类账 Sheet 存在并已初始化标题。
-func (wb *Workbook) ensureGLSheet(account string) (string, error) {
+// ensureGLSheet 取得（或创建）科目 GL sheet；第二返回值=是否本次新建。
+// 新建标志用于期初行判定——此前 appendToGLSheet 用 len(rows)<=2 猜测，
+// 但标题块写入后恒为 false，年中新建/重新包含的账页永不显示期初行
+// （2026-08-30 合并页 D2 同源缺陷，此处对齐同款修法）。
+func (wb *Workbook) ensureGLSheet(account string) (string, bool, error) {
 	name := sheetNameGL(account)
 	if idx, err := wb.File.GetSheetIndex(name); err == nil && idx >= 0 {
-		return name, nil
+		return name, false, nil
 	}
 
 	idx, err := wb.File.NewSheet(name)
 	if err != nil {
-		return "", fmt.Errorf("创建 Sheet %s: %w", name, err)
+		return "", false, fmt.Errorf("创建 Sheet %s: %w", name, err)
 	}
 	wb.File.SetActiveSheet(idx)
 
 	if err := wb.writeGLTitle(name); err != nil {
-		return "", err
+		return "", false, err
 	}
-	return name, nil
+	return name, true, nil
 }
 
 // writeGLTitle 写入总分类账的标题区（2 行）、列标题和列宽。
@@ -566,14 +570,12 @@ func (wb *Workbook) getPageNum(sheet string) int {
 }
 
 func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, initial int64) error {
-	sheet, err := wb.ensureGLSheet(account)
+	sheet, isNew, err := wb.ensureGLSheet(account)
 	if err != nil {
 		return err
 	}
 
 	lay := glLayout()
-	rows, _ := wb.File.GetRows(sheet)
-	isNew := len(rows) <= 2
 
 	// 计算页码：从文件"过次页"标签数（含模板和真断页）
 	pageNum := wb.getPageNum(sheet)

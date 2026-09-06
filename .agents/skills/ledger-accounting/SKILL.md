@@ -2,7 +2,7 @@
 name: ledger-accounting
 description: 手工账电子化工具 ledger（Go CLI）的会计操作技能。当用户涉及建账（init）、生成月度账本（generate）、科目管理（map/add-manual）、期初调整、月结、年末损益结转（gen-close/year-close）、结账标记（lock）、账本检查（check/漂移/重建）、打印版、凭证格式与红字处理、git 管理 JSON 等一切会计记账操作时使用。技能指导 agent 全程协助用户完成村级/个人手工账电子化：凭证 Markdown → Excel 账本（总账/明细账/合并总账/现金银行日记账/期初期末表/资产负债表等）→ 打印装订 → 跨年结转。
 agent_created: true
-version: 0.9.3
+version: 0.9.4
 ---
 
 # ledger 会计记账操作
@@ -78,7 +78,7 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 | `ledger subjects import/list/export -f <审核表.csv> -j <json>` | 科目批量登记 + 属性（借/贷）设置（迁移科目建立入口；`--dry-run` 预演） |
 | `ledger opening import -f <审核表.csv> -j <json>` | 期初余额批量导入（替代逐条 add-manual；科目存在/属性一致/**试算平衡强制闸门**三重校验 + `--dry-run` 预演） |
 | `ledger year-close -j <json> -o <输出>` | 跨年结转（生成新年 JSON + 空账本 + 损益结转草稿 + 三告警） |
-| `ledger gen-close -j <json> -o <输出>` | 自动生成年末损益结转凭证到 `<输出>/<年份>/closing/`（不写手工凭证目录） |
+| `ledger gen-close -j <json> -o <输出>` | 自动生成年末两段结转凭证到 `<输出>/<年份>/closing/`（①损益→本年收益；②本年收益→收益分配-未分配收益，`--no-transfer` 跳过二段；不写手工凭证目录） |
 | `ledger lock -j <json> -m <YYYY-MM>` | 设置结账月（<=该月默认拒绝无 -f 生成；`-m ''` 解锁） |
 | `ledger check -j <json>` | 科目树 + 期初试算平衡 + xlsx 漂移比对 |
 | `ledger doctor [-o <输出>]` | 环境自检（版本/skill 安装与自包含/print-config 发现/账本结构）；**生产排障先跑这个** |
@@ -124,13 +124,15 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 
 ### 4. 年末损益结转（"清零"，每年 12 月）
 ```bash
-./ledger gen-close -j output/2025/2025.json -o output   # ① 生成结转凭证到 closing/
-# 打开 closing/ 里的凭证核对金额
-./ledger generate -v 2025_12 -o output -f               # ② 重新生成 12 月（自动并入结转，损益归零）
+./ledger gen-close -j output/2025/2025.json -o output   # ① 生成两段结转凭证到 closing/（核对金额）
+./ledger generate -v 2025_12 -o output -f               # ② 重新生成 12 月（自动并入结转，损益与本年收益归零）
 ./ledger year-close -j output/2025/2025.json -o output  # ③ 跨年（结转后无损益告警）
 ```
-- 结转凭证是**派生产物**（closing/ 不进 git，可幂等重建）
+- **两段结转**（默认齐发）：① 收入/费用 → 本年收益；② 本年收益 → 收益分配-未分配收益（净亏损方向相反；`--no-transfer` 跳过二段，下次重跑补发）。净额挂账后，新年"本年收益"从 0 起算、不混入上年净额
+- 结转目标科目（本年收益、收益分配-未分配收益）由 gen-close 自动登记（属性=贷），无需手工建科目
+- 结转凭证是**派生产物**（closing/ 不进 git，可幂等重建）；老账套升级后跑一次新版 gen-close 即补上二段，历史月无需重建
 - 不做结转：收入/费用带余额跨年，year-close 每次告警
+- 资产负债表口径：结转后权益列显示 收益分配-未分配收益（官方"未分配收益"项目）；未结转月份照旧显示"本年收益（未结转损益）"行（详见 references/json-schema.md）
 
 ### 5. 结账与保护
 - 每月结账后 `ledger lock -j output/2025/2025.json -m 2025-10`——该月及之前默认拒绝无 -f 生成（防误改）

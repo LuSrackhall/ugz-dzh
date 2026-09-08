@@ -121,3 +121,76 @@ func TestReorderSubjectSheetsNoFixedTail(t *testing.T) {
 		t.Errorf("Sheet 数 = %d, want 2: %v", len(got), got)
 	}
 }
+
+// TestReorderSplitPagesFollowDetailOrder 分离明细账页组内次序联动 明细列顺序
+// （列序=页序）：分离页区块殿后，组内按 DetailOrder[总账] 的列序排，未列出按名兜底；
+// 科目顺序（显式页序）优先级最高。
+func TestReorderSplitPagesFollowDetailOrder(t *testing.T) {
+	wb := newOrderTestWorkbook(t, []string{
+		"2026-01期初",
+		"多科目明细账-公益支出",
+		"明细账-公益支出-其他福利",   // 名序应排最后（未在列序中）
+		"明细账-公益支出-优抚慰问",   // 列序 idx3
+		"明细账-公益支出-补助费用",   // 列序 idx0
+		"明细账-公益支出-公益事业支出", // 列序 idx1
+		"总分类账-公益支出-补助费用",
+		"现金日记账",
+		"2026-01期末",
+	}, nil, nil)
+	// 明细列顺序：补助费用 → 公益事业支出 → 优抚慰问（其他福利未列出 → 按名兜底殿后）
+	wb.Config.DetailOrder = map[string][]string{
+		"公益支出": {"补助费用", "公益事业支出", "优抚慰问"},
+	}
+
+	wb.reorderSubjectSheets()
+
+	got := sheetList(t, wb)
+	want := []string{
+		"2026-01期初",
+		"总分类账-公益支出-补助费用",
+		"多科目明细账-公益支出",
+		// 分离页组内次序 = 明细列顺序（列序=页序），未列出按名兜底殿后
+		"明细账-公益支出-补助费用",
+		"明细账-公益支出-公益事业支出",
+		"明细账-公益支出-优抚慰问",
+		"明细账-公益支出-其他福利",
+		"现金日记账",
+		"2026-01期末",
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("位置 %d = %q, want %q（全序: %v）", i, got[i], want[i], got)
+		}
+	}
+}
+
+// TestReorderSplitPagesOrderOverridesDetailOrder 科目顺序（显式页序）优先于
+// 明细列顺序：全路径条目命中时按 科目顺序 排，列序不越权。
+func TestReorderSplitPagesOrderOverridesDetailOrder(t *testing.T) {
+	wb := newOrderTestWorkbook(t, []string{
+		"2026-01期初",
+		"明细账-公益支出-补助费用", // 列序 idx0
+		"明细账-公益支出-优抚慰问", // 列序 idx1
+		"现金日记账",
+		"2026-01期末",
+	}, []string{"公益支出-优抚慰问", "公益支出-补助费用"}, nil) // 显式页序：优抚慰问在前
+	wb.Config.DetailOrder = map[string][]string{
+		"公益支出": {"补助费用", "优抚慰问"}, // 列序相反
+	}
+
+	wb.reorderSubjectSheets()
+
+	got := sheetList(t, wb)
+	want := []string{
+		"2026-01期初",
+		"明细账-公益支出-优抚慰问", // 科目顺序 优先
+		"明细账-公益支出-补助费用",
+		"现金日记账",
+		"2026-01期末",
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("位置 %d = %q, want %q（全序: %v）", i, got[i], want[i], got)
+		}
+	}
+}

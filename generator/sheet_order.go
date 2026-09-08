@@ -11,12 +11,16 @@ import (
 //
 // 目标布局（与账簿装订分区一致，路径无关、结果确定）：
 //
-//	[当月期初表] [总分类账叶子账页…] [合并总账账页…] [多科目明细账账页…] [日记账/报表/期末表（原相对顺序）]
+//	[当月期初表] [总分类账叶子账页…] [合并总账账页…] [多科目明细账账页…] [分离明细账账页…] [日记账/报表/期末表（原相对顺序）]
 //
 // 区块内按 科目顺序 排序：列出的科目排前（按列表先后），未列出的按 Sheet 名排序
 // （同时消除 ML map 遍历创建顺序的随机性，使全量重建结果确定）。
 // 匹配规则：科目顺序条目等于账页键（叶子全路径或总账科目名）或其总账科目名即命中；
 // 条目指向不存在的账页时无影响。
+//
+// 分离明细账页（明细账-<总账>-<明细>，分离明细账科目）组内次序联动 明细列顺序：
+// 明细列顺序 里配了该总账的列序时，分离页组内次序自动跟随（列序=页序，一个心智）。
+// 优先级：科目顺序（显式页序）> 明细列顺序（组内次序）> 按名兜底。
 //
 // 实现：以「{月}期末」表为哨兵，按目标序列逐个 MoveSheet 到哨兵之前（前插法，
 // 每次插入都紧贴哨兵，序列顺序即最终顺序）。期末表由 WriteFinalSheet 在本函数
@@ -81,10 +85,33 @@ func (wb *Workbook) reorderSubjectSheets() {
 		name    string
 		section int
 		rankVal int
+		detRank int // 分离明细账页组内次序：明细列顺序（DetailOrder[总账段]）中该明细的索引；未列出=大数（按名兜底）
 	}
 	var slots []slot
 	initials := []string{} // 当月期初表（WriteInitialSheet 已删往月，仅存当月一张）
 	target := []string{}
+
+	// detailOrderRank 返回分离明细账页在其总账组内的次序（明细列顺序联动）：
+	// 分离页（明细账-<总账>-<明细>）与合并页的明细列同源——明细列顺序 里配了
+	// 该总账的列序，分离页组内次序自动跟随（列序=页序，一个心智）。
+	// 未列出 → 大数（组内按名兜底）。
+	detailOrderRank := func(key string) int {
+		i := strings.IndexByte(key, '-')
+		if i <= 0 {
+			return len(order) + len(wb.Config.DetailOrder) + 1
+		}
+		general, detail := key[:i], key[i+1:]
+		seq, ok := wb.Config.DetailOrder[general]
+		if !ok {
+			return len(order) + len(wb.Config.DetailOrder) + 1
+		}
+		for idx, d := range seq {
+			if d == detail {
+				return idx
+			}
+		}
+		return len(seq) // 该总账有列序配置但未列出此明细 → 列序尾部
+	}
 
 	for _, name := range list {
 		switch {
@@ -99,7 +126,7 @@ func (wb *Workbook) reorderSubjectSheets() {
 			slots = append(slots, slot{name: name, section: sec, rankVal: rankOfKey(key)})
 		case strings.HasPrefix(name, sheetPrefixDetail):
 			key := strings.TrimPrefix(name, sheetPrefixDetail)
-			slots = append(slots, slot{name: name, section: sectionDetail, rankVal: rankOfKey(key)})
+			slots = append(slots, slot{name: name, section: sectionDetail, rankVal: rankOfKey(key), detRank: detailOrderRank(key)})
 		case strings.HasPrefix(name, sheetPrefixML):
 			key := strings.TrimPrefix(name, sheetPrefixML)
 			slots = append(slots, slot{name: name, section: sectionML, rankVal: rankOfKey(key)})
@@ -117,6 +144,9 @@ func (wb *Workbook) reorderSubjectSheets() {
 		}
 		if slots[i].rankVal != slots[j].rankVal {
 			return slots[i].rankVal < slots[j].rankVal
+		}
+		if slots[i].detRank != slots[j].detRank {
+			return slots[i].detRank < slots[j].detRank
 		}
 		return slots[i].name < slots[j].name
 	})

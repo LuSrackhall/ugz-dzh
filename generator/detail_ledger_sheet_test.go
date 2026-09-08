@@ -156,7 +156,7 @@ func TestAppendDetailLedgerEntriesInitialOnly(t *testing.T) {
 		t.Error("page must not be built in non-January month without adjustment")
 	}
 
-	// 1 月：建页 + 期初行（ML 语义 initial≠0 → "期初余额"）+ 结构过次页补齐
+	// 1 月：建页 + 期初行（跨年延续 → "上年结转"，对齐 GL 规范）+ 结构过次页补齐
 	wb2 := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-01"}
 	if err := wb2.AppendDetailLedgerEntries(nil, map[string]int64{"管理费用-办公费": 50000}); err != nil {
 		t.Fatalf("AppendDetailLedgerEntries (Jan): %v", err)
@@ -165,8 +165,36 @@ func TestAppendDetailLedgerEntriesInitialOnly(t *testing.T) {
 	lay := mlLayout()
 	cfRow := mlFirstDataPageStart() + lay.DataStartRow
 	label, _ := wb2.File.GetCellValue(name, mlCellName(lay.BackStartCol+mlOffSummary, cfRow))
-	if label != "期初余额" {
-		t.Errorf("January initial label = %q, want 期初余额", label)
+	if label != "上年结转" {
+		t.Errorf("January initial label = %q, want 上年结转", label)
+	}
+}
+
+// TestAppendDetailLedgerEntriesZeroInitialNoPlaceholder 期初=0 且 isNew：
+// 不写"承前页 平 0"占位行（首数据页无上页可承，对齐 GL），首笔分录顶格。
+func TestAppendDetailLedgerEntriesZeroInitialNoPlaceholder(t *testing.T) {
+	cfg := &balance.GlobalConfig{}
+	cfg.Settings.DetailSplit = []string{"管理费用-办公费"}
+
+	wb := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-01"}
+	entries := []voucher.Entry{
+		{Date: "2026-01-05", VoucherNum: 1, Summary: "首笔", GeneralAccount: "管理费用", DetailAccount: "办公费", DebitCents: 30000},
+	}
+	if err := wb.AppendDetailLedgerEntries(entries, map[string]int64{"管理费用-办公费": 0}); err != nil {
+		t.Fatalf("AppendDetailLedgerEntries: %v", err)
+	}
+
+	name := sheetNameDetail("管理费用-办公费")
+	lay := mlLayout()
+	cfRow := mlFirstDataPageStart() + lay.DataStartRow
+	// 数据首行 = 第一笔分录（无占位行）
+	label, _ := wb.File.GetCellValue(name, mlCellName(lay.BackStartCol+mlOffSummary, cfRow))
+	if label != "首笔" {
+		t.Errorf("first data row = %q, want 首笔（无占位行）", label)
+	}
+	bal, _ := wb.File.GetCellValue(name, mlCellName(lay.BackStartCol+mlOffBalance, cfRow))
+	if parseTestYuan(bal) != 300 {
+		t.Errorf("first entry balance = %q, want 300", bal)
 	}
 }
 

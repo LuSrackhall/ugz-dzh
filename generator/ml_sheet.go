@@ -815,15 +815,21 @@ func (wb *Workbook) appendToMLSheetBody(sheet, accountLabel string, entries []vo
 		// 页头写完后写入实际明细科目名（空列留空，无"明细N"占位）
 		wb.writeMLDetailNamesAt(sheet, mlFirstDataPageStart(), reDetails)
 
-		// 结转行在第38行（mlFirstDataPageStart + DataStartRow = 30 + 8）
-		row = mlFirstDataPageStart() + lay.DataStartRow // = 38: 数据页header后承前页行
-		cfLabel := carryForwardLabel
+		// 期初行（仅 initial≠0 时写，对齐 GL 规范——下游评价者反馈 + 手工账规范）：
+		//   1 月跨年延续（非调整额）→ "上年结转"（此前误写"期初余额"）；
+		//   调整额生效 / 年内新建 → "期初余额"；
+		//   期初=0 → 不写占位行（此前写"承前页 平 0"——首数据页无上页可承，
+		//   用词错位；gen-close 清零损益后新年首月的"承前页 平"即此），
+		//   首笔分录顶格，余额链从 0 起算无断裂。
+		row = mlFirstDataPageStart() + lay.DataStartRow
 		if initial != 0 {
-			// 新 Sheet 期初行：建账/调整语义（审计：期初行摘要按来源区分）
-			cfLabel = "期初余额"
+			cfLabel := "期初余额"
+			if !wb.InitialAdjust[accountLabel] && strings.HasSuffix(wb.Month, "-01") {
+				cfLabel = "上年结转"
+			}
+			wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
+			row++
 		}
-		wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
-		row++ // = 12：第一条分录
 		// preWrite removed — 由 break handler 负责
 	} else {
 		// 已有数据 — 找到下一个可用数据行

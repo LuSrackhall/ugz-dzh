@@ -337,6 +337,14 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		}
 		_ = existingIdx
 
+		// 明细账独立科目：存量合并页仍含其明细列 → 拒绝（列收缩只发生在生成期，
+		// 历史文件铁律一不动，需 -f 从首月重建；对仗 detailOrder 冲突先例）
+		for _, d := range existingDetails {
+			if d != "" && wb.detailStandalone(general+"-"+d) {
+				return "", nil, nil, fmt.Errorf("科目 %s-%s 已配置为明细账独立科目，但存量多科目明细账页 %s 仍含其明细列，请使用 -f 从首月重新生成", general, d, name)
+			}
+		}
+
 		// 冲突检测：若配置了 detailOrder，逐列比对
 		if len(detailOrder) > 0 {
 			var existNonEmpty []string
@@ -652,7 +660,9 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 			groups[e.GeneralAccount] = g
 		}
 		g.entries = append(g.entries, e)
-		if e.DetailAccount != "" {
+		if e.DetailAccount != "" && !wb.detailStandalone(e.GeneralAccount+"-"+e.DetailAccount) {
+			// 命中 明细账独立科目 的明细不进合并 ML 列（列收缩；独立账页由
+			// AppendDetailLedgerEntries 专职，加法路由，GL 与合并页互不影响）
 			found := false
 			for _, d := range g.details {
 				if d == e.DetailAccount {
@@ -754,11 +764,17 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 }
 
 // appendToMLSheet 追加分录到指定总账科目的多科目明细账 Sheet。
-// 逻辑页号：数据块两侧页码相同
-// Paper1 Front 占位页已经由 ensureMLSheet 写入第1-5行。
-// 数据页标题从第6行开始。
 func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, detailIdx map[string]int, initial int64) error {
-	sheet := sheetNameML(general)
+	return wb.appendToMLSheetBody(sheetNameML(general), general, entries, detailIdx, initial)
+}
+
+// appendToMLSheetBody 追加分录共享本体（合并多科目明细账页与独立明细账页同构）。
+// sheet 由入口决定（sheetNameML / sheetNameDetail）；accountLabel 用于数据页页头
+// "会计科目"区显示（合并页=总账科目名，独立页=明细科目全路径）。
+// 逻辑页号：数据块两侧页码相同
+// Paper1 Front 占位页已由 ensure 路径写入第1-5行。
+// 数据页标题从第6行开始。
+func (wb *Workbook) appendToMLSheetBody(sheet, accountLabel string, entries []voucher.Entry, detailIdx map[string]int, initial int64) error {
 	lay := mlLayout()
 	numDetails := mlMaxDetails
 
@@ -802,7 +818,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 	if isNew {
 		// Paper1 Front 已在 rows 1-5（ensureMLSheet 写入）
 		// 写入第一个数据页标题：两侧同一逻辑页号
-		wb.writeMLPageHeader(sheet, mlFirstDataPageStart(), logicalPageNum, logicalPageNum, general, true, true)
+		wb.writeMLPageHeader(sheet, mlFirstDataPageStart(), logicalPageNum, logicalPageNum, accountLabel, true, true)
 		// 页头写完后写入实际明细科目名（空列留空，无"明细N"占位）
 		wb.writeMLDetailNamesAt(sheet, mlFirstDataPageStart(), reDetails)
 
@@ -833,7 +849,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			pbDebit, pbCredit := wb.mlLastBreakTotals(sheet)
 			pbDetails := wb.lastBreakDetailTotals(sheet)
 			logicalPageNum++
-			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
+			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, accountLabel, true, true)
 			wb.writeMLDetailNamesAt(sheet, row, reDetails)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
@@ -848,7 +864,7 @@ func (wb *Workbook) appendToMLSheet(general string, entries []voucher.Entry, det
 			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails)
 			row += 1 + lay.BottomMarginRows // 下边距 + 新页上边距
 			logicalPageNum++
-			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, general, true, true)
+			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, accountLabel, true, true)
 			wb.writeMLDetailNamesAt(sheet, row, reDetails)
 			row += lay.DataStartRow
 			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel)

@@ -113,13 +113,15 @@ func (wb *Workbook) ensureGLSheet(account string) (string, bool, error) {
 	}
 	wb.File.SetActiveSheet(idx)
 
-	if err := wb.writeGLTitle(name); err != nil {
+	if err := wb.writeLedgerTitle(name, "   总  分  类  账   "); err != nil {
 		return "", false, err
 	}
 	return name, true, nil
 }
 
-// writeGLTitle 写入总分类账的标题区（2 行）、列标题和列宽。
+// writeLedgerTitle 写入总分类账/独立明细账的标题区（2 行）、列标题和列宽。
+// title 为页首大标题文字（GL="总  分  类  账"，独立明细账="明  细  账"）；
+// 会计科目名从 sheet 名按前缀剥离取得。
 //
 // 行结构：
 //   Row 1: 总    分    类    账（居中，绿色+双下划线）| 分第 n 页（"分第"/"页"绿色，数字红色+绿色虚线下划线）
@@ -128,8 +130,8 @@ func (wb *Workbook) ensureGLSheet(account string) (string, bool, error) {
 //   Row 4: 年（合并两列）│凭证号│摘要│借方金额│贷方金额│方向│余额
 //   Row 5: 月│日
 
-func (wb *Workbook) writeGLTitle(sheet string) error {
-	account := sheet[len(sheetPrefixGL):]
+func (wb *Workbook) writeLedgerTitle(sheet, title string) error {
+	account := strings.TrimPrefix(strings.TrimPrefix(sheet, sheetPrefixGL), sheetPrefixDetail)
 	lay := layout.GLComputeLayout(layout.DefaultGLSpec())
 
 	darkGreen := "006100"
@@ -139,7 +141,7 @@ func (wb *Workbook) writeGLTitle(sheet string) error {
 	tl := cellName(lay.TitleColLeft, lay.TitleRow+1)
 	tr := cellName(lay.TitleColRight, lay.TitleRow+1)
 	wb.File.MergeCell(sheet, tl, tr)
-	wb.File.SetCellValue(sheet, tl, "   总  分  类  账   ")
+	wb.File.SetCellValue(sheet, tl, title)
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
@@ -574,7 +576,13 @@ func (wb *Workbook) appendToGLSheet(account string, entries []voucher.Entry, ini
 	if err != nil {
 		return err
 	}
+	return wb.appendToLedgerSheetBody(sheet, account, isNew, entries, initial)
+}
 
+// appendToLedgerSheetBody 追加分录共享本体（GL 叶子页与独立明细账页同构）：
+// 期初行（新建/跨年延续/调整额）、翻页（过次页/承前页/页头）、逐行分录与样式。
+// sheet 名由入口决定（sheetNameGL / sheetNameDetail），页首标题由 writePageHeader 按前缀切换。
+func (wb *Workbook) appendToLedgerSheetBody(sheet, account string, isNew bool, entries []voucher.Entry, initial int64) error {
 	lay := glLayout()
 
 	// 计算页码：从文件"过次页"标签数（含模板和真断页）
@@ -972,11 +980,17 @@ func (wb *Workbook) writePageHeader(sheet string, row int, pageNum int, account 
 	darkGreen := "006100"
 	sealRed := "CC0000"
 
+	// 页首大标题按账页类型切换（GL 叶子/合并页="总 分 类 账"，独立明细账="明 细 账"）
+	pageTitle := "   总  分  类  账   "
+	if strings.HasPrefix(sheet, sheetPrefixDetail) {
+		pageTitle = "   明  细  账   "
+	}
+
 	// Row N+0: 总    分    类    账（居中）| 分第 n 页（"分第"/"页"绿色，数字红色+绿色虚线下划线）
 	tl := cellName(lay.TitleColLeft+colOffset, row)
 	tr := cellName(lay.TitleColRight+colOffset, row)
 	wb.File.MergeCell(sheet, tl, tr)
-	wb.File.SetCellValue(sheet, tl, "   总  分  类  账   ")
+	wb.File.SetCellValue(sheet, tl, pageTitle)
 	titleStyle, _ := wb.File.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 14, Color: darkGreen, Underline: "double"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
@@ -1300,6 +1314,10 @@ func (wb *Workbook) finalizeGLSheet(sheet string) error {
 func (wb *Workbook) finalizeAllGLSheets() error {
 	lay := glLayout()
 	for _, sheet := range wb.File.GetSheetList() {
+		// 仅 GL 前缀（含合并 GL）：GL 页末补齐是 GL 坐标系逻辑，绝不可跑到
+		// 独立明细账页（明细账-，ML 家族）上——曾因前缀扩展把 GL 式过次页/
+		// 摘要样式写进 ML 式页子造成边框错乱。独立页的页末补齐归 ML 家族
+		//（月结末尾 / 仅期初时 padMLPage）。
 		if !strings.HasPrefix(sheet, sheetPrefixGL) {
 			continue
 		}
@@ -1427,6 +1445,7 @@ func (wb *Workbook) finalizeAllGLSheets() error {
 		}
 	}
 	// 摘要列数据行：9号加粗+自动换行+左对齐（最后统一应用，保留边框）
+	// 仅 GL 前缀：GL 坐标系的摘要列样式不可跑到独立明细账页（ML 家族）上。
 	for _, s := range wb.File.GetSheetList() {
 		if !strings.HasPrefix(s, sheetPrefixGL) {
 			continue

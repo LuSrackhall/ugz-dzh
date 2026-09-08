@@ -56,6 +56,16 @@ func TransformToPrint(viewPath, printPath string) error {
 			if len(rects) > 0 {
 				pending[sheet] = rects
 			}
+		case strings.HasPrefix(sheet, sheetPrefixDetail):
+			// 明细科目独立账页（ML 家族分离形态，ML 样式多栏式）：走 ML 变换（11/10 列拆位）
+			printSheetType = "ml"
+			rects, err := transformMLSheet(f, sheet)
+			if err != nil {
+				return fmt.Errorf("变换独立明细账 %s: %w", sheet, err)
+			}
+			if len(rects) > 0 {
+				pending[sheet] = rects
+			}
 		case strings.HasPrefix(sheet, sheetPrefixML):
 			printSheetType = "ml"
 			rects, err := transformMLSheet(f, sheet)

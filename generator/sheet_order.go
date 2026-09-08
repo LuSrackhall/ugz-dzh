@@ -48,9 +48,10 @@ func (wb *Workbook) reorderSubjectSheets() {
 	}
 
 	const (
-		sectionGL    = 0 // 总分类账叶子账页
-		sectionMerge = 1 // 合并总账账页（与叶子 GL 同名前缀，按 MergeGLAccounts 区分）
-		sectionML    = 2 // 多科目明细账账页
+		sectionGL     = 0 // 总分类账叶子账页
+		sectionMerge  = 1 // 合并总账账页（与叶子 GL 同名前缀，按 MergeGLAccounts 区分）
+		sectionML     = 2 // 多科目明细账账页（默认合并）
+		sectionDetail = 3 // 明细科目独立账页（ML 家族分离形态，明细账独立科目）
 	)
 	rankOfKey := func(key string) int {
 		if r, ok := rank[key]; ok {
@@ -96,6 +97,9 @@ func (wb *Workbook) reorderSubjectSheets() {
 				sec = sectionMerge
 			}
 			slots = append(slots, slot{name: name, section: sec, rankVal: rankOfKey(key)})
+		case strings.HasPrefix(name, sheetPrefixDetail):
+			key := strings.TrimPrefix(name, sheetPrefixDetail)
+			slots = append(slots, slot{name: name, section: sectionDetail, rankVal: rankOfKey(key)})
 		case strings.HasPrefix(name, sheetPrefixML):
 			key := strings.TrimPrefix(name, sheetPrefixML)
 			slots = append(slots, slot{name: name, section: sectionML, rankVal: rankOfKey(key)})

@@ -51,6 +51,34 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		}
 	}
 
+	// 明细账独立科目——存量清理：名单移除后删除孤儿独立账页（对仗 GL 忽略科目清理，
+	// 使配置变更对存量账本收敛）
+	standalone := make(map[string]bool)
+	for _, d := range cfg.Settings.DetailStandalone {
+		if d != "" {
+			standalone[d] = true
+		}
+	}
+	// 明细账独立科目不得是合并总账父级（父级是总账科目非明细，对仗 D1a 语义一致性）
+	for _, d := range cfg.Settings.DetailStandalone {
+		if glMergeSet[d] {
+			return fmt.Errorf("科目 %s 配置为合并总账科目，不能同时配置为明细账独立科目", d)
+		}
+	}
+	var detailSheets []string
+	for _, s := range wb.File.GetSheetList() {
+		if strings.HasPrefix(s, sheetPrefixDetail) {
+			detailSheets = append(detailSheets, s)
+		}
+	}
+	for _, s := range detailSheets {
+		if !standalone[strings.TrimPrefix(s, sheetPrefixDetail)] {
+			if err := wb.File.DeleteSheet(s); err != nil {
+				return fmt.Errorf("删除孤儿独立明细账 sheet %s: %w", s, err)
+			}
+		}
+	}
+
 	// 第三轮审查 D1a：合并总账科目禁止直接记账（无明细分录）——
 	// 否则 GL 与 MergeGL 共用同名 sheet 月结两遍、期初被合并视图污染。
 	for _, general := range cfg.Settings.MergeGLAccounts {
@@ -163,9 +191,14 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("追加多科目明细账: %w", err)
 	}
 
+	// 7.1 追加分录到明细科目独立账页（明细账独立科目；GL 叶子页照常，加法路由）
+	if err := wb.AppendDetailLedgerEntries(entries, initials); err != nil {
+		return fmt.Errorf("追加独立明细账: %w", err)
+	}
+
 	// 8. 计算当月活动量
 	activity := ComputeActivity(entries)
-	changedSheets := CollectChangedSheets(entries)
+	changedSheets := CollectChangedSheets(entries, wb.detailStandaloneSet())
 
 	// 同时收集多科目明细账 Sheet（排除已忽略科目）
 	mlSuppress := make(map[string]bool)

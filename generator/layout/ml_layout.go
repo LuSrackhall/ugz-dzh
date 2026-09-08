@@ -35,7 +35,7 @@ type MLLayout struct {
 	BackColumns  []MLColumnPos // 左半：基础7列 + 明细1~4
 	FrontColumns []MLColumnPos // 右半：明细5~14
 
-	BindingLeftCols  int // 2
+	BindingLeftCols  int // 1（Back 书口非装订，最左 1 列；ml_layout.go:120 赋值）
 	BackStartCol     int // 左半起始列（Back 区）
 	PageGapStartCol  int // 间隙列
 	FrontStartCol    int // 右半起始列（Front 区）

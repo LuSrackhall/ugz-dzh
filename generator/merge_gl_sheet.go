@@ -132,7 +132,7 @@ func (wb *Workbook) ensureMergeGLSheet(general string) (string, error) {
 	}
 	wb.File.SetActiveSheet(idx)
 
-	if err := wb.writeGLTitle(name); err != nil {
+	if err := wb.writeLedgerTitle(name, "   总  分  类  账   "); err != nil {
 		return "", err
 	}
 	return name, nil

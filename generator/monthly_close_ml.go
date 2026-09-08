@@ -40,11 +40,47 @@ func (wb *Workbook) WriteMLMonthClosings(
 		g.entries = append(g.entries, e)
 	}
 
-	for general, g := range groups {
-		sheet := sheetNameML(general)
-		if !changedSheets[sheet] {
+	// 独立明细账页分组（明细账独立科目，叶子全路径口径；ML 家族分离形态）
+	detailGroups := make(map[string]*mlClosing)
+	for _, e := range entries {
+		path := e.GeneralAccount
+		if e.DetailAccount != "" {
+			path += "-" + e.DetailAccount
+		}
+		if !wb.detailStandalone(path) {
 			continue
 		}
+		g, ok := detailGroups[path]
+		if !ok {
+			g = &mlClosing{}
+			detailGroups[path] = g
+		}
+		g.entries = append(g.entries, e)
+	}
+
+	// 目标页序列：合并 ML 页（照旧）+ 独立明细账页（明细列空；专职月结，
+	// 对仗 WriteMergeGLClosings 对合并 GL 页的分工）
+	type mlClosingTarget struct {
+		sheet, label string
+		entries      []voucher.Entry
+	}
+	var targets []mlClosingTarget
+	for general, g := range groups {
+		sheet := sheetNameML(general)
+		if changedSheets[sheet] {
+			targets = append(targets, mlClosingTarget{sheet: sheet, label: general, entries: g.entries})
+		}
+	}
+	for path, g := range detailGroups {
+		sheet := sheetNameDetail(path)
+		if changedSheets[sheet] {
+			targets = append(targets, mlClosingTarget{sheet: sheet, label: path, entries: g.entries})
+		}
+	}
+
+	for _, t := range targets {
+		general, sheet := t.label, t.sheet
+		g := &mlClosing{entries: t.entries}
 
 		detailIdx, details, err := wb.readMLDetailHeaders(sheet)
 		if err != nil {
@@ -275,14 +311,19 @@ func (wb *Workbook) WriteMLMonthClosings(
 		return nil
 }
 
-// FinalizeMLPages 补齐所有多科目明细账 Sheet 的最后一页。
+// FinalizeMLPages 补齐所有多科目明细账与独立明细账页的最后一页。
 // 每页固定20数据行+1过次页行，数据不满时用空行补齐。
 func (wb *Workbook) FinalizeMLPages() {
 	for _, name := range wb.File.GetSheetList() {
-		if len(name) < len(sheetPrefixML) || name[:len(sheetPrefixML)] != sheetPrefixML {
+		isML := len(name) >= len(sheetPrefixML) && name[:len(sheetPrefixML)] == sheetPrefixML
+		isDetail := len(name) >= len(sheetPrefixDetail) && name[:len(sheetPrefixDetail)] == sheetPrefixDetail
+		if !isML && !isDetail {
 			continue
 		}
-		general := name[len(sheetPrefixML):]
+		general := ""
+		if isML {
+			general = name[len(sheetPrefixML):]
+		}
 		wb.padMLPage(name, general)
 	}
 }

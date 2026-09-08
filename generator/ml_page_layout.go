@@ -30,7 +30,7 @@ func setMLSheetPageLayout(f *excelize.File) {
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	for _, sheet := range f.GetSheetList() {
-		if !strings.HasPrefix(sheet, sheetPrefixML) {
+		if !strings.HasPrefix(sheet, sheetPrefixML) && !strings.HasPrefix(sheet, sheetPrefixDetail) {
 			continue
 		}
 		// 固定缩放 74%：关闭 FitToPage 与 FitToWidth/Height，缩放不再每次打开重算

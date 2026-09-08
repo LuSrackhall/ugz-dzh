@@ -108,6 +108,9 @@ func setAllSheetPageLayout(f *excelize.File) {
 		if len(sheet) >= len(sheetPrefixML) && sheet[:len(sheetPrefixML)] == sheetPrefixML {
 			continue // ML sheet 由 setMLSheetPageLayout 单独处理
 		}
+		if len(sheet) >= len(sheetPrefixDetail) && sheet[:len(sheetPrefixDetail)] == sheetPrefixDetail {
+			continue // 独立明细账页（ML 家族分离形态，ML 样式）由 setMLSheetPageLayout 单独处理
+		}
 		if len(sheet) >= len(sheetPrefixGL) && sheet[:len(sheetPrefixGL)] == sheetPrefixGL {
 			// GL（含合并 GL）：B5 横向、固定缩放 74%、边距 0、显式分页
 			paperSize := 13 // B5 (JIS)
@@ -247,10 +250,11 @@ func (wb *Workbook) ExtractLastMonthFinals() (map[string]int64, error) {
 
 // sheet naming constants
 const (
-	sheetPrefixGL  = "总分类账-"
-	sheetPrefixML  = "多科目明细账-"
-	pageBreakLabel = "过    次    页"
-	periodEndLabel = "期末余额"
+	sheetPrefixGL     = "总分类账-"
+	sheetPrefixML     = "多科目明细账-"
+	sheetPrefixDetail = "明细账-"
+	pageBreakLabel    = "过    次    页"
+	periodEndLabel    = "期末余额"
 )
 
 const pageSize = 20
@@ -317,6 +321,34 @@ func sheetNameGL(account string) string {
 // sheetNameML 返回多科目明细账 Sheet 名称。
 func sheetNameML(general string) string {
 	return sheetPrefixML + general
+}
+
+// sheetNameDetail 返回明细科目独立账页 Sheet 名称（全局设置.明细账独立科目）。
+func sheetNameDetail(account string) string {
+	return sheetPrefixDetail + account
+}
+
+// detailStandalone 报告科目（叶子全路径）是否配置为独立明细账页。
+// 名单项与科目全路径精确相等——明细科目是叶子无子树，且科目路径本身可含连字符
+// （如 收益分配-未分配收益），前缀/祖先段匹配会引入歧义。
+func (wb *Workbook) detailStandalone(account string) bool {
+	for _, s := range wb.Config.Settings.DetailStandalone {
+		if s != "" && account == s {
+			return true
+		}
+	}
+	return false
+}
+
+// detailStandaloneSet 返回明细账独立科目集合（供按分录批量路由使用）。
+func (wb *Workbook) detailStandaloneSet() map[string]bool {
+	set := make(map[string]bool, len(wb.Config.Settings.DetailStandalone))
+	for _, s := range wb.Config.Settings.DetailStandalone {
+		if s != "" {
+			set[s] = true
+		}
+	}
+	return set
 }
 
 // entryMonth 返回分录的月份标识。

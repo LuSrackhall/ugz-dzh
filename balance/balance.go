@@ -30,7 +30,8 @@ type GlobalSettings struct {
 	MergeGLAccounts    []string          `json:"合并总账科目"`
 	GLSuppressAccounts []string          `json:"总分类账忽略科目"`
 	MLSuppressAccounts []string          `json:"多科目明细账忽略科目"`
-	ClosingMonth       string            `json:"结账月"` // Change 11：已结账的最后月份（<=该月拒绝无 -f 生成）
+	DetailStandalone   []string          `json:"明细账独立科目,omitempty"` // 明细科目独立账页名单（叶子全路径，精确匹配）
+	ClosingMonth       string            `json:"结账月"`               // Change 11：已结账的最后月份（<=该月拒绝无 -f 生成）
 }
 
 // AccountNode 科目树中的一个节点（叶子科目）。
@@ -369,6 +370,7 @@ func UpdateBalancesAfterGenerate(cfg *GlobalConfig, month string, activity map[s
 //     按铁律三（JSON 是余额唯一权威源）采信 JSON 并经 warn 告警，使 -f 重建自愈
 //     而非从陈旧账页链复发（下游 0.9.0 实测：冲平科目静置重现后期初被重置回建账期初）。
 //  3. 仅单源存在时取该源；两源皆无 → 0。
+//
 // 返回值 warn 非空表示发生双源冲突（已采信 JSON，调用方应打印告警）。
 func GetInitBalanceForGenerate(cfg *GlobalConfig, account, month string, prevMonthEnd map[string]int64) (int64, string) {
 	// 1. 期初调整额只锚定建账月（启动月）：生成启动月时直取，其余月份一律续链

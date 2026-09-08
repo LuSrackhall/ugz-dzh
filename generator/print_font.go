@@ -108,7 +108,7 @@ func printColToView(p int, cm colMap) int {
 	return 0
 }
 
-// isLedgerSheet 判断是否总分类账/多科目明细账 sheet。
+// isLedgerSheet 判断是否总分类账/独立明细账/多科目明细账 sheet。
 func isLedgerSheet(name string) bool {
-	return strings.HasPrefix(name, sheetPrefixGL) || strings.HasPrefix(name, sheetPrefixML)
+	return strings.HasPrefix(name, sheetPrefixGL) || strings.HasPrefix(name, sheetPrefixDetail) || strings.HasPrefix(name, sheetPrefixML)
 }

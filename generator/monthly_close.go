@@ -22,8 +22,13 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 		mergeSet[g] = true
 	}
 
-	for account, act := range activity {
-		// 合并总账父级跳过（月结由 WriteMergeGLClosings 专职）
+	// 目标账页序列：GL 叶子页照旧（明细账独立科目不排除——GL 与独立明细账互不影响；
+	// 独立明细账页的月结由 WriteMLMonthClosings 专职，ML 家族分离形态）。
+	type closingTarget struct {
+		sheet, account string
+	}
+	var targets []closingTarget
+	for account := range activity {
 		if mergeSet[account] {
 			continue
 		}
@@ -31,9 +36,14 @@ func (wb *Workbook) WriteMonthClosings(activity map[string]Activity, ytdDebit, y
 			continue // 总分类账忽略科目：分录未入账页，月结也不写（sheet 可能不存在）
 		}
 		sheet := sheetNameGL(account)
-		if !changedSheets[sheet] {
-			continue
+		if changedSheets[sheet] {
+			targets = append(targets, closingTarget{sheet: sheet, account: account})
 		}
+	}
+
+	for _, t := range targets {
+		account, sheet := t.account, t.sheet
+		act := activity[account]
 
 		pageNum := wb.getPageNum(sheet)
 		row, err := wb.nextDataRowAfterBreak(sheet)
@@ -322,7 +332,8 @@ func ComputeActivity(entries []voucher.Entry) map[string]Activity {
 }
 
 // CollectChangedSheets 返回当期有分录变动的 Sheet 名称集合。
-func CollectChangedSheets(entries []voucher.Entry) map[string]bool {
+// standalone 命中名单的科目同时标记其独立明细账页（明细账独立科目）。
+func CollectChangedSheets(entries []voucher.Entry, standalone map[string]bool) map[string]bool {
 	sheets := make(map[string]bool)
 	for _, e := range entries {
 		path := e.GeneralAccount
@@ -330,6 +341,9 @@ func CollectChangedSheets(entries []voucher.Entry) map[string]bool {
 			path += "-" + e.DetailAccount
 		}
 		sheets[sheetNameGL(path)] = true
+		if standalone[path] {
+			sheets[sheetNameDetail(path)] = true
+		}
 	}
 	return sheets
 }

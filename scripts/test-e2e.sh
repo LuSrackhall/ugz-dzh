@@ -189,6 +189,36 @@ for m in 01 02 03 04 05 06; do
     echo "FAIL"; "$LEDGER" generate -v "test/e2e/test_data/2026_$m" -o "$OUT" -f; exit 1; }
 done
 
+echo "=== 5.5 明细账独立科目验证（公益支出-补助费用 分离形态）==="
+python3 - "$OUT/2026/2026-06.xlsx" "$OUT/2026/2026.json" <<'PYEOF'
+import json, sys
+from openpyxl import load_workbook
+xlsx, json_path = sys.argv[1], sys.argv[2]
+wb = load_workbook(xlsx)
+
+detail, merged, gl_leaf = '明细账-公益支出-补助费用', '多科目明细账-公益支出', '总分类账-公益支出-补助费用'
+# 1) 独立明细账页在位（ML 分离形态）
+assert detail in wb.sheetnames, f'FAIL: 独立明细账页缺失 {detail}'
+# 2) GL 叶子页照常（加法路由，互不影响）
+assert gl_leaf in wb.sheetnames, 'FAIL: GL 叶子页不应被排除'
+# 3) 合并 ML 明细列收缩：全表明细列区域不得出现"补助费用"列头
+ml = wb[merged]
+hits = [(c.row, c.column) for row in ml.iter_rows(min_col=12, max_col=28) for c in row
+        if c.value and str(c.value).strip() == '补助费用']
+assert not hits, f'FAIL: 合并 ML 仍含 补助费用 列 {hits[:3]}'
+# 4) 独立页期末余额 = JSON 权威链（拆的是页不是账）
+ws = wb[detail]
+end_bal = None
+for r in range(1, ws.max_row + 1):
+    if str(ws.cell(row=r, column=6).value or '').strip() == '期末余额':
+        end_bal = ws.cell(row=r, column=10).value
+with open(json_path) as f:
+    final = json.load(f)['科目树']['公益支出-补助费用']['余额']['2026-06']['期末'] / 100  # 分 → 元
+assert end_bal is not None, 'FAIL: 独立页无期末余额行'
+assert abs(float(end_bal) - float(final)) < 0.01, f'FAIL: 独立页期末 {end_bal} != JSON {final}'
+print(f'  PASS: 独立页在位 | GL 叶子页照常 | 合并 ML 列已收缩 | 期末 {end_bal} = JSON 权威链 {final}')
+PYEOF
+
 echo ""
 if [ "$SKIP_TEST" = false ]; then
   echo "=== 6. 测试 ==="

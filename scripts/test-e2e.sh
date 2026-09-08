@@ -56,6 +56,10 @@ ML_SUPPRESS='[
   "其他流动负债", "其他非流动资产", "其他非流动负债"
 ]'
 
+# 明细科目独立账页（ML 家族分离形态）：公益支出-补助费用 单独立页，
+# 验证 期初行/跨月续写/月结/翻页/打印拆位 与 合并 ML 列收缩。
+DETAIL_STANDALONE='["公益支出-补助费用"]'
+
 SKIP_TEST=false
 KEEP_JSON=false
 for arg in "$@"; do
@@ -134,6 +138,7 @@ with open('$OUT/2025/2025.json') as f:
     cfg = json.load(f)
 cfg.setdefault('全局设置', {})['多科目明细账忽略科目'] = $ML_SUPPRESS
 cfg.setdefault('全局设置', {})['合并总账科目'] = ['应收款', '应付款', '内部往来', '固定资产']
+cfg.setdefault('全局设置', {})['明细账独立科目'] = $DETAIL_STANDALONE
 with open('$OUT/2025/2025.json', 'w') as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)
 print('  MLSuppressAccounts 已写入')

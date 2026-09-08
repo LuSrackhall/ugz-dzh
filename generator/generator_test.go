@@ -197,7 +197,7 @@ func TestCollectChangedSheets(t *testing.T) {
 		{Date: "2026-01-05", Summary: "test", GeneralAccount: "管理费用", DetailAccount: "办公费", DebitCents: 100},
 		{Date: "2026-01-10", Summary: "test", GeneralAccount: "库存现金", CreditCents: 100},
 	}
-	sheets := CollectChangedSheets(entries, map[string]bool{"管理费用-办公费": true})
+	sheets := CollectChangedSheets(entries, func(path string) bool { return path == "管理费用-办公费" })
 	if !sheets["总分类账-管理费用-办公费"] {
 		t.Error("expected 总分类账-管理费用-办公费 to be changed")
 	}
@@ -205,10 +205,10 @@ func TestCollectChangedSheets(t *testing.T) {
 		t.Error("expected 总分类账-库存现金 to be changed")
 	}
 	if !sheets["明细账-管理费用-办公费"] {
-		t.Error("expected 明细账-管理费用-办公费 to be changed (standalone)")
+		t.Error("expected 明细账-管理费用-办公费 to be changed (split)")
 	}
 	if sheets["明细账-库存现金"] {
-		t.Error("expected 明细账-库存现金 NOT to be changed (not standalone)")
+		t.Error("expected 明细账-库存现金 NOT to be changed (not split)")
 	}
 }
 

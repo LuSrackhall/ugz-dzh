@@ -332,8 +332,8 @@ func ComputeActivity(entries []voucher.Entry) map[string]Activity {
 }
 
 // CollectChangedSheets 返回当期有分录变动的 Sheet 名称集合。
-// standalone 命中名单的科目同时标记其独立明细账页（明细账独立科目）。
-func CollectChangedSheets(entries []voucher.Entry, standalone map[string]bool) map[string]bool {
+// split 为分离明细账科目判定（可 nil）：命中科目同时标记其分离明细账页。
+func CollectChangedSheets(entries []voucher.Entry, split func(string) bool) map[string]bool {
 	sheets := make(map[string]bool)
 	for _, e := range entries {
 		path := e.GeneralAccount
@@ -341,7 +341,7 @@ func CollectChangedSheets(entries []voucher.Entry, standalone map[string]bool) m
 			path += "-" + e.DetailAccount
 		}
 		sheets[sheetNameGL(path)] = true
-		if standalone[path] {
+		if split != nil && split(path) {
 			sheets[sheetNameDetail(path)] = true
 		}
 	}

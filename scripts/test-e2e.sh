@@ -56,9 +56,10 @@ ML_SUPPRESS='[
   "其他流动负债", "其他非流动资产", "其他非流动负债"
 ]'
 
-# 明细科目独立账页（ML 家族分离形态）：公益支出-补助费用 单独立页，
-# 验证 期初行/跨月续写/月结/翻页/打印拆位 与 合并 ML 列收缩。
-DETAIL_STANDALONE='["公益支出-补助费用"]'
+# 分离明细账科目（ML 家族分离形态）：公益支出 整体配置（总账名），
+# 其下所有明细各自分离成独立账页——验证 期初行/跨月续写/月结/翻页/打印拆位，
+# 且合并 ML 明细列照常保留（互不冲突共存）。
+DETAIL_STANDALONE='["公益支出"]'
 
 SKIP_TEST=false
 KEEP_JSON=false
@@ -138,7 +139,7 @@ with open('$OUT/2025/2025.json') as f:
     cfg = json.load(f)
 cfg.setdefault('全局设置', {})['多科目明细账忽略科目'] = $ML_SUPPRESS
 cfg.setdefault('全局设置', {})['合并总账科目'] = ['应收款', '应付款', '内部往来', '固定资产']
-cfg.setdefault('全局设置', {})['明细账独立科目'] = $DETAIL_STANDALONE
+cfg.setdefault('全局设置', {})['分离明细账科目'] = $DETAIL_STANDALONE
 with open('$OUT/2025/2025.json', 'w') as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)
 print('  MLSuppressAccounts 已写入')
@@ -189,7 +190,7 @@ for m in 01 02 03 04 05 06; do
     echo "FAIL"; "$LEDGER" generate -v "test/e2e/test_data/2026_$m" -o "$OUT" -f; exit 1; }
 done
 
-echo "=== 5.5 明细账独立科目验证（公益支出-补助费用 分离形态）==="
+echo "=== 5.5 分离明细账科目验证（公益支出 ML 分离，总账名配置）==="
 python3 - "$OUT/2026/2026-06.xlsx" "$OUT/2026/2026.json" <<'PYEOF'
 import json, sys
 from openpyxl import load_workbook
@@ -197,15 +198,17 @@ xlsx, json_path = sys.argv[1], sys.argv[2]
 wb = load_workbook(xlsx)
 
 detail, merged, gl_leaf = '明细账-公益支出-补助费用', '多科目明细账-公益支出', '总分类账-公益支出-补助费用'
-# 1) 独立明细账页在位（ML 分离形态）
-assert detail in wb.sheetnames, f'FAIL: 独立明细账页缺失 {detail}'
+# 1) 分离明细账页在位（总账名配置 → 其下所有明细各一页）
+assert detail in wb.sheetnames, f'FAIL: 分离明细账页缺失 {detail}'
+split_pages = [s for s in wb.sheetnames if s.startswith('明细账-公益支出-')]
+assert len(split_pages) >= 5, f'FAIL: 公益支出下分离页过少 ({len(split_pages)}): {split_pages}'
 # 2) GL 叶子页照常（加法路由，互不影响）
 assert gl_leaf in wb.sheetnames, 'FAIL: GL 叶子页不应被排除'
-# 3) 合并 ML 明细列收缩：全表明细列区域不得出现"补助费用"列头
+# 3) 合并 ML 明细列照常保留（互不冲突共存，不删减）
 ml = wb[merged]
-hits = [(c.row, c.column) for row in ml.iter_rows(min_col=12, max_col=28) for c in row
-        if c.value and str(c.value).strip() == '补助费用']
-assert not hits, f'FAIL: 合并 ML 仍含 补助费用 列 {hits[:3]}'
+kept = any(c.value and str(c.value).strip() == '补助费用'
+           for row in ml.iter_rows(min_col=12, max_col=28) for c in row)
+assert kept, 'FAIL: 合并 ML 应保留 补助费用 列（互不冲突）'
 # 4) 独立页期末余额 = JSON 权威链（拆的是页不是账）
 ws = wb[detail]
 end_bal = None
@@ -214,9 +217,9 @@ for r in range(1, ws.max_row + 1):
         end_bal = ws.cell(row=r, column=10).value
 with open(json_path) as f:
     final = json.load(f)['科目树']['公益支出-补助费用']['余额']['2026-06']['期末'] / 100  # 分 → 元
-assert end_bal is not None, 'FAIL: 独立页无期末余额行'
-assert abs(float(end_bal) - float(final)) < 0.01, f'FAIL: 独立页期末 {end_bal} != JSON {final}'
-print(f'  PASS: 独立页在位 | GL 叶子页照常 | 合并 ML 列已收缩 | 期末 {end_bal} = JSON 权威链 {final}')
+assert end_bal is not None, 'FAIL: 分离页无期末余额行'
+assert abs(float(end_bal) - float(final)) < 0.01, f'FAIL: 分离页期末 {end_bal} != JSON {final}'
+print(f'  PASS: 公益支出 {len(split_pages)} 个明细全部分离 | GL 叶子页照常 | 合并 ML 列保留 | 补助费用期末 {end_bal} = JSON 权威链 {final}')
 PYEOF
 
 echo ""

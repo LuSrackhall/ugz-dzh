@@ -13,7 +13,7 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// TestDetailStandaloneLedgerFlow 明细科目独立账页全流程（明细账独立科目）：
+// TestDetailStandaloneLedgerFlow 分离明细账页全流程（分离明细账科目，总账名配置）：
 // 建账（银行存款-工行 100,000 / 实收资本 100,000）→ 1 月 名单明细 办公费 300 +
 // 非名单明细 差旅费 200 → generate → 断言：
 //   - 独立页 明细账-管理费用-办公费 存在且分录/月结/余额链正确；
@@ -89,7 +89,7 @@ func TestDetailStandaloneLedgerFlow(t *testing.T) {
     "合并总账科目": [],
     "总分类账忽略科目": [],
     "多科目明细账忽略科目": [],
-    "明细账独立科目": ["管理费用-办公费"],
+    "分离明细账科目": ["管理费用"],
     "结账月": ""
   },
   "科目树": {
@@ -160,21 +160,17 @@ func TestDetailStandaloneLedgerFlow(t *testing.T) {
 		t.Errorf("GL 叶子页必须照常存在（加法路由）, sheets=%v", sheets)
 	}
 
-	// 2) 合并 ML 列收缩：办公费列不在、差旅费列在
+	// 2) 合并 ML 明细列照常保留（互不冲突共存，对仗 GL 叶子页与合并页共存）
 	mlSheet := "多科目明细账-管理费用"
 	if !has(mlSheet) {
 		t.Fatalf("合并 ML 页缺失, sheets=%v", sheets)
 	}
 	mlRows, _ := f.GetRows(mlSheet)
-	joined := ""
-	for _, r := range mlRows {
-		joined += strings.Join(r, "|") + "\n"
-	}
-	if strings.Contains(joined, "\t办公费") || hasMLColumnLabel(mlRows, "办公费") {
-		t.Errorf("合并 ML 页不应含名单明细列 办公费")
+	if !hasMLColumnLabel(mlRows, "办公费") {
+		t.Errorf("合并 ML 页应保留 办公费 列（互不冲突）")
 	}
 	if !hasMLColumnLabel(mlRows, "差旅费") {
-		t.Errorf("合并 ML 页应保留非名单列 差旅费")
+		t.Errorf("合并 ML 页应保留 差旅费 列")
 	}
 
 	// 3) 独立页分录 + 月结：分录 300；本月合计 300；期末余额 300（借）

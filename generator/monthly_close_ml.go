@@ -40,14 +40,14 @@ func (wb *Workbook) WriteMLMonthClosings(
 		g.entries = append(g.entries, e)
 	}
 
-	// 独立明细账页分组（明细账独立科目，叶子全路径口径；ML 家族分离形态）
+	// 独立明细账页分组（分离明细账科目，叶子全路径口径；ML 家族分离形态）
 	detailGroups := make(map[string]*mlClosing)
 	for _, e := range entries {
 		path := e.GeneralAccount
 		if e.DetailAccount != "" {
 			path += "-" + e.DetailAccount
 		}
-		if !wb.detailStandalone(path) {
+		if !wb.detailSplit(path) {
 			continue
 		}
 		g, ok := detailGroups[path]

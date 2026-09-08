@@ -328,27 +328,32 @@ func sheetNameDetail(account string) string {
 	return sheetPrefixDetail + account
 }
 
-// detailStandalone 报告科目（叶子全路径）是否配置为独立明细账页。
-// 名单项与科目全路径精确相等——明细科目是叶子无子树，且科目路径本身可含连字符
-// （如 收益分配-未分配收益），前缀/祖先段匹配会引入歧义。
-func (wb *Workbook) detailStandalone(account string) bool {
-	for _, s := range wb.Config.Settings.DetailStandalone {
-		if s != "" && account == s {
+// detailSplit 报告科目（叶子全路径）是否配置为分离明细账页（ML 家族分离形态）。
+// 条目双匹配（对仗 总分类账忽略科目 先例）：
+//   - 总账科目名（如 "公益支出"）→ 其下所有明细科目各自分离成独立账页；
+//   - 叶子全路径（如 "公益支出-补助费用"）→ 单个明细分离。
+//
+// 仅带明细段的路径（叶子）可命中——总账直记路径（无明细段）不建分离页。
+func (wb *Workbook) detailSplit(account string) bool {
+	i := strings.IndexByte(account, '-')
+	if i <= 0 {
+		return false
+	}
+	general := account[:i]
+	for _, s := range wb.Config.Settings.DetailSplit {
+		if s == "" {
+			continue
+		}
+		if s == account || s == general {
 			return true
 		}
 	}
 	return false
 }
 
-// detailStandaloneSet 返回明细账独立科目集合（供按分录批量路由使用）。
-func (wb *Workbook) detailStandaloneSet() map[string]bool {
-	set := make(map[string]bool, len(wb.Config.Settings.DetailStandalone))
-	for _, s := range wb.Config.Settings.DetailStandalone {
-		if s != "" {
-			set[s] = true
-		}
-	}
-	return set
+// detailSplitSet 返回分离配置集合原样（供按分录批量路由与守卫使用）。
+func (wb *Workbook) detailSplitSet() []string {
+	return wb.Config.Settings.DetailSplit
 }
 
 // entryMonth 返回分录的月份标识。

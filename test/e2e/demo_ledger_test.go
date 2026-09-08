@@ -10,10 +10,10 @@ import (
 )
 
 // TestDemoLedgerStandaloneDetail 守门断言：scripts/test-e2e.sh 生成的演示账套
-// （配置 明细账独立科目=["公益支出-补助费用"]）中，公益支出在 ML 下的分离形态正确：
-//   - 独立明细账页 明细账-公益支出-补助费用 存在且有月结（期末余额行）；
+// （配置 分离明细账科目=["公益支出"]，总账名）中，公益支出在 ML 下的分离形态正确：
+//   - 其下所有有分录的明细各自得到独立明细账页（明细账-公益支出-*）；
 //   - GL 叶子页照常（加法路由，互不影响）；
-//   - 合并 多科目明细账-公益支出 的明细列已收缩（无"补助费用"列头）。
+//   - 合并 多科目明细账-公益支出 明细列照常保留（互不冲突共存）。
 //
 // out/ 由 test-e2e.sh 生成（gitignored）：不存在时 Skip（CI 无产物自动跳过），
 // 本地跑过脚本后 go test ./... 即验证，防回归。
@@ -45,17 +45,32 @@ func TestDemoLedgerStandaloneDetail(t *testing.T) {
 	if !has(glLeaf) {
 		t.Error("GL 叶子页不应被排除（加法路由）")
 	}
-	// 3) 合并 ML 明细列收缩：明细列区域（ML 坐标 GetRows idx 11-27）不得出现"补助费用"列头
+	// 3) 合并 ML 明细列照常保留（互不冲突共存）：补助费用列头仍在
 	mlRows, err := f.GetRows(merged)
 	if err != nil {
 		t.Fatalf("读合并 ML 页: %v", err)
 	}
+	kept := false
 	for _, r := range mlRows {
 		for i := 11; i <= 27 && i < len(r); i++ {
 			if strings.TrimSpace(r[i]) == "补助费用" {
-				t.Errorf("合并 ML 仍含 补助费用 列（GetRows idx %d）", i)
+				kept = true
 			}
 		}
+	}
+	if !kept {
+		t.Error("合并 ML 应保留 补助费用 列（互不冲突，不删减）")
+	}
+	// 4) 总账名配置 → 其下所有有分录的明细各自得到独立页（统计明细账-公益支出-* 页数）
+	sheets := f.GetSheetList()
+	splitPages := 0
+	for _, s := range sheets {
+		if strings.HasPrefix(s, "明细账-公益支出-") {
+			splitPages++
+		}
+	}
+	if splitPages < 5 {
+		t.Errorf("公益支出下应有多个明细分离成页（got %d, sheets=%v）", splitPages, sheets)
 	}
 	// 4) 独立页有月结终行（期末余额），余额为正数格式
 	dRows, err := f.GetRows(detail)

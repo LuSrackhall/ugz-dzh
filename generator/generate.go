@@ -51,18 +51,12 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		}
 	}
 
-	// 明细账独立科目——存量清理：名单移除后删除孤儿独立账页（对仗 GL 忽略科目清理，
-	// 使配置变更对存量账本收敛）
-	standalone := make(map[string]bool)
-	for _, d := range cfg.Settings.DetailStandalone {
-		if d != "" {
-			standalone[d] = true
-		}
-	}
-	// 明细账独立科目不得是合并总账父级（父级是总账科目非明细，对仗 D1a 语义一致性）
-	for _, d := range cfg.Settings.DetailStandalone {
-		if glMergeSet[d] {
-			return fmt.Errorf("科目 %s 配置为合并总账科目，不能同时配置为明细账独立科目", d)
+	// 分离明细账科目——存量清理：配置移除后删除孤儿分离账页（对仗 GL 忽略科目清理，
+	// 使配置变更对存量账本收敛）。页 key=叶子全路径，判定走 detailSplit 双匹配。
+	// 分离明细账科目不得是合并总账父级（父级是总账科目非明细，对仗 D1a 语义一致性）
+	for _, d := range cfg.Settings.DetailSplit {
+		if d != "" && glMergeSet[d] {
+			return fmt.Errorf("科目 %s 配置为合并总账科目，不能同时配置为分离明细账科目", d)
 		}
 	}
 	var detailSheets []string
@@ -72,9 +66,9 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		}
 	}
 	for _, s := range detailSheets {
-		if !standalone[strings.TrimPrefix(s, sheetPrefixDetail)] {
+		if !wb.detailSplit(strings.TrimPrefix(s, sheetPrefixDetail)) {
 			if err := wb.File.DeleteSheet(s); err != nil {
-				return fmt.Errorf("删除孤儿独立明细账 sheet %s: %w", s, err)
+				return fmt.Errorf("删除孤儿分离明细账 sheet %s: %w", s, err)
 			}
 		}
 	}
@@ -198,7 +192,7 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 
 	// 8. 计算当月活动量
 	activity := ComputeActivity(entries)
-	changedSheets := CollectChangedSheets(entries, wb.detailStandaloneSet())
+	changedSheets := CollectChangedSheets(entries, wb.detailSplit)
 
 	// 同时收集多科目明细账 Sheet（排除已忽略科目）
 	mlSuppress := make(map[string]bool)

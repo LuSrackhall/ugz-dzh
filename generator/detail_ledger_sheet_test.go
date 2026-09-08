@@ -15,42 +15,50 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// 独立明细账页（全局设置.明细账独立科目）单元测试。
-// 页面样式与多科目明细账同族（ML 那张多栏式账页纸，明细列自然为空）。
+// 分离明细账页（全局设置.分离明细账科目）单元测试。
+// 页面样式与多科目明细账同族（ML 那张多栏式账页纸，明细列自然为空）；
+// 与合并 ML 页互不冲突共存（对仗 GL 叶子页与合并页共存）。
 
-func TestDetailStandaloneMatch(t *testing.T) {
+func TestDetailSplitMatch(t *testing.T) {
 	wb := &Workbook{Config: &balance.GlobalConfig{}}
-	wb.Config.Settings.DetailStandalone = []string{"管理费用-办公费", "收益分配-未分配收益"}
+	// 条目混合：总账科目名 + 叶子全路径
+	wb.Config.Settings.DetailSplit = []string{"公益支出", "管理费用-办公费"}
 
-	if !wb.detailStandalone("管理费用-办公费") {
-		t.Error("exact path should match")
+	// 总账名命中其下所有明细
+	if !wb.detailSplit("公益支出-补助费用") {
+		t.Error("general entry should split all its details")
 	}
-	if !wb.detailStandalone("收益分配-未分配收益") {
-		t.Error("hyphenated path should match exactly")
+	if !wb.detailSplit("公益支出-其他福利") {
+		t.Error("general entry should split all its details (second)")
 	}
-	// 前缀/祖先段不匹配：精确匹配语义（明细是叶子，路径本身含连字符不能前缀匹配）
-	if wb.detailStandalone("管理费用") {
-		t.Error("general segment must not match")
+	// 叶子全路径精确命中
+	if !wb.detailSplit("管理费用-办公费") {
+		t.Error("exact leaf path should match")
 	}
-	if wb.detailStandalone("管理费用-办公费-子明细") {
-		t.Error("deeper path must not match (no ancestor semantics)")
+	// 未配置总账/未配置明细不命中
+	if wb.detailSplit("管理费用-差旅费") {
+		t.Error("sibling detail of leaf-path entry must not match")
 	}
-	if wb.detailStandalone("办公费") {
-		t.Error("detail-only segment must not match")
+	if wb.detailSplit("银行存款-工行") {
+		t.Error("unrelated account must not match")
+	}
+	// 总账本体（非叶子路径）不命中——分离页只按叶子建
+	if wb.detailSplit("公益支出") {
+		t.Error("general account itself is not a leaf, must not match")
 	}
 
 	// 空名单短路
 	empty := &Workbook{Config: &balance.GlobalConfig{}}
-	if empty.detailStandalone("管理费用-办公费") {
+	if empty.detailSplit("公益支出-补助费用") {
 		t.Error("empty list must never match")
 	}
 }
 
-// TestAppendMLEntriesExcludesStandaloneDetail 验证名单明细从合并 ML 列排除（列收缩），
-// 非名单列正常。
-func TestAppendMLEntriesExcludesStandaloneDetail(t *testing.T) {
+// TestAppendMLEntriesKeepsSplitDetailColumns 验证分离配置下合并 ML 明细列
+// **照常保留**（互不冲突共存，对仗 GL 叶子页与合并页共存）。
+func TestAppendMLEntriesKeepsSplitDetailColumns(t *testing.T) {
 	cfg := &balance.GlobalConfig{}
-	cfg.Settings.DetailStandalone = []string{"管理费用-办公费"}
+	cfg.Settings.DetailSplit = []string{"管理费用"}
 
 	wb := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-03"}
 	entries := []voucher.Entry{
@@ -69,43 +77,19 @@ func TestAppendMLEntriesExcludesStandaloneDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readMLDetailHeaders: %v", err)
 	}
-	if _, ok := detailIdx["办公费"]; ok {
-		t.Errorf("standalone detail 办公费 must be excluded from merged ML columns, got %v", details)
+	if _, ok := detailIdx["办公费"]; !ok {
+		t.Errorf("merged ML must KEEP 办公费 column (no conflict), got %v", details)
 	}
 	if _, ok := detailIdx["差旅费"]; !ok {
-		t.Errorf("non-standalone detail 差旅费 should stay, got %v", details)
+		t.Errorf("merged ML must KEEP 差旅费 column, got %v", details)
 	}
 }
 
-// TestEnsureMLSheetRejectsLegacyStandaloneColumn 验证存量合并页残留名单列时报错提示 -f
-// （列收缩只发生在生成期，历史文件铁律一不动；对仗 detailOrder 冲突先例）。
-func TestEnsureMLSheetRejectsLegacyStandaloneColumn(t *testing.T) {
-	cfg := &balance.GlobalConfig{}
-	cfg.Settings.DetailStandalone = []string{"管理费用-办公费"}
-
-	wb := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-03"}
-	// 预建存量页：名单生效前已写入办公费列
-	if _, _, _, err := wb.ensureMLSheet("管理费用", []string{"办公费", "差旅费"}, nil); err != nil {
-		t.Fatalf("prebuild ensureMLSheet: %v", err)
-	}
-
-	entries := []voucher.Entry{
-		{Date: "2026-03-05", GeneralAccount: "管理费用", DetailAccount: "差旅费", DebitCents: 700},
-	}
-	err := wb.AppendMLEntries(entries, map[string]int64{})
-	if err == nil {
-		t.Fatal("expected error for legacy standalone column, got nil")
-	}
-	if !strings.Contains(err.Error(), "-f 从首月重新生成") {
-		t.Errorf("error should hint -f rebuild, got: %v", err)
-	}
-}
-
-// TestAppendDetailLedgerEntriesBuildsPage 验证独立页生成（ML 样式）：
+// TestAppendDetailLedgerEntriesBuildsPage 验证独立页生成（ML 样式，总账名配置）：
 // 页名/页头科目区/期初行/分录/余额链/明细列全空。
 func TestAppendDetailLedgerEntriesBuildsPage(t *testing.T) {
 	cfg := &balance.GlobalConfig{}
-	cfg.Settings.DetailStandalone = []string{"管理费用-办公费"}
+	cfg.Settings.DetailSplit = []string{"管理费用"} // 总账名：其下所有明细分离
 
 	wb := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-03"}
 	initials := map[string]int64{"管理费用-办公费": 50000}
@@ -152,16 +136,16 @@ func TestAppendDetailLedgerEntriesBuildsPage(t *testing.T) {
 		col := mlDetailCol(lay, i)
 		v, _ := wb.File.GetCellValue(name, mlCellName(col, cfRow+1))
 		if strings.TrimSpace(v) != "" {
-			t.Errorf("detail column %d must be empty on standalone page, got %q", i, v)
+			t.Errorf("detail column %d must be empty on split page, got %q", i, v)
 		}
 	}
 }
 
-// TestAppendDetailLedgerEntriesInitialOnly 验证仅期初无分录的名单科目：
+// TestAppendDetailLedgerEntriesInitialOnly 验证仅期初无分录的命中科目：
 // 1 月建页写期初行；非 1 月无调整额不建页。
 func TestAppendDetailLedgerEntriesInitialOnly(t *testing.T) {
 	cfg := &balance.GlobalConfig{}
-	cfg.Settings.DetailStandalone = []string{"管理费用-办公费"}
+	cfg.Settings.DetailSplit = []string{"管理费用-办公费"}
 
 	// 非 1 月、无调整额：不建页
 	wb := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-03"}
@@ -186,10 +170,10 @@ func TestAppendDetailLedgerEntriesInitialOnly(t *testing.T) {
 	}
 }
 
-// TestWriteMLMonthClosingsStandaloneDetail 验证独立页月结四行（ML 家族专职）落页。
-func TestWriteMLMonthClosingsStandaloneDetail(t *testing.T) {
+// TestWriteMLMonthClosingsSplitDetail 验证分离页月结四行（ML 家族专职）落页。
+func TestWriteMLMonthClosingsSplitDetail(t *testing.T) {
 	cfg := &balance.GlobalConfig{}
-	cfg.Settings.DetailStandalone = []string{"管理费用-办公费"}
+	cfg.Settings.DetailSplit = []string{"管理费用-办公费"}
 
 	wb := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-03"}
 	initials := map[string]int64{"管理费用-办公费": 50000}
@@ -223,28 +207,25 @@ func TestWriteMLMonthClosingsStandaloneDetail(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"本月合计", "本年累计", "期末余额"} {
+	for _, want := range []string{"本月合计", "本季合计", "本年累计", "期末余额"} {
 		if !found[want] {
-			t.Errorf("standalone page missing closing row %q", want)
+			t.Errorf("split page missing closing row %q", want)
 		}
-	}
-	if !found["本季合计"] {
-		t.Error("March is a quarter end, 本季合计 must appear")
 	}
 	// 期末余额 = 500 + 300 = 800
 	if parseTestYuan(endBal) != 800 {
-		t.Errorf("standalone page final balance = %q, want 800", endBal)
+		t.Errorf("split page final balance = %q, want 800", endBal)
 	}
 }
 
-// TestGenerateWorkbookDetailStandalone 全流程（GenerateWorkbook）：
-// 独立页在（ML 样式）、GL 叶子页照常（互不影响）、合并 ML 列收缩、
-// 合并父级进名单报错、名单移除后孤儿页收敛。
-func TestGenerateWorkbookDetailStandalone(t *testing.T) {
+// TestGenerateWorkbookDetailSplit 全流程（GenerateWorkbook，总账名配置）：
+// 其下所有明细各得独立页、GL 叶子页照常（互不影响）、合并 ML 列保留
+// （互不冲突共存）、合并父级进配置报错、配置移除后孤儿页收敛。
+func TestGenerateWorkbookDetailSplit(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "科目余额总览.json")
 
-	writeCfg := func(standalone []string) {
+	writeCfg := func(split []string) {
 		cfg := map[string]any{
 			"全局设置": map[string]any{
 				"启动月":        "2026-01",
@@ -253,7 +234,7 @@ func TestGenerateWorkbookDetailStandalone(t *testing.T) {
 				"合并总账科目":     []string{},
 				"总分类账忽略科目":   []string{},
 				"多科目明细账忽略科目": []string{},
-				"明细账独立科目":    standalone,
+				"分离明细账科目":    split,
 			},
 			"科目树": map[string]any{
 				"银行存款-工行":  map[string]any{"科目属性": "借", "余额": map[string]any{}},
@@ -277,8 +258,8 @@ func TestGenerateWorkbookDetailStandalone(t *testing.T) {
 		{Date: "2026-01-07", VoucherNum: 3, Summary: "现金付", GeneralAccount: "银行存款", DetailAccount: "工行", CreditCents: 100000},
 	}
 
-	// 1) 名单生效：全流程
-	writeCfg([]string{"管理费用-办公费"})
+	// 1) 总账名配置：其下所有明细各得独立页
+	writeCfg([]string{"管理费用"})
 	if err := GenerateWorkbook(configPath, "2026-01", dir, entries); err != nil {
 		t.Fatalf("GenerateWorkbook: %v", err)
 	}
@@ -303,39 +284,38 @@ func TestGenerateWorkbookDetailStandalone(t *testing.T) {
 		}
 		return -1
 	}
-	const detailSheet = "明细账-管理费用-办公费"
-	if !has(detailSheet) {
-		t.Fatalf("standalone page missing, sheets=%v", sheets)
+	if !has("明细账-管理费用-办公费") || !has("明细账-管理费用-差旅费") {
+		t.Errorf("all details of 配置总账 must split, sheets=%v", sheets)
 	}
 	if !has("总分类账-管理费用-办公费") {
 		t.Errorf("GL leaf page must stay (no interference), sheets=%v", sheets)
 	}
-	// 合并 ML 列收缩
+	// 合并 ML 列保留（互不冲突共存）
 	mlSheet := sheetNameML("管理费用")
 	detIdx, details, err := readMLDetailHeadersFrom(f, mlSheet)
 	if err != nil {
 		t.Fatalf("read headers: %v", err)
 	}
-	if _, ok := detIdx["办公费"]; ok {
-		t.Errorf("merged ML must exclude standalone column, got %v", details)
+	if _, ok := detIdx["办公费"]; !ok {
+		t.Errorf("merged ML must KEEP 办公费 column, got %v", details)
 	}
 	if _, ok := detIdx["差旅费"]; !ok {
-		t.Errorf("merged ML must keep 差旅费, got %v", details)
+		t.Errorf("merged ML must KEEP 差旅费 column, got %v", details)
 	}
-	// 排序：明细账独立页在 ML 区块之后（ML 家族分离形态殿后）
-	if !(idx(detailSheet) > idx(mlSheet)) {
-		t.Errorf("sort order: standalone page(%d) must follow merged ML(%d)", idx(detailSheet), idx(mlSheet))
+	// 排序：分离页在 ML 区块之后（ML 家族分离形态殿后）
+	if !(idx("明细账-管理费用-办公费") > idx(mlSheet)) {
+		t.Errorf("sort order: split pages(%d) must follow merged ML(%d)", idx("明细账-管理费用-办公费"), idx(mlSheet))
 	}
 	// 页头科目区 = 全路径（ML 样式页头）
 	lay := mlLayout()
 	acctCol := mlDetailCol(lay, 11) + 1
-	acct, _ := f.GetCellValue(detailSheet, mlCellName(acctCol, mlFirstDataPageStart()+2))
+	acct, _ := f.GetCellValue("明细账-管理费用-办公费", mlCellName(acctCol, mlFirstDataPageStart()+2))
 	if acct != "管理费用-办公费" {
 		t.Errorf("page header account = %q, want 管理费用-办公费", acct)
 	}
 	f.Close()
 
-	// 2) 合并父级进名单：报错
+	// 2) 合并父级进配置：报错
 	writeCfg2 := map[string]any{
 		"全局设置": map[string]any{
 			"启动月":        "2026-01",
@@ -344,7 +324,7 @@ func TestGenerateWorkbookDetailStandalone(t *testing.T) {
 			"合并总账科目":     []string{"管理费用"},
 			"总分类账忽略科目":   []string{},
 			"多科目明细账忽略科目": []string{},
-			"明细账独立科目":    []string{"管理费用"},
+			"分离明细账科目":    []string{"管理费用"},
 		},
 		"科目树":    map[string]any{},
 		"自动识别科目": []any{},
@@ -356,15 +336,15 @@ func TestGenerateWorkbookDetailStandalone(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 	if err := GenerateWorkbook(configPath, "2026-01", dir, entries); err == nil {
-		t.Fatal("expected error when merge parent is also standalone")
-	} else if !strings.Contains(err.Error(), "不能同时配置为明细账独立科目") {
+		t.Fatal("expected error when merge parent is also split")
+	} else if !strings.Contains(err.Error(), "不能同时配置为分离明细账科目") {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	// 3) 名单移除：孤儿页收敛
+	// 3) 配置移除：孤儿页收敛
 	writeCfg(nil)
 	if err := GenerateWorkbook(configPath, "2026-01", dir, entries); err != nil {
-		t.Fatalf("GenerateWorkbook (no standalone): %v", err)
+		t.Fatalf("GenerateWorkbook (no split): %v", err)
 	}
 	f2, err := excelize.OpenFile(filepath.Join(dir, "2026-01.xlsx"))
 	if err != nil {
@@ -373,7 +353,7 @@ func TestGenerateWorkbookDetailStandalone(t *testing.T) {
 	defer f2.Close()
 	for _, s := range f2.GetSheetList() {
 		if strings.HasPrefix(s, sheetPrefixDetail) {
-			t.Errorf("orphan standalone page %s must be removed after config change", s)
+			t.Errorf("orphan split page %s must be removed after config change", s)
 		}
 	}
 }

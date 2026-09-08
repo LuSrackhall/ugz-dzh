@@ -337,15 +337,8 @@ func (wb *Workbook) ensureMLSheet(general string, details []string, detailOrder 
 		}
 		_ = existingIdx
 
-		// 明细账独立科目：存量合并页仍含其明细列 → 拒绝（列收缩只发生在生成期，
-		// 历史文件铁律一不动，需 -f 从首月重建；对仗 detailOrder 冲突先例）
-		for _, d := range existingDetails {
-			if d != "" && wb.detailStandalone(general+"-"+d) {
-				return "", nil, nil, fmt.Errorf("科目 %s-%s 已配置为明细账独立科目，但存量多科目明细账页 %s 仍含其明细列，请使用 -f 从首月重新生成", general, d, name)
-			}
-		}
-
 		// 冲突检测：若配置了 detailOrder，逐列比对
+		//（分离明细账科目 与合并页互不冲突共存，存量列无需检测）
 		if len(detailOrder) > 0 {
 			var existNonEmpty []string
 			for _, d := range existingDetails {
@@ -660,9 +653,9 @@ func (wb *Workbook) AppendMLEntries(entries []voucher.Entry, initials map[string
 			groups[e.GeneralAccount] = g
 		}
 		g.entries = append(g.entries, e)
-		if e.DetailAccount != "" && !wb.detailStandalone(e.GeneralAccount+"-"+e.DetailAccount) {
-			// 命中 明细账独立科目 的明细不进合并 ML 列（列收缩；独立账页由
-			// AppendDetailLedgerEntries 专职，加法路由，GL 与合并页互不影响）
+		if e.DetailAccount != "" {
+			// 分离明细账科目 与合并页互不冲突共存（对仗 GL 叶子页与合并页共存）：
+			// 合并 ML 明细列照常保留全部明细，分离页是额外视图（AppendDetailLedgerEntries）
 			found := false
 			for _, d := range g.details {
 				if d == e.DetailAccount {

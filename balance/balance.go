@@ -30,7 +30,7 @@ type GlobalSettings struct {
 	MergeGLAccounts    []string          `json:"合并总账科目"`
 	GLSuppressAccounts []string          `json:"总分类账忽略科目"`
 	MLSuppressAccounts []string          `json:"多科目明细账忽略科目"`
-	DetailStandalone   []string          `json:"明细账独立科目,omitempty"` // 明细科目独立账页名单（叶子全路径，精确匹配）
+	DetailSplit        []string          `json:"分离明细账科目,omitempty"` // ML 家族分离配置：条目=总账科目名（其下所有明细各得独立账页）或叶子全路径（单明细分离），对仗"合并总账科目"
 	ClosingMonth       string            `json:"结账月"`               // Change 11：已结账的最后月份（<=该月拒绝无 -f 生成）
 }
 

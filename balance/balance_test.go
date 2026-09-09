@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"ledger/voucher"
@@ -743,5 +744,27 @@ func TestCmpMonth(t *testing.T) {
 	}
 	if cmpMonth("2026-01", "2026-01") != 0 {
 		t.Error("2026-01 should == 2026-01")
+	}
+}
+
+// TestDeprecatedFieldWarnings 废弃字段告警（防"配置静默失效"）：
+// 旧键名（明细账独立科目）显式告警并提示新键名；新键名/无字段不告警。
+func TestDeprecatedFieldWarnings(t *testing.T) {
+	old := []byte(`{"全局设置": {"启动月": "2026-01", "明细账独立科目": ["公益支出"]}}`)
+	w := DeprecatedFieldWarnings(old)
+	if len(w) != 1 {
+		t.Fatalf("warnings = %v, want 1 条", w)
+	}
+	for _, want := range []string{"明细账独立科目", "分离明细账科目", "v0.9.6"} {
+		if !strings.Contains(w[0], want) {
+			t.Errorf("告警应含 %q: %s", want, w[0])
+		}
+	}
+
+	if w := DeprecatedFieldWarnings([]byte(`{"全局设置": {"分离明细账科目": ["公益支出"]}}`)); len(w) != 0 {
+		t.Errorf("新键名不应告警: %v", w)
+	}
+	if w := DeprecatedFieldWarnings([]byte(`{"全局设置": {}}`)); len(w) != 0 {
+		t.Errorf("无字段不应告警: %v", w)
 	}
 }

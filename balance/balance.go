@@ -219,6 +219,11 @@ func LoadConfig(path string) (*GlobalConfig, error) {
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置 %s: %w", path, err)
 	}
+	// 废弃字段显式告警（防"静默失效"）：JSON 解析对未知字段静默忽略，
+	// 字段改名后旧配置会无声失效（v0.9.6 明细账独立科目→分离明细账科目 先例）
+	for _, w := range DeprecatedFieldWarnings(b) {
+		fmt.Fprintln(os.Stderr, "⚠", w)
+	}
 
 	// normalize: 确保旧配置缺失字段时不为 nil，避免生成时 nil slice 行为不一致
 	if cfg.Settings.MergeGLAccounts == nil {
@@ -549,6 +554,32 @@ func inferPropertyByType(general string) string {
 // InferPropertyByType 导出版（供呈现层定向使用，如多科目明细账明细列净额方向）。
 func InferPropertyByType(general string) string {
 	return inferPropertyByType(general)
+}
+
+// deprecatedGlobalFields 已废弃的全局设置字段名：JSON 解析对未知字段静默忽略，
+// 字段改名后旧配置会"无声失效"（配置写在文件里却被完全无视）——加载时显式告警。
+// 旧名 → {新名, 更名版本}。
+var deprecatedGlobalFields = map[string][2]string{
+	"明细账独立科目": {"分离明细账科目", "v0.9.6"},
+}
+
+// DeprecatedFieldWarnings 扫描原始配置 JSON，返回已废弃字段名的迁移告警列表。
+func DeprecatedFieldWarnings(data []byte) []string {
+	var probe struct {
+		Settings map[string]any `json:"全局设置"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil
+	}
+	var out []string
+	for old, info := range deprecatedGlobalFields {
+		if _, ok := probe.Settings[old]; ok {
+			out = append(out, fmt.Sprintf(
+				"检测到已废弃的配置字段 %q（%s 起更名为 %q），该字段已被忽略——请将键名改为 %q 后重新 generate",
+				old, info[1], info[0], info[0]))
+		}
+	}
+	return out
 }
 
 // PurgePhantomInitials 清理历史幻影期初（幂等，generate 加载 JSON 后自动调用）：

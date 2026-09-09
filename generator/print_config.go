@@ -44,6 +44,10 @@ var printSheetType = ""
 // PrintConfig 打印版配置（英文键，可直接 json.Unmarshal）。
 type PrintConfig struct {
 	Platforms map[string]PlatformConfig `json:"platforms"`
+	// LedgerOnly 打印版仅含账页（2026-09-09）：true 时打印版 xlsx 移除全部非账页
+	// sheet（日记账/报表/期初期末表），用户在 WPS/Excel 导出 PDF 即纯账页成册。
+	// 默认 false = 打印版含全部 sheet（现状）。
+	LedgerOnly bool `json:"ledgerOnly,omitempty"`
 }
 
 // PlatformConfig 单平台配置（补偿系数 + 分区域字体 + 可选 GL/ML 分账本覆盖）。
@@ -366,6 +370,8 @@ func LoadPrintConfig(path string) error {
 		}
 		printCfg.Platforms[name] = base
 	}
+	// 顶层开关：打印版仅含账页（bool 直接赋值——true 生效，缺省/false 均为含全部）
+	printCfg.LedgerOnly = loaded.LedgerOnly
 	return nil
 }
 
@@ -374,7 +380,8 @@ func LoadPrintConfig(path string) error {
 // 配置永远显式存在、可见可改；删除后下次生成自动重建，行为与代码默认一致。
 func PrintConfigTemplate() string {
 	return `{
-  "_comment": "打印版配置（generate 自动发现）。字段含义见技能 references/print-config.md；0/空/null=保持默认（不配置时的行为）；改完重新 generate 生效（免发版）",
+  "_comment": "打印版配置（generate 自动发现）。字段含义见技能 references/print-config.md；0/空/null=保持默认（不配置时的行为）；改完重新 generate 生效（免发版）。ledgerOnly=true 时打印版仅含账页（GL/ML/分离明细账，移除日记账/报表/期初期末表）——导出 PDF 即纯账页成册",
+  "ledgerOnly": false,
   "platforms": {
     "windows": {
       "_comment": "Windows 平台：列宽/行高补偿系数 + 字体 + GL/ML 分账本覆盖",

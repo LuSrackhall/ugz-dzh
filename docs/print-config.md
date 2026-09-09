@@ -160,6 +160,20 @@ WPS 各平台/各机器渲染列宽、行高存在差异（字体环境、渲染
 
 默认值（windows 平台级 1.1075 / 0.992；GL 独立 1.13595 / 0.99495）为多轮肉眼观察标定的收敛值；换环境后可自行调整（GL/ML 可独立调），观察方法见 `scripts/gen-win-test.sh` 顶部说明。
 
+## ledgerOnly：打印版仅含账页（2026-09-09 新增）
+
+顶层布尔开关（默认 `false` = 打印版含全部 sheet，现状不变）：
+
+```json
+{ "ledgerOnly": true, "platforms": { ... } }
+```
+
+`true` 时打印版 xlsx **移除全部非账页 Sheet**（日记账/各类报表/期初期末表），只保留 总分类账-/多科目明细账-/明细账- 三类账页——用户在 WPS/Excel 打开打印版**直接"导出 PDF"即纯账页成册**（位格拆分/正反面配对/打印区域全部已精调）。
+
+- 日记账/报表数据不受影响（完整存在于查看版 xlsx）；查看版零改动；
+- generate 过程会打印 `打印版仅含账页（ledgerOnly）：已移除 N 张非账页 sheet`；
+- 重新 generate 即生效（免发版）；想恢复全部 sheet 改回 `false`。
+
 ## 完整示例
 
 见 `docs/print-config.example.json`；`ledger init` 也会自动生成 `print-config.json` 模板到输出根目录。

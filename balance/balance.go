@@ -546,6 +546,11 @@ func inferPropertyByType(general string) string {
 	}
 }
 
+// InferPropertyByType 导出版（供呈现层定向使用，如多科目明细账明细列净额方向）。
+func InferPropertyByType(general string) string {
+	return inferPropertyByType(general)
+}
+
 // PurgePhantomInitials 清理历史幻影期初（幂等，generate 加载 JSON 后自动调用）：
 // 自动识别科目 FirstRecord.Amount 置 0；删除余额历史中 月份<首次月 且 借方==0 && 贷方==0 的记录
 // （首次月之前不可能有发生额，此类记录只可能是旧 ensureBackfillForAll 回填产生）。

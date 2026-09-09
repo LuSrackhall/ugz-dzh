@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"ledger/balance"
 	"ledger/voucher"
@@ -24,6 +25,8 @@ type Workbook struct {
 	MLSheetBalances   map[string]int64 // sheet名 → 最近期末余额
 	moneyStyleThickID int              // 金额样式（底边加粗）
 	InitialAdjust     map[string]bool  // 当月期初来自期初调整额的科目（摘要"期初余额"）
+	detailCreditOnce  sync.Once
+	detailCreditCache map[string]bool // 总账名 → 是否贷方向基准（科目树叶子属性优先，官方推断兜底）
 }
 
 // NewWorkbook 创建或加载工作薄。若上月 xlsx 存在则复制之，否则新建。
@@ -354,6 +357,42 @@ func (wb *Workbook) detailSplit(account string) bool {
 // detailSplitSet 返回分离配置集合原样（供按分录批量路由与守卫使用）。
 func (wb *Workbook) detailSplitSet() []string {
 	return wb.Config.Settings.DetailSplit
+}
+
+// detailCreditBased 报告总账科目是否以贷方向为基准（收入/负债/权益类）。
+// 判定来源：科目树中该总账下叶子的科目属性（subjects import 用户确认值）优先，
+// 无叶子时按官方科目表/大类推断（balance.InferPropertyByType，含备抵科目贷余特例）。
+// 结果按总账名缓存（树遍历一次）。
+func (wb *Workbook) detailCreditBased(general string) bool {
+	wb.detailCreditOnce.Do(func() {
+		cache := make(map[string]bool)
+		for leaf, node := range wb.Config.Tree {
+			i := strings.IndexByte(leaf, '-')
+			if i <= 0 {
+				continue
+			}
+			g := leaf[:i]
+			if _, seen := cache[g]; !seen {
+				cache[g] = node.Property == "贷"
+			}
+		}
+		wb.detailCreditCache = cache
+	})
+	if v, ok := wb.detailCreditCache[general]; ok {
+		return v
+	}
+	return balance.InferPropertyByType(general) == "贷"
+}
+
+// detailColNet 明细列显示净额：以科目基准方向为正——贷方向科目（收入/负债/权益）
+// = 贷-借，其余 = 借-贷。负值 = 与基准方向相反的发生额（冲减/红字冲销），
+// 打印版按负数红字标记（审计 H2：手工账红笔惯例）——方向定向后红字语义即正确。
+func (wb *Workbook) detailColNet(general string, debit, credit int64) int64 {
+	net := debit - credit
+	if wb.detailCreditBased(general) {
+		net = -net
+	}
+	return net
 }
 
 // entryMonth 返回分录的月份标识。

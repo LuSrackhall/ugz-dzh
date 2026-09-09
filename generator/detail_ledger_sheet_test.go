@@ -431,3 +431,62 @@ func parseTestYuan(s string) float64 {
 	}
 	return v
 }
+
+// TestMLDetailColumnDirectionAware 明细列净额方向审计（下游反馈）：
+// 明细列以**科目基准方向**为正——贷方向科目（收入类）贷发生显示正数、
+// 借方冲减显示负数（打印版红字）；借方向科目维持 借-贷 口径不变。
+func TestMLDetailColumnDirectionAware(t *testing.T) {
+	cfg := &balance.GlobalConfig{
+		Tree: map[string]balance.AccountNode{
+			"经营收入-服务收入": {Property: "贷", Balances: map[string]balance.MonthBalance{}},
+			"管理费用-办公费":  {Property: "借", Balances: map[string]balance.MonthBalance{}},
+		},
+	}
+	wb := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-03"}
+	entries := []voucher.Entry{
+		// 收入类：贷发生 500（正常收入，应显示 +500 蓝字；旧口径误为 -500 红字）
+		{Date: "2026-03-05", GeneralAccount: "经营收入", DetailAccount: "服务收入", CreditCents: 50000},
+		// 费用类：借发生 300（基准同向，+300）
+		{Date: "2026-03-06", GeneralAccount: "管理费用", DetailAccount: "办公费", DebitCents: 30000},
+	}
+	if err := wb.AppendMLEntries(entries, map[string]int64{}); err != nil {
+		t.Fatalf("AppendMLEntries: %v", err)
+	}
+
+	lay := mlLayout()
+	revRow := mlFirstDataPageStart() + lay.DataStartRow // 首数据页首行（initial=0 无期初行，分录顶格）
+
+	revSheet := sheetNameML("经营收入")
+	revNet, _ := wb.File.GetCellValue(revSheet, mlCellName(mlDetailCol(lay, 0), revRow))
+	if parseTestYuan(revNet) != 500 {
+		t.Errorf("贷方向科目正常贷发生应显示 +500（蓝字），got %q", revNet)
+	}
+
+	expSheet := sheetNameML("管理费用")
+	expNet, _ := wb.File.GetCellValue(expSheet, mlCellName(mlDetailCol(lay, 0), revRow))
+	if parseTestYuan(expNet) != 300 {
+		t.Errorf("借方向科目正常借发生应显示 +300，got %q", expNet)
+	}
+
+	// 贷方向科目的反向单笔（借方冲减 300）：明细列每行写**该笔净额**——
+	// 分录2 显示 = sign×(300−0) = −300（打印红字：与基准方向相反的红笔）；
+	// 分录1（贷 100，基准同向）= sign×(0−100) = +100（蓝字）。
+	wb2 := &Workbook{File: excelize.NewFile(), Config: cfg, Month: "2026-03"}
+	entries2 := []voucher.Entry{
+		{Date: "2026-03-05", GeneralAccount: "经营收入", DetailAccount: "服务收入", CreditCents: 10000},
+		{Date: "2026-03-08", GeneralAccount: "经营收入", DetailAccount: "服务收入", DebitCents: 30000}, // 借方冲减（如退款/红字）
+	}
+	if err := wb2.AppendMLEntries(entries2, map[string]int64{}); err != nil {
+		t.Fatalf("AppendMLEntries: %v", err)
+	}
+	netRow := mlFirstDataPageStart() + lay.DataStartRow + 1
+	bad, _ := wb2.File.GetCellValue(sheetNameML("经营收入"), mlCellName(mlDetailCol(lay, 0), netRow))
+	if parseTestYuan(bad) != -300 {
+		t.Errorf("贷方向科目反向单笔（借方冲减）应显示 -300（打印红字），got %q", bad)
+	}
+	// 分录1（贷 100，基准同向）= +100（蓝字）
+	good, _ := wb2.File.GetCellValue(sheetNameML("经营收入"), mlCellName(mlDetailCol(lay, 0), netRow-1))
+	if parseTestYuan(good) != 100 {
+		t.Errorf("贷方向科目基准同向单笔应显示 +100，got %q", good)
+	}
+}

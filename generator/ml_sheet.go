@@ -827,7 +827,7 @@ func (wb *Workbook) appendToMLSheetBody(sheet, accountLabel string, entries []vo
 			if !wb.InitialAdjust[accountLabel] && strings.HasSuffix(wb.Month, "-01") {
 				cfLabel = "上年结转"
 			}
-			wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel)
+			wb.writeMLCarryForwardRow(sheet, row, initial, 0, 0, make([]mlDetailTotals, numDetails), cfLabel, accountLabel)
 			row++
 		}
 		// preWrite removed — 由 break handler 负责
@@ -846,12 +846,12 @@ func (wb *Workbook) appendToMLSheetBody(sheet, accountLabel string, entries []vo
 		// 补承前页（上月遗留的孤立过次页）
 		if wb.mlLastRowIsOrphanBreak(sheet) {
 			pbDebit, pbCredit := wb.mlLastBreakTotals(sheet)
-			pbDetails := wb.lastBreakDetailTotals(sheet)
+			pbDetails := wb.lastBreakDetailTotals(sheet, accountLabel)
 			logicalPageNum++
 			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, accountLabel, true, true)
 			wb.writeMLDetailNamesAt(sheet, row, reDetails)
 			row += lay.DataStartRow
-			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel)
+			wb.writeMLCarryForwardRow(sheet, row, balance, pbDebit, pbCredit, pbDetails, carryForwardLabel, accountLabel)
 			row++
 			pageDebit = 0
 			pageCredit = 0
@@ -860,13 +860,13 @@ func (wb *Workbook) appendToMLSheetBody(sheet, accountLabel string, entries []vo
 
 		// 页满 → 过次页 + 标题 + 承前页
 		if wb.mlRowIsPageBreak(sheet, row) {
-			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails)
+			wb.writeMLPageBreakRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, accountLabel)
 			row += 1 + lay.BottomMarginRows // 下边距 + 新页上边距
 			logicalPageNum++
 			wb.writeMLPageHeader(sheet, row, logicalPageNum, logicalPageNum, accountLabel, true, true)
 			wb.writeMLDetailNamesAt(sheet, row, reDetails)
 			row += lay.DataStartRow
-			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel)
+			wb.writeMLCarryForwardRow(sheet, row, balance, pageDebit, pageCredit, pageDetails, carryForwardLabel, accountLabel)
 			row++
 			pageDebit = 0
 			pageCredit = 0
@@ -903,7 +903,7 @@ func (wb *Workbook) appendToMLSheetBody(sheet, accountLabel string, entries []vo
 
 		if e.DetailAccount != "" {
 			if idx, ok := detailIdx[e.DetailAccount]; ok {
-				net := e.DebitCents - e.CreditCents
+				net := wb.detailColNet(e.GeneralAccount, e.DebitCents, e.CreditCents)
 				col := mlDetailCol(lay, idx)
 				wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 				wb.setMoneyStyle(sheet, row, col)
@@ -922,7 +922,7 @@ func (wb *Workbook) appendToMLSheetBody(sheet, accountLabel string, entries []vo
 // writeMLPageBreakRow 写多科目明细账的"过次页"行，双面写入：
 // Back 侧：基础列（日期=空、凭证号=空、摘要=过次页、借方/贷方合计数、方向、余额）+ 明细1~4净额
 // Front 侧：明细5~14净额
-func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals) {
+func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals, general string) {
 	lay := mlLayout()
 	dir, dispBal := directionFor(balance, 0)
 
@@ -947,9 +947,9 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 	wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffCredit)
 	wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffBalance)
 
-	// Back 侧：明细1~4 净额
+	// Back 侧：明细1~4 净额（显示口径=科目基准方向，见 detailColNet）
 	for i := 0; i < 4 && i < len(pageDetails); i++ {
-		net := pageDetails[i].debit - pageDetails[i].credit
+		net := wb.detailColNet(general, pageDetails[i].debit, pageDetails[i].credit)
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
@@ -957,7 +957,7 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 
 	// Front 侧：明细5~14 净额
 	for i := 4; i < len(pageDetails); i++ {
-		net := pageDetails[i].debit - pageDetails[i].credit
+		net := wb.detailColNet(general, pageDetails[i].debit, pageDetails[i].credit)
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
@@ -968,7 +968,7 @@ func (wb *Workbook) writeMLPageBreakRow(sheet string, row int, balance int64, pa
 // writeMLCarryForwardRow 写多科目明细账的"承前页"行，双面写入（结构与过次页相同，标签可定制）。
 
 // 翻页触发时 writeMLPageBreakRow 会覆盖为完整数据。
-func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals, label string) {
+func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64, pageDebit, pageCredit int64, pageDetails []mlDetailTotals, label string, general string) {
 	lay := mlLayout()
 	dir, dispBal := directionFor(balance, 0)
 
@@ -987,9 +987,9 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 	wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffCredit)
 	wb.setMoneyStyle(sheet, row, lay.BackStartCol+mlOffBalance)
 
-	// Back 侧：明细1~4 净额
+	// Back 侧：明细1~4 净额（显示口径=科目基准方向，见 detailColNet）
 	for i := 0; i < 4 && i < len(pageDetails); i++ {
-		net := pageDetails[i].debit - pageDetails[i].credit
+		net := wb.detailColNet(general, pageDetails[i].debit, pageDetails[i].credit)
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
@@ -997,7 +997,7 @@ func (wb *Workbook) writeMLCarryForwardRow(sheet string, row int, balance int64,
 
 	// Front 侧：明细5~14 净额
 	for i := 4; i < len(pageDetails); i++ {
-		net := pageDetails[i].debit - pageDetails[i].credit
+		net := wb.detailColNet(general, pageDetails[i].debit, pageDetails[i].credit)
 		col := mlDetailCol(lay, i)
 		wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 		wb.setMoneyStyle(sheet, row, col)
@@ -1267,7 +1267,7 @@ func (wb *Workbook) writeMLPageHeader(sheet string, row int, backPageNum, frontP
 }
 
 // lastBreakDetailTotals 读取最后一个过次页行的各明细列净额。
-func (wb *Workbook) lastBreakDetailTotals(sheet string) []mlDetailTotals {
+func (wb *Workbook) lastBreakDetailTotals(sheet, general string) []mlDetailTotals {
 	lay := mlLayout()
 	rows, err := wb.File.GetRows(sheet)
 	if err != nil {
@@ -1277,13 +1277,19 @@ func (wb *Workbook) lastBreakDetailTotals(sheet string) []mlDetailTotals {
 		if mlHasPageBreakAt(rows[i], lay) && !mlIsStructuralBreak(rows[i], lay) {
 			result := make([]mlDetailTotals, mlMaxDetails)
 			for j := 0; j < mlMaxDetails; j++ {
-				colIdx := mlDetailRowIdx(lay, j) // GetRows 索引：j<4→BindingLeftCols+7+j(Back侧), j>=4→FrontStartCol-1+(j-4)(Front侧)
+				colIdx := mlDetailRowIdx(lay, j) // GetRows 索引：j<4→BindingLeftCols+9+j(Back侧), j>=4→FrontStartCol-1+(j-4)(Front侧)
 				if colIdx < len(rows[i]) {
 					if v, err := yuanStrToCents(rows[i][colIdx]); err == nil {
-						if v >= 0 {
-							result[j].debit = v
+						// 页上显示值 = detailColNet 口径（贷方向科目已翻转）——
+						// 还原为原始借贷口径，避免后续显示时二次翻转
+						raw := v
+						if wb.detailCreditBased(general) {
+							raw = -v
+						}
+						if raw >= 0 {
+							result[j].debit = raw
 						} else {
-							result[j].credit = -v
+							result[j].credit = -raw
 						}
 					}
 				}

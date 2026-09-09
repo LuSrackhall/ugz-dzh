@@ -127,11 +127,11 @@ func (wb *Workbook) WriteMLMonthClosings(
 				}
 			}
 			pageNum++
-			wb.writeMLPageBreakRow(sheet, initBreakPos, bal, 0, 0, make([]mlDetailTotals, numDetails))
+			wb.writeMLPageBreakRow(sheet, initBreakPos, bal, 0, 0, make([]mlDetailTotals, numDetails), general)
 			wb.writeMLPageHeader(sheet, initBreakPos+1+lay.BottomMarginRows, pageNum, pageNum, general, true, true)
 			wb.writeMLDetailNamesAt(sheet, initBreakPos+1+lay.BottomMarginRows, details)
 			cfRow := initBreakPos + 1 + lay.DataStartRow + lay.BottomMarginRows
-			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
+			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel, general)
 			row = cfRow + 1
 		}
 
@@ -163,17 +163,17 @@ func (wb *Workbook) WriteMLMonthClosings(
 				}
 			}
 			pageNum++
-			wb.writeMLPageBreakRow(sheet, pbRow, bal, 0, 0, make([]mlDetailTotals, numDetails))
+			wb.writeMLPageBreakRow(sheet, pbRow, bal, 0, 0, make([]mlDetailTotals, numDetails), general)
 			wb.writeMLPageHeader(sheet, pbRow+1+lay.BottomMarginRows, pageNum, pageNum, general, true, true)
 			wb.writeMLDetailNamesAt(sheet, pbRow+1+lay.BottomMarginRows, details)
 			cfRow := pbRow + 1 + lay.DataStartRow + lay.BottomMarginRows
-			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel)
+			wb.writeMLCarryForwardRow(sheet, cfRow, bal, 0, 0, make([]mlDetailTotals, numDetails), carryForwardLabel, general)
 			return cfRow + 1
 		}
 
 		// 本月合计
 		row = mlCheckPageBreak(row)
-		wb.writeMLClosingRow(sheet, row, "本月合计", mtdDebit, mtdCredit, mtdDetails, details, lay)
+		wb.writeMLClosingRow(sheet, row, "本月合计", mtdDebit, mtdCredit, mtdDetails, details, lay, general)
 		monthlyStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "top", Color: "#808080", Style: 1}},
@@ -215,7 +215,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 			}
 
 			row = mlCheckPageBreak(row)
-			wb.writeMLClosingRow(sheet, row, "本季合计", qtDebit, qtCredit, qtDetails, details, lay)
+			wb.writeMLClosingRow(sheet, row, "本季合计", qtDebit, qtCredit, qtDetails, details, lay, general)
 			qtStyle, _ := wb.File.NewStyle(&excelize.Style{
 				Font: &excelize.Font{Bold: true, Size: 10},
 			})
@@ -256,7 +256,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		}
 
 		row = mlCheckPageBreak(row)
-		wb.writeMLClosingRow(sheet, row, "本年累计", cumDebit, cumCredit, ytdDetails, details, lay)
+		wb.writeMLClosingRow(sheet, row, "本年累计", cumDebit, cumCredit, ytdDetails, details, lay, general)
 		cumStyle, _ := wb.File.NewStyle(&excelize.Style{
 			Font:   &excelize.Font{Bold: true, Size: 10},
 			Border: []excelize.Border{{Type: "bottom", Color: "#808080", Style: 1}},
@@ -381,7 +381,7 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 }
 
 // writeMLClosingRow 将月结行写入双面：Back 侧（基础列+明细1~4），Front 侧（明细5~14）。
-func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit, credit int64, details []mlDetailTotals, detailsList []string, lay layout.MLLayout) {
+func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit, credit int64, details []mlDetailTotals, detailsList []string, lay layout.MLLayout, general string) {
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffMonth, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffDay, row), "")
 	wb.File.SetCellValue(sheet, mlCellName(lay.BackStartCol+mlOffVouChar, row), "")
@@ -397,7 +397,7 @@ func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit
 
 	for i := 0; i < 4 && i < len(details); i++ {
 		if i < len(detailsList) && detailsList[i] != "" {
-			net := details[i].debit - details[i].credit
+			net := wb.detailColNet(general, details[i].debit, details[i].credit)
 			col := mlDetailCol(lay, i)
 			wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 			wb.setMoneyStyle(sheet, row, col)
@@ -406,7 +406,7 @@ func (wb *Workbook) writeMLClosingRow(sheet string, row int, label string, debit
 
 	for i := 4; i < len(details); i++ {
 		if i < len(detailsList) && detailsList[i] != "" {
-			net := details[i].debit - details[i].credit
+			net := wb.detailColNet(general, details[i].debit, details[i].credit)
 			col := mlDetailCol(lay, i)
 			wb.File.SetCellValue(sheet, mlCellName(col, row), centsToYuan(net))
 			wb.setMoneyStyle(sheet, row, col)

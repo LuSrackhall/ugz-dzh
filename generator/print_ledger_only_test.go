@@ -124,3 +124,21 @@ func TestTransformToPrintLedgerOnly(t *testing.T) {
 		}
 	}
 }
+
+// TestPrintConfigDeprecatedWarnings 打印版配置废弃字段告警（防"静默失效"）：
+// ledgerOnly 已废弃 → 显式告警；新配置（无该字段）不告警。
+func TestPrintConfigDeprecatedWarnings(t *testing.T) {
+	old := []byte(`{"ledgerOnly": true, "platforms": {}}`)
+	w := PrintConfigDeprecatedWarnings(old)
+	if len(w) != 1 {
+		t.Fatalf("warnings = %v, want 1 条", w)
+	}
+	for _, want := range []string{"ledgerOnly", "pdf/", "已废弃"} {
+		if !strings.Contains(w[0], want) {
+			t.Errorf("告警应含 %q: %s", want, w[0])
+		}
+	}
+	if w := PrintConfigDeprecatedWarnings([]byte(`{"platforms": {}}`)); len(w) != 0 {
+		t.Errorf("无废弃字段不应告警: %v", w)
+	}
+}

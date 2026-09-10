@@ -149,6 +149,29 @@ func defaultPrintConfig() *PrintConfig {
 	return cfg
 }
 
+// deprecatedPrintFields 已废弃的打印版配置顶层字段 → 迁移提示。
+// JSON 解析对未知字段静默忽略，配置改了名/取消了若仍写着会"无声失效"——
+// 加载时显式告警（与主配置 全局设置 的废弃字段告警同思路）。
+var deprecatedPrintFields = map[string]string{
+	"ledgerOnly": "纯账页版现为默认产物（pdf/ 子目录），无需配置；打印版始终完整",
+}
+
+// PrintConfigDeprecatedWarnings 扫描配置 JSON 中已废弃的顶层字段，返回告警列表。
+func PrintConfigDeprecatedWarnings(data []byte) []string {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	var out []string
+	for f, hint := range deprecatedPrintFields {
+		if _, ok := raw[f]; ok {
+			out = append(out, fmt.Sprintf(
+				"打印版配置字段 %q 已废弃（%s）——该字段已被忽略", f, hint))
+		}
+	}
+	return out
+}
+
 // currentPlatform 当前目标平台（PrintPlatform 由 cmd 层设置；auto=当前系统）。
 func currentPlatform() string {
 	plat := PrintPlatform
@@ -302,6 +325,11 @@ func LoadPrintConfig(path string) error {
 			}
 		}
 	}
+	// 已废弃字段显式告警（防"静默失效"）
+	for _, w := range PrintConfigDeprecatedWarnings(data) {
+		fmt.Fprintln(os.Stderr, "⚠", w)
+	}
+
 	loaded := &PrintConfig{}
 	if err := json.Unmarshal(data, loaded); err != nil {
 		return fmt.Errorf("解析打印版配置 %s: %w（请确认文件是 UTF-8 无 BOM 编码；JSON 不能有注释/尾逗号）", path, err)

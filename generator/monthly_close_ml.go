@@ -308,7 +308,7 @@ func (wb *Workbook) WriteMLMonthClosings(
 		}
 	}
 
-		return nil
+	return nil
 }
 
 // FinalizeMLPages 补齐所有多科目明细账与独立明细账页的最后一页。
@@ -327,6 +327,7 @@ func (wb *Workbook) FinalizeMLPages() {
 		wb.padMLPage(name, general)
 	}
 }
+
 // 如果当前页已有真实过次页（翻页），则在新页上补齐。
 // 如果当前页不满20行，用空行补齐后写结构过次页。
 // padMLPage 补齐当前页的结构过次页。
@@ -367,7 +368,10 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 		}
 	}
 
-	// PaperN Back 尾部占位：底部结构过次页
+	// PaperN Back 尾部占位：底部结构过次页（982db27 恢复——续写需要页尾结构；
+	// 有意不写标题头以免干扰续写）。占位块本体不写页头 → 页头区行高缺失，
+	// 会被压扁成"版式断裂页"（下游实测反馈"格式完全毁掉"）→ 此处补齐占位块
+	// 页头区行高（与 writeMLPageHeader 同参：16/28/18/·/20/8/8/20）。
 	pnRow := structRow + 1 + lay.DataStartRow + lay.BottomMarginRows + pageSize
 	pnCell := mlCellName(lay.BackStartCol+mlOffSummary, pnRow)
 	pnVal, _ := wb.File.GetCellValue(sheet, pnCell)
@@ -377,6 +381,19 @@ func (wb *Workbook) padMLPage(sheet string, general string) {
 			Font: &excelize.Font{Color: "CC0000", Size: 10, Bold: true},
 		})
 		wb.File.SetCellStyle(sheet, pnCell, pnCell, redS)
+	}
+	// 占位块页头区行高（块起始行 = 过次页行 - 数据区 - 页头区）
+	pnBlock := pnRow - pageSize - lay.DataStartRow
+	if pnBlock >= 1 {
+		const headerTotalHeight = 56.0
+		hu := headerTotalHeight / 7.0
+		wb.File.SetRowHeight(sheet, pnBlock, 16)       // Row+0 上边距
+		wb.File.SetRowHeight(sheet, pnBlock+1, 28)     // Row+1 标题
+		wb.File.SetRowHeight(sheet, pnBlock+2, 18)     // Row+2 页码/科目
+		wb.File.SetRowHeight(sheet, pnBlock+4, hu*2.5) // Row+4 表头1
+		wb.File.SetRowHeight(sheet, pnBlock+5, hu)     // Row+5
+		wb.File.SetRowHeight(sheet, pnBlock+6, hu)     // Row+6
+		wb.File.SetRowHeight(sheet, pnBlock+7, hu*2.5) // Row+7 表头4
 	}
 }
 

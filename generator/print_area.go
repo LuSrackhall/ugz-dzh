@@ -52,8 +52,18 @@ func glAreaPlan(lastRow, blockRows, breakPrintCol, maxCol int) []areaRect {
 }
 
 // mlAreaPlan 计算多科目明细账打印 sheet 的多区域打印区域。
-// 滑动窗口：块0=(空, 占位正面F1)，中间块k=(反面Bk, 正面Fk+1)，末块=(反面B末, 空)。
-// 阅读序 [F1, B1, F2, B2 …] = [右块0, (左块k, 右块k)…, 左末块]，页数恒为偶数，无需补页。
+//
+// ML 一块 = 一页：右半=正面（Front）、左半=反面（Back），两侧同页码
+//（writeMLPageHeader 传同一 logicalPageNum）。块0 特殊（Paper1 Front 占位页，
+// 只写右侧，页码 0）；块 k（k≥1）= 第 k 页的正反两半。
+//
+// 打印序：占位正面 → 每页 [正面(右半), 反面(左半)]——与 GL 的"正1反1正2反2"对齐。
+// 区域数 = 1 + 2×数据页数 恒为奇数（占位页只有正面）→ 尾部补一张空白页保持偶数，
+// 保证整本导出跨 sheet 时下一账页从正面开始配对（对齐 glAreaPlan 补页逻辑）。
+//
+// 修正记录（2026-09-10）：旧实现按"滑动窗口"取中间块两侧、末块只取左半，
+// 实测末块右半含正面页头（标题/页码/会计科目/表头区）→ Print_Area 遗漏导致
+// 导出 PDF 每页 ML 缺最后一页正面；"末块右侧结构为空"假设不成立已废弃。
 func mlAreaPlan(lastRow, blockRows, breakPrintCol, maxCol int) []areaRect {
 	if lastRow < 1 || blockRows < 1 || breakPrintCol < 2 || maxCol < breakPrintCol {
 		return nil
@@ -68,12 +78,18 @@ func mlAreaPlan(lastRow, blockRows, breakPrintCol, maxCol int) []areaRect {
 		return areaRect{c1: breakPrintCol, r1: r1, c2: maxCol, r2: r2}
 	}
 	rects := make([]areaRect, 0, 2*blocks)
-	rects = append(rects, rect(false, 0)) // F1 占位页
-	for k := 1; k <= blocks-2; k++ {
-		rects = append(rects, rect(true, k), rect(false, k))
+	rects = append(rects, rect(false, 0)) // 占位页正面（Paper1 Front；左半为空不打）
+	for k := 1; k < blocks; k++ {
+		rects = append(rects, rect(false, k), rect(true, k)) // 第 k 页：正面(右半) → 反面(左半)
 	}
-	if blocks >= 2 {
-		rects = append(rects, rect(true, blocks-1)) // 末块反面（末块右侧结构为空）
+	if len(rects)%2 == 1 {
+		// 补空白页：取全部数据块之后的空行区（必空，不与任何内容区域重叠）
+		// + 装订侧间隙列 + 写空格保底成页（对齐 GL 补页风格）
+		after := blocks * blockRows
+		rects = append(rects, areaRect{
+			c1: breakPrintCol, r1: after + 1, c2: breakPrintCol + 1,
+			r2: after + blockRows, blank: true,
+		})
 	}
 	return rects
 }

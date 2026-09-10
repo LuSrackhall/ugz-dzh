@@ -62,30 +62,31 @@ func TestGLAreaPlan(t *testing.T) {
 	})
 }
 
-// ML 结构：块=页（右半正面、左半反面，同页码）；块0=占位页（只写正面）。
-// 打印序 [占位正, 页1正, 页1反, 页2正, 页2反, …] + 尾部补空白保持偶数。
+// ML 结构：一块=一页逻辑页（左半=基础列+明细1-4，右半=明细5-14，同页码）；
+// 块0 为占位页（只写右半）。打印序 = [块0右] + 逐块 [左半, 右半]（先基础列后明细），
+// 尾部补空白保偶数（跨 sheet 配对）。区域数 = 1 + 2×(blocks-1) + 补白。
 func TestMLAreaPlan(t *testing.T) {
 	const blockRows, breakCol, maxCol = 30, 82, 184
 
-	t.Run("六块（180行）：11 区域+补空白=12（偶数，末页正面不遗漏）", func(t *testing.T) {
+	t.Run("六块（180行）：11 内容区域+补空白=12（末块右半不遗漏、左右顺序正确）", func(t *testing.T) {
 		rects := mlAreaPlan(180, blockRows, breakCol, maxCol)
 		if len(rects) != 12 {
-			t.Fatalf("期望 12 个区域，得到 %d（11 内容 + 1 补空白）", len(rects))
+			t.Fatalf("期望 12 个区域，得到 %d（1+2×5 内容 + 1 补空白）", len(rects))
 		}
-		// 期望序列: R0, R1, L1, R2, L2, R3, L3, R4, L4, R5, L5, 空白
+		// R0, L1, R1, L2, R2, L3, R3, L4, R4, L5, R5, 空白
 		want := []areaRect{
-			{c1: 82, r1: 1, c2: 184, r2: 30},   // 占位页正面
-			{c1: 82, r1: 31, c2: 184, r2: 60},  // 页1 正面（此前遗漏！）
-			{c1: 1, r1: 31, c2: 81, r2: 60},    // 页1 反面
-			{c1: 82, r1: 61, c2: 184, r2: 90},  // 页2 正面
-			{c1: 1, r1: 61, c2: 81, r2: 90},    // 页2 反面
-			{c1: 82, r1: 91, c2: 184, r2: 120}, // 页3 正面
-			{c1: 1, r1: 91, c2: 81, r2: 120},   // 页3 反面
-			{c1: 82, r1: 121, c2: 184, r2: 150},
+			{c1: 82, r1: 1, c2: 184, r2: 30},  // 块0 右半（占位页）
+			{c1: 1, r1: 31, c2: 81, r2: 60},   // 页1 左半（基础列）
+			{c1: 82, r1: 31, c2: 184, r2: 60}, // 页1 右半（明细列）——旧实现遗漏此区域
+			{c1: 1, r1: 61, c2: 81, r2: 90},   // 页2 左半
+			{c1: 82, r1: 61, c2: 184, r2: 90}, // 页2 右半
+			{c1: 1, r1: 91, c2: 81, r2: 120},
+			{c1: 82, r1: 91, c2: 184, r2: 120},
 			{c1: 1, r1: 121, c2: 81, r2: 150},
-			{c1: 82, r1: 151, c2: 184, r2: 180},             // 页5 正面（末页，此前遗漏！）
-			{c1: 1, r1: 151, c2: 81, r2: 180},               // 页5 反面
-			{c1: 82, r1: 181, c2: 83, r2: 210, blank: true}, // 补空白（块后空行区，偶数配对）
+			{c1: 82, r1: 121, c2: 184, r2: 150},
+			{c1: 1, r1: 151, c2: 81, r2: 180},
+			{c1: 82, r1: 151, c2: 184, r2: 180},             // 末页右半（此前遗漏！）
+			{c1: 82, r1: 181, c2: 83, r2: 210, blank: true}, // 补空白（跨 sheet 偶数配对）
 		}
 		for i, w := range want {
 			if rects[i] != w {
@@ -94,27 +95,30 @@ func TestMLAreaPlan(t *testing.T) {
 		}
 	})
 
-	t.Run("两块（59行）：占位正面+页1正反+补空白", func(t *testing.T) {
+	t.Run("两块（59行）：[块0右, 页1左, 页1右] + 补空白", func(t *testing.T) {
 		rects := mlAreaPlan(59, blockRows, breakCol, maxCol)
 		if len(rects) != 4 {
 			t.Fatalf("期望 4 个区域，得到 %d", len(rects))
 		}
-		// 页1 正面（右半行 31-59）必须在——旧实现遗漏此区域
-		if rects[1] != (areaRect{c1: 82, r1: 31, c2: 184, r2: 59}) {
-			t.Errorf("区域1（页1正面） = %+v", rects[1])
+		if rects[0] != (areaRect{c1: 82, r1: 1, c2: 184, r2: 30}) {
+			t.Errorf("区域0（块0右半） = %+v", rects[0])
 		}
-		if rects[2] != (areaRect{c1: 1, r1: 31, c2: 81, r2: 59}) {
-			t.Errorf("区域2（页1反面） = %+v", rects[2])
+		// 关键：左半在前、右半在后（此前错误版本是右半在前）
+		if rects[1] != (areaRect{c1: 1, r1: 31, c2: 81, r2: 59}) {
+			t.Errorf("区域1（页1左半） = %+v", rects[1])
+		}
+		if rects[2] != (areaRect{c1: 82, r1: 31, c2: 184, r2: 59}) {
+			t.Errorf("区域2（页1右半） = %+v", rects[2])
 		}
 		if !rects[3].blank {
 			t.Errorf("区域3 应为补空白: %+v", rects[3])
 		}
 	})
 
-	t.Run("单块（30行）：占位正面+补空白", func(t *testing.T) {
+	t.Run("单块（30行）：仅块0右半 + 补空白", func(t *testing.T) {
 		rects := mlAreaPlan(30, blockRows, breakCol, maxCol)
 		if len(rects) != 2 || rects[0].c1 != breakCol || !rects[1].blank {
-			t.Fatalf("期望 [占位正面, 补空白]: %+v", rects)
+			t.Fatalf("期望 [块0右半, 补空白]: %+v", rects)
 		}
 	})
 }

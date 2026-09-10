@@ -4,10 +4,13 @@
 //  1. 复制查看版文件为打印版（查看版本身零改动）
 //  2. 打开打印版，对 总分类账-/多科目明细账-/明细账- 前缀的 Sheet 做金额列拆位变换
 //  3. 其余 Sheet（期初/期末等）保持原样（数据与样式不变）
-//  4. ledgerOnly=true（print-config.json）时移除全部非账页 Sheet——导出 PDF 即纯账页成册
-//  5. 保存打印版
+//  4. 保存打印版（**始终含全部 Sheet**；纯账页版见 TransformToPrintLedgerOnly）
 //
 // 失败返回 error，调用方应仅告警而不中断主流程（查看版已成功落盘）。
+//
+// TransformToPrintLedgerOnly 在完整变换的基础上再移除全部非账页 Sheet，
+// 产出**纯账页版**（GL/多科目明细账/分离明细账）——供导出 PDF 成册使用，
+// 由 generate 同步输出到 {年}/pdf/ 子目录（默认产物，不受配置开关影响）。
 package generator
 
 import (
@@ -85,21 +88,33 @@ func TransformToPrint(viewPath, printPath string) error {
 		}
 	}
 
-	// ledgerOnly（print-config.json 顶层开关）：移除全部非账页 Sheet——
-	// 用户在 WPS/Excel 导出 PDF 即纯账页成册（日记账/报表/期初期末表只存在于查看版）
-	if printCfg.LedgerOnly {
-		if removed := removeNonLedgerSheets(f); removed > 0 {
-			fmt.Fprintf(os.Stderr, "打印版仅含账页（ledgerOnly）：已移除 %d 张非账页 sheet\n", removed)
-		}
-	}
-
 	if err := f.SaveAs(printPath); err != nil {
 		return fmt.Errorf("保存打印版: %w", err)
 	}
 	return nil
 }
 
-// removeNonLedgerSheets 移除全部非账页 Sheet（ledgerOnly 开关），返回删除数。
+// TransformToPrintLedgerOnly 生成纯账页打印版（供导出 PDF 成册）：
+// 与 TransformToPrint 相同的位格变换，再移除日记账/报表/期初期末表等非账页 Sheet。
+// 返回移除的非账页 Sheet 数（供调用方日志）。
+func TransformToPrintLedgerOnly(viewPath, outPath string) (int, error) {
+	if err := TransformToPrint(viewPath, outPath); err != nil {
+		return 0, err
+	}
+	f, err := excelize.OpenFile(outPath)
+	if err != nil {
+		return 0, fmt.Errorf("打开纯账页版: %w", err)
+	}
+	removed := removeNonLedgerSheets(f)
+	if err := f.SaveAs(outPath); err != nil {
+		f.Close()
+		return 0, fmt.Errorf("保存纯账页版: %w", err)
+	}
+	f.Close()
+	return removed, nil
+}
+
+// removeNonLedgerSheets 移除全部非账页 Sheet，返回删除数。
 // 账页判定复用 isLedgerSheet（print_font.go）。账页至少一张（GL 必在）；
 // 删除后激活首张账页。
 func removeNonLedgerSheets(f *excelize.File) int {

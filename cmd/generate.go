@@ -274,6 +274,16 @@ var generateCmd = &cobra.Command{
 			fmt.Printf("已生成打印版: %s\n", printPath)
 		}
 
+		// 纯账页版（GL/多科目明细账/分离明细账，供导出 PDF 成册）：
+		// 独立目录默认产物——打印版保持完整（含日记账/报表/期初期末表），
+		// 两者互不影响；将来 PDF 输出亦落此目录
+		pdfPath := filepath.Join(yearDir, "pdf", month+".xlsx")
+		if removed, err := generator.TransformToPrintLedgerOnly(xlsxPath, pdfPath); err != nil {
+			fmt.Fprintf(os.Stderr, "警告: 生成纯账页版失败（查看版已成功）: %v\n", err)
+		} else if verbose {
+			fmt.Printf("已生成纯账页版（导出 PDF 用，移除 %d 张非账页 sheet）: %s\n", removed, pdfPath)
+		}
+
 		fmt.Printf("已生成 %s/%s 工作薄，共 %d 条分录\n", year, month, len(entries))
 		return nil
 	},

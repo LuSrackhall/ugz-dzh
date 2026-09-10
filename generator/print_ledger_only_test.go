@@ -1,7 +1,6 @@
 package generator
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,57 +50,23 @@ func TestRemoveNonLedgerSheets(t *testing.T) {
 	}
 }
 
-func TestLoadPrintConfigLedgerOnly(t *testing.T) {
-	defer func() { printCfg.LedgerOnly = false }() // 恢复全局状态（printCfg 为包级单例）
-
-	dir := t.TempDir()
-	p := filepath.Join(dir, "print-config.json")
-	if err := os.WriteFile(p, []byte(`{"ledgerOnly": true, "platforms": {}}`), 0o644); err != nil {
-		t.Fatalf("写配置: %v", err)
-	}
-	if err := LoadPrintConfig(p); err != nil {
-		t.Fatalf("LoadPrintConfig: %v", err)
-	}
-	if !printCfg.LedgerOnly {
-		t.Error("ledgerOnly=true 应生效")
-	}
-
-	// 缺省（不配置）→ false
-	if err := os.WriteFile(p, []byte(`{"platforms": {}}`), 0o644); err != nil {
-		t.Fatalf("写配置: %v", err)
-	}
-	if err := LoadPrintConfig(p); err != nil {
-		t.Fatalf("LoadPrintConfig: %v", err)
-	}
-	if printCfg.LedgerOnly {
-		t.Error("未配置 ledgerOnly 应为 false（打印版含全部 sheet，现状不变）")
-	}
-}
-
-func TestPrintConfigTemplateHasLedgerOnly(t *testing.T) {
-	if !strings.Contains(PrintConfigTemplate(), `"ledgerOnly"`) {
-		t.Error("配置模板应包含 ledgerOnly 字段（显式存在原则）")
-	}
-}
-
-// TestTransformToPrintLedgerOnlyKeepsSplitPages 全链复现：ledgerOnly 下分离明细账页
-// 必须保留（曾实测丢失——定位 removeNonLedgerSheets 与 TransformToPrint 的边界）。
-func TestTransformToPrintLedgerOnlyKeepsSplitPages(t *testing.T) {
-	defer func() { printCfg.LedgerOnly = false }()
-	printCfg.LedgerOnly = true
-
+// TestTransformToPrintLedgerOnly 双产物语义：
+//   - TransformToPrint（print/ 完整版）**不删任何 sheet**（默认零影响）；
+//   - TransformToPrintLedgerOnly（pdf/ 纯账页版）移除非账页、保留三类账页。
+func TestTransformToPrintLedgerOnly(t *testing.T) {
 	dir := t.TempDir()
 	viewPath := filepath.Join(dir, "2026-01.xlsx")
-	f := excelize.NewFile()
-	for _, s := range []string{
+	sheets := []string{
 		"2026-01期初",
 		"总分类账-管理费用-办公费",
 		"明细账-管理费用-办公费",
 		"多科目明细账-管理费用",
 		"资产负债表",
 		"2026-01期末",
-	} {
-		if _, err := f.NewSheet(s); err != nil {
+	}
+	f := excelize.NewFile()
+	for _, sh := range sheets {
+		if _, err := f.NewSheet(sh); err != nil {
 			t.Fatalf("创建: %v", err)
 		}
 	}
@@ -113,31 +78,49 @@ func TestTransformToPrintLedgerOnlyKeepsSplitPages(t *testing.T) {
 	}
 	f.Close()
 
-	printPath := filepath.Join(dir, "print", "2026-01.xlsx")
-	if err := TransformToPrint(viewPath, printPath); err != nil {
+	// 完整打印版：全部 sheet 保留
+	fullPath := filepath.Join(dir, "print", "2026-01.xlsx")
+	if err := TransformToPrint(viewPath, fullPath); err != nil {
 		t.Fatalf("TransformToPrint: %v", err)
 	}
-
-	pf, err := excelize.OpenFile(printPath)
+	ff, err := excelize.OpenFile(fullPath)
 	if err != nil {
-		t.Fatalf("打开打印版: %v", err)
+		t.Fatalf("打开完整版: %v", err)
+	}
+	if got := len(ff.GetSheetList()); got != len(sheets) {
+		t.Errorf("完整打印版应含全部 %d 张 sheet（默认零影响），得到 %d: %v", len(sheets), got, ff.GetSheetList())
+	}
+	ff.Close()
+
+	// 纯账页版：非账页移除、三类账页保留
+	pdfPath := filepath.Join(dir, "pdf", "2026-01.xlsx")
+	removed, err := TransformToPrintLedgerOnly(viewPath, pdfPath)
+	if err != nil {
+		t.Fatalf("TransformToPrintLedgerOnly: %v", err)
+	}
+	if removed != 3 {
+		t.Errorf("removed = %d, want 3（期初/资产负债表/期末）", removed)
+	}
+	pf, err := excelize.OpenFile(pdfPath)
+	if err != nil {
+		t.Fatalf("打开纯账页版: %v", err)
 	}
 	defer pf.Close()
 	got := pf.GetSheetList()
 	for _, want := range []string{"总分类账-管理费用-办公费", "明细账-管理费用-办公费", "多科目明细账-管理费用"} {
 		found := false
-		for _, s := range got {
-			if s == want {
+		for _, sh := range got {
+			if sh == want {
 				found = true
 			}
 		}
 		if !found {
-			t.Errorf("打印版缺账页 %s（got %v）", want, got)
+			t.Errorf("纯账页版缺账页 %s（got %v）", want, got)
 		}
 	}
-	for _, s := range got {
-		if strings.HasPrefix(s, "2026-01") || s == "资产负债表" {
-			t.Errorf("非账页 %s 应被移除（got %v）", s, got)
+	for _, sh := range got {
+		if strings.HasPrefix(sh, "2026-01") || sh == "资产负债表" {
+			t.Errorf("非账页 %s 应被移除（got %v）", sh, got)
 		}
 	}
 }

@@ -26,13 +26,6 @@
 
 - 合并父级月结/期初由 WriteMergeGLClosings **专职**；普通 GL 流程一律排除 mergeSet（不进 initials）。新增任何对 GL sheet 写月结/期初的代码必须检查排除合并父级；独立明细页月结同理归 WriteMLMonthClosings 专职。
 
-## ML 打印区域（v0.10.1 修正 + 审计工具）
-
-- **ML 物理结构铁律：块=页**——每 30 行一块，右半=正面、左半=反面、两侧同页码（writeMLPageHeader 两侧传同一 logicalPageNum）；块0=Paper1 Front 占位页（页码 0，只写右侧）。**旧"滑动窗口"理解是错的**（曾致末页正面整体漏出打印区域）。
-- 打印区域序列：`[占位正, 页k正(右半), 页k反(左半), …]`（正先，对齐 GL）+ 尾部补空白保偶数（跨 sheet 配对）；补页矩形须取 `blocks*blockRows` 之后的空行区（否则与末块正面区域重叠）。
-- **审计工具 `scripts/render-print-areas-pdf.py`**：区域 vs 内容覆盖校验（未覆盖/重叠/奇偶三项）+ 修复前后 PDF 对比渲染（★ 标注新增页）。改打印区域后必跑。
-- 环境：本机无 LibreOffice/Excel，WPS 无法程序化导 PDF（无 sdef/CLI）；渲染验证走 reportlab（venv 已装 reportlab/pypdf/openpyxl）。
-
 ## 打印版位格（红线与坑精选）
 
 - **红线（用户锁定）**：colScale/rowScale 与金额子列数 12/11/10 不开放区域级自定义，复杂度请求一律拒绝；配置必须显式存在（缺失自动补默认 print-config.json）。

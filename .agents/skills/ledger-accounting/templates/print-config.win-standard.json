@@ -1,5 +1,5 @@
 {
-  "_comment": "【配置模板库】win-standard：Windows 标准标定（平台 1.1075/0.992、GL 1.13595/0.99495、Normal 宋体、表头等线 Light）。打印版配置（generate 自动发现）。字段含义见技能 references/print-config.md；0/空/null=保持默认（不配置时的行为）；改完重新 generate 生效（免发版）",
+  "_comment": "【配置模板库】win-standard：Windows 标准标定（平台 1.1075/0.992、GL 1.13595/0.99495、Normal 宋体、金额数字 MV Boli、表头等线 Light）。2026-09-11：digit 由 Noteworthy 改 MV Boli。打印版配置（generate 自动发现）。字段含义见技能 references/print-config.md；0/空/null=保持默认（不配置时的行为）；改完重新 generate 生效（免发版）",
   "platforms": {
     "windows": {
       "_comment": "Windows 平台：列宽/行高补偿系数 + 字体 + GL/ML 分账本覆盖",
@@ -8,7 +8,7 @@
       "fonts": {
         "_comment": "normal=列宽基准字体；digit=金额数字；title=标题；default=其余区域；labelFamily=摘要/借/贷/余额表头字体（Win 默认等线 Light）；digitSize/labelSize=字号、digitBold/labelBold=加粗（0/null=现状）",
         "normal": "宋体",
-        "digit": "Noteworthy",
+        "digit": "MV Boli",
         "title": "仿宋",
         "default": "宋体",
         "digitSize": 0,
@@ -57,7 +57,7 @@
       "rowScale": 1.0,
       "fonts": {
         "normal": "Calibri",
-        "digit": "Noteworthy",
+        "digit": "MV Boli",
         "title": "仿宋",
         "default": "宋体",
         "digitSize": 0,

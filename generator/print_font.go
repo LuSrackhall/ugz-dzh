@@ -53,6 +53,9 @@ func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetCon
 			if inHeader {
 				if view := printColToView(c, cm); cfg.labelCols[view] {
 					target = true
+				} else if cfg.isAmountHeaderRow != nil && cfg.isAmountHeaderRow(r) {
+					// 金额分析表头行（ML h1："( )方金"/"额分析"合并格）：明细列表头段同样应用 labelFamily
+					target = true
 				}
 			}
 			key := fontKey{sid, target}

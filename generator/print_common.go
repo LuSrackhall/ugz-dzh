@@ -384,6 +384,10 @@ type printSheetConfig struct {
 	// isHeaderRow 表头区行判定（含"摘要/借方/贷方/余额"文字行 + 金额位数标签行；
 	// nil=仅按 isLabelRow 判定）。表头字体 labelFamily 作用于整个表头区，而非仅位数标签行。
 	isHeaderRow func(r int) bool
+	// isAmountHeaderRow 金额分析表头行判定（ML：h1 行——"( )方金"/"额分析"合并格所在行）。
+	// 该行的明细列段同属表头区，labelFamily 亦作用于它（下游反馈：明细列表头区字体需随模板统一）。
+	// nil = 不额外作用（GL 行为不变）。
+	isAmountHeaderRow func(r int) bool
 	// postProcess 列展开变换后的额外后处理（如 ML 标题区合并/字体覆盖）。
 	// cm 为该 sheet 的列映射；maxRow 为变换后最大行号。
 	postProcess func(f *excelize.File, sheet string, cm colMap, maxRow int)

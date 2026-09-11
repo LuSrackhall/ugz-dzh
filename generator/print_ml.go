@@ -158,6 +158,12 @@ func transformMLSheet(f *excelize.File, sheet string) ([]areaRect, error) {
 		lay.BackStartCol + mlOffCredit:  true,
 		lay.BackStartCol + mlOffBalance: true,
 	}
+	// 金额分析表头行（h1："( )方金"/"额分析"合并格）：明细列表头段一并应用 labelFamily。
+	// 表头行在块内偏移：h1=+1 … h4=+4（isHeaderRow 判定为 (r-start)%blockRows <= 4）
+	cfg.isAmountHeaderRow = func(r int) bool {
+		start := lay.DataStartRow - 4
+		return blockRows > 0 && r > start && (r-start)%blockRows == 1
+	}
 	// 多区域打印区域：滑动窗口阅读序 [占位正面, 反1, 正2, 反2 …]，页数恒为偶数
 	cfg.planAreas = func(breakPrintCol, maxCol, lastRow int) []areaRect {
 		return mlAreaPlan(lastRow, blockRows, breakPrintCol, maxCol)

@@ -248,11 +248,10 @@ func GenerateWorkbook(configPath, month, outputDir string, entries []voucher.Ent
 		return fmt.Errorf("多科目明细账月结: %w", err)
 	}
 
-	// 9.2 多科目明细账页末补齐（含分离明细账页）——对齐 GL 侧 step 11 的
-	// finalizeAllGLSheets：每页固定 20 数据行 + 1 过次页，页未满补齐结构过次页
-	// （此前该函数定义了但未接线：仅"当月有变动页"在月结末尾补齐，历史页的
-	// 尾部占位块因此缺结构/行高 → 下游实测"部分明细页版式毁掉"）
-	wb.FinalizeMLPages()
+	// 9.2 注：**不调用 FinalizeMLPages**（历史方案，af47835 已移除）。续写定位
+	// 自 af47835 起用"月度尾行标记列"（期末余额行写月份标识），不依赖页尾占位内容；
+	// 若整体调用 FinalizeMLPages 会对每张 ML/分离页补出全空页尾占位块（凭空多页，下游实测）。
+	// 当月有变动页的页尾结构过次页仍由月结末尾的 padMLPage 补齐（见 WriteMLMonthClosings）。
 
 	// 9.5. 生成独立期末余额汇总 Sheet
 	if err := wb.WriteFinalSheet(initials, activity); err != nil {

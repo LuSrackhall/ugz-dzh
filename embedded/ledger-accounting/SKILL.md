@@ -51,9 +51,9 @@ version: 0.10.6
 
 | 模板 | 适用 |
 |---|---|
-| `templates/print-config.win-standard.json` | Windows 标准标定（默认值：平台 1.1075/0.992、GL 1.13595/0.99495、Normal 宋体、表头等线 Light） |
+| `templates/print-config.win-standard.json` | Windows 标准标定（默认值：平台 1.1075/0.992、GL 1.13595/0.99495、Normal 宋体、**金额数字 MV Boli**、表头等线 Light——含 ML 明细列表头区"( )方金/额分析"） |
 | `templates/print-config.mac-standard.json` | Mac 标准（系数 1.0、Calibri，无需补偿） |
-| `templates/print-config.mac-win-common.json` | **两端通用标定**（用户贡献）：GL 1.13595 正反面、ML 1.1198/1.11809 + 微调（装订 -18、分位 k9 -1、书口 -9、摘要 +12）；win 端金额数字 MV Boli（2026-09-09） |
+| `templates/print-config.mac-win-common.json` | **两端通用标定**（用户贡献）：GL 1.13595 正反面 + 反面书口 -8px；**ML 用平台级（ml 段全 0，2026-09-11 起与 win-standard 一致——原自带 ML 1.1198/1.11809 会撑宽 ML 页）**；win 金额数字 MV Boli |
 | （未来按贡献补充） | 某机器适配版本（`_comment` 里写适用条件） |
 
 **选用（agent 执行，用户无需手动操作）**：

@@ -15,10 +15,12 @@ import (
 // printFontName 打印版"默认"区域（表头/标签/摘要等）字体名（可在 print-config.json 的 字体.默认 配置）。
 const printFontName = "宋体"
 
-// fontKey 样式缓存键：原 styleID + 是否"摘要/借/贷/余额表头目标"（labelCols 格与普通格同 styleID 时不能串用）。
+// fontKey 样式缓存键：原 styleID + 表头目标级别（普通/表头/金额分析表头行——
+// 三者同 styleID 时不能串用）。
 type fontKey struct {
-	sid    int
-	target bool
+	sid             int
+	target          bool
+	amountHeaderRow bool
 }
 
 // applyPrintFont 统一 sheet 内所有非零样式的字体为 宋体+Bold（保留其他属性）。
@@ -46,6 +48,7 @@ func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetCon
 			}
 			// 表头区（含"摘要/借方/贷方/余额"文字行 + 金额位数标签行）且列∈labelCols → 表头样式
 			target := false
+			amountHeaderRow := false
 			inHeader := cfg.isHeaderRow != nil && cfg.isHeaderRow(r)
 			if !inHeader && cfg.isHeaderRow == nil {
 				inHeader = cfg.isLabelRow(r) // 未填表头区判定时的兼容回退
@@ -54,11 +57,13 @@ func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetCon
 				if view := printColToView(c, cm); cfg.labelCols[view] {
 					target = true
 				} else if cfg.isAmountHeaderRow != nil && cfg.isAmountHeaderRow(r) {
-					// 金额分析表头行（ML h1："( )方金"/"额分析"合并格）：明细列表头段同样应用 labelFamily
+					// 金额分析表头行（ML h1："( )方金"/"额分析"合并格）：可独立配字体
+					// （amountHeaderFamily），未配则回落 labelFamily
 					target = true
+					amountHeaderRow = true
 				}
 			}
-			key := fontKey{sid, target}
+			key := fontKey{sid, target, amountHeaderRow}
 			nid, ok := styleMap[key]
 			if !ok {
 				st, err := f.GetStyle(sid)
@@ -84,8 +89,11 @@ func applyPrintFont(f *excelize.File, sheet string, cm colMap, cfg printSheetCon
 					if cfg.labelSizeOverride {
 						font.Size = cfg.labelFontSize
 					}
-					// 表头字体覆盖（如 Windows 默认"等线 Light"）
-					if cfg.labelFamily != "" {
+					// 表头字体覆盖（如 Windows 默认"等线 Light"）；
+					// 金额分析表头行优先用独立配置（如"等线"），未配回落 labelFamily
+					if amountHeaderRow && cfg.amountHeaderFamily != "" {
+						font.Family = cfg.amountHeaderFamily
+					} else if cfg.labelFamily != "" {
 						font.Family = cfg.labelFamily
 					}
 				}

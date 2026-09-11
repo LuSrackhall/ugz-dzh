@@ -15,7 +15,8 @@
         "digitBold": null,
         "labelSize": 0,
         "labelBold": null,
-        "labelFamily": "等线 Light"
+        "labelFamily": "等线 Light",
+        "amountHeaderFamily": "等线"
       },
       "gl": {
         "_comment": "GL（总分类账）覆盖：colScale/rowScale=0 用平台级；front/backColScale=正反面页独立列宽系数；{front,back}{Summary,Binding,Outer}Delta=±px 精调（最终 px、0=不动，只动摘要列/装订边/非装订边各一列，金额列不参与）",

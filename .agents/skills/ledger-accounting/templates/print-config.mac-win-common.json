@@ -9,7 +9,8 @@
         "digit": "MV Boli",
         "title": "仿宋",
         "default": "宋体",
-        "labelFamily": "等线 Light"
+        "labelFamily": "等线 Light",
+        "amountHeaderFamily": "等线"
       },
       "gl": {
         "colScale": 1.13595,

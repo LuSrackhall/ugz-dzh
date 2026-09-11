@@ -105,6 +105,7 @@ func transformMLSheet(f *excelize.File, sheet string) ([]areaRect, error) {
 	}
 	cfg.labelBold = fc.LabelBold
 	cfg.labelFamily = fc.LabelFamily
+	cfg.amountHeaderFamily = fc.AmountHeaderFamily
 	// 正反面页独立列宽系数（Back 侧=借/贷/余+明细1-4；Front 侧=明细5-14；装订区列不属任一半侧）
 	cfg.frontColScale, cfg.backColScale = sheetColScales()
 	cfg.isBackCol = func(c int) bool { return c >= lay.BackStartCol && c < lay.BackStartCol+lay.BackColCount }

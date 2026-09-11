@@ -368,6 +368,8 @@ type printSheetConfig struct {
 	labelBold *bool
 	// labelFamily 摘要/借/贷/余额表头字体（空=现状宋体；如 Windows 默认"等线 Light"）。
 	labelFamily string
+	// amountHeaderFamily 金额分析表头行（ML h1）独立字体（空=回落 labelFamily）。
+	amountHeaderFamily string
 	// labelCols 摘要/借/贷/余额 表头目标列（查看版列号集合；labelBold 应用范围）。
 	labelCols map[int]bool
 	// frontColScale/backColScale 正面页（Front 半侧）/反面页（Back 半侧）独立列宽系数（0=用账本级 colScale）。

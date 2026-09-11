@@ -121,6 +121,10 @@ type FontConfig struct {
 	LabelSize   float64 `json:"labelSize"`
 	LabelBold   *bool   `json:"labelBold"`
 	LabelFamily string  `json:"labelFamily"`
+	// AmountHeaderFamily 金额分析表头字体（ML 表头 h1 行："( )方金"/"额分析"合并格）——
+	// 独立于 labelFamily（如整体表头"等线 Light"、该行用"等线"常规体）；
+	// 空=回落 labelFamily（无 labelFamily 则保持默认）。
+	AmountHeaderFamily string `json:"amountHeaderFamily"`
 }
 
 // printCfg 全局打印版配置（默认值=当前标定行为）。
@@ -217,6 +221,9 @@ func mergeFonts(base FontConfig, over FontConfig) FontConfig {
 	}
 	if over.LabelFamily != "" {
 		base.LabelFamily = over.LabelFamily
+	}
+	if over.AmountHeaderFamily != "" {
+		base.AmountHeaderFamily = over.AmountHeaderFamily
 	}
 	return base
 }
@@ -373,6 +380,9 @@ func LoadPrintConfig(path string) error {
 		if pc.Fonts.LabelFamily != "" {
 			base.Fonts.LabelFamily = pc.Fonts.LabelFamily
 		}
+		if pc.Fonts.AmountHeaderFamily != "" {
+			base.Fonts.AmountHeaderFamily = pc.Fonts.AmountHeaderFamily
+		}
 		// GL/ML 分账本覆盖（全空视为未配置）
 		if !pc.GL.empty() {
 			sc := &SheetConfig{ColScale: pc.GL.ColScale, RowScale: pc.GL.RowScale,
@@ -409,7 +419,7 @@ func PrintConfigTemplate() string {
       "colScale": 1.1075,
       "rowScale": 0.992,
       "fonts": {
-        "_comment": "normal=列宽基准字体；digit=金额数字；title=标题；default=其余区域；labelFamily=摘要/借/贷/余额表头字体（Win 默认等线 Light）；digitSize/labelSize=字号、digitBold/labelBold=加粗（0/null=现状）",
+        "_comment": "normal=列宽基准字体；digit=金额数字；title=标题；default=其余区域；labelFamily=摘要/借/贷/余额表头字体（Win 默认等线 Light）；amountHeaderFamily=ML 金额分析表头行（( )方金 / 额分析）字体（空=随 labelFamily）；digitSize/labelSize=字号、digitBold/labelBold=加粗（0/null=现状）",
         "normal": "宋体",
         "digit": "Noteworthy",
         "title": "仿宋",
@@ -418,7 +428,8 @@ func PrintConfigTemplate() string {
         "digitBold": null,
         "labelSize": 0,
         "labelBold": null,
-        "labelFamily": "等线 Light"
+        "labelFamily": "等线 Light",
+        "amountHeaderFamily": "等线"
       },
       "gl": {
         "_comment": "GL（总分类账）覆盖：colScale/rowScale=0 用平台级；front/backColScale=正反面页独立列宽系数；{front,back}{Summary,Binding,Outer}Delta=±px 精调（最终 px、0=不动，只动摘要列/装订边/非装订边各一列，金额列不参与）",

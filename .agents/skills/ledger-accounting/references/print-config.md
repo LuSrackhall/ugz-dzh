@@ -163,3 +163,14 @@ WPS 各平台/各机器渲染列宽、行高存在差异（字体环境、渲染
 ## 完整示例
 
 见 `docs/print-config.example.json`；`ledger init` 也会自动生成 `print-config.json` 模板到输出根目录。
+
+## 金额分析表头行字体（amountHeaderFamily，2026-09-11 新增）
+
+ML 账页表头 h1 行的 "( ) 方 金" / "额 分 析"（明细列上方的金额分析表头）可**独立**配置字体，区别于 `labelFamily`（摘要/借/贷/余额表头）：
+
+```json
+"fonts": { "labelFamily": "等线 Light", "amountHeaderFamily": "等线" }
+```
+
+- Windows 两个内置模板默认：常规表头 `等线 Light`、金额分析表头行 `等线`（两个不同的 Windows 字体）；
+- 空 = 回落 `labelFamily`；两者都空 = 保持默认（宋体）；仅作用于打印版，按平台隔离（Mac 未配 → 不变）。

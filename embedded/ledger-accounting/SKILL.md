@@ -2,7 +2,7 @@
 name: ledger-accounting
 description: 手工账电子化工具 ledger（Go CLI）的会计操作技能。当用户涉及建账（init）、生成月度账本（generate）、科目管理（map/add-manual）、期初调整、月结、年末损益结转（gen-close/year-close）、结账标记（lock）、账本检查（check/漂移/重建）、打印版、凭证格式与红字处理、git 管理 JSON 等一切会计记账操作时使用。技能指导 agent 全程协助用户完成村级/个人手工账电子化：凭证 Markdown → Excel 账本（总账/明细账/合并总账/现金银行日记账/期初期末表/资产负债表等）→ 打印装订 → 跨年结转。
 agent_created: true
-version: 0.10.6
+version: 0.10.7
 ---
 
 # ledger 会计记账操作
@@ -51,9 +51,9 @@ version: 0.10.6
 
 | 模板 | 适用 |
 |---|---|
-| `templates/print-config.win-standard.json` | Windows 标准标定（默认值：平台 1.1075/0.992、GL 1.13595/0.99495、Normal 宋体、**金额数字 MV Boli**、表头等线 Light——含 ML 明细列表头区"( )方金/额分析"） |
+| `templates/print-config.win-standard.json` | Windows 标准标定（平台 1.1075/0.992、GL 1.13595/0.99495、Normal 宋体、金额数字 **MV Boli**、表头 **等线 Light**、ML 金额分析表头行 "( )方金/额分析" **等线**） |
 | `templates/print-config.mac-standard.json` | Mac 标准（系数 1.0、Calibri，无需补偿） |
-| `templates/print-config.mac-win-common.json` | **两端通用标定**（用户贡献）：GL 1.13595 正反面 + 反面书口 -8px；**ML 用平台级（ml 段全 0，2026-09-11 起与 win-standard 一致——原自带 ML 1.1198/1.11809 会撑宽 ML 页）**；win 金额数字 MV Boli |
+| `templates/print-config.mac-win-common.json` | **两端通用标定**（用户贡献）：GL 1.13595 正反面 + 反面书口 -8px；**ML 用平台级（ml 段全 0，2026-09-11 起与 win-standard 一致）**；win 金额数字 MV Boli、金额分析表头行等线 |
 | （未来按贡献补充） | 某机器适配版本（`_comment` 里写适用条件） |
 
 **选用（agent 执行，用户无需手动操作）**：

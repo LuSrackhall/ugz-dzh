@@ -82,7 +82,15 @@ func strictTestVoucher(t *testing.T, dir string) string {
 func resetFlagsInProcess(c *cobra.Command) {
 	reset := func(fs *pflag.FlagSet) {
 		fs.VisitAll(func(f *pflag.Flag) {
-			_ = f.Value.Set(f.DefValue)
+			// 切片型 flag（StringArray/StringSlice 等）的 DefValue 是字面量 "[]"，
+			// 直接 Set(DefValue) 会写入一个内容为 "[]" 的元素，使同一进程内第二次
+			// Execute 读到脏值（voucher --debit/--credit 是本仓库第一对切片 flag，
+			// 此缺陷由此暴露）。改用 SliceValue.Replace(nil) 真正清空。
+			if sv, ok := f.Value.(pflag.SliceValue); ok {
+				_ = sv.Replace(nil)
+			} else {
+				_ = f.Value.Set(f.DefValue)
+			}
 			f.Changed = false
 		})
 	}

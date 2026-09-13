@@ -72,6 +72,9 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 |---|---|
 | `ledger init -s <YYYY-MM> -o <输出目录>` | 建账（设置建账月=启动月，生成 {year}.json，并建好 vouchers/ 凭证目录 + print-config.json 打印版配置模板 + README，完整管理体系一次到位） |
 | `ledger generate -v <凭证目录> -o <输出> [-f] [-p <平台>] [--config <print-config.json>] [--allow-new]` | 生成月度账本（所有凭证须同一年同月；-f 覆盖重建；-p 指定打印版目标平台 mac/windows；--config 加载打印版配置：平台补偿系数 + 分区域字体 + GL/ML 分账本 + 正反面独立 + ±px 微调，见 references/print-config.md；**先定义后生成：未定义科目拒绝生成并输出清单**，`--allow-new` 显式逃生） |
+| `ledger voucher add -o <输出根> --date <YYYY-MM-DD> --summary <摘要> --debit "科目=金额" --credit "科目=金额" [--json <文件\|->]` | **创建凭证 md**（唯一写凭证的命令；落盘前强制借贷平衡 + 科目已定义 + 解析器往返自检，不平不落盘；`--num` 显式发号、`--idempotency-key` 重试幂等；**不触发生成**） |
+| `ledger voucher list -v <月目录> [--json]` | 列示当月正式凭证清单（凭证号/日期/摘要/借贷合计/行数） |
+| `ledger voucher check -v <月目录> [--strict] [--json]` | 凭证序列完整性 + 月目录卫生（缺号/重号/非正式文件名；**默认告警，`--strict` 才阻断**） |
 | `ledger map -a <错名> -b <对名> -j <json>` | 科目名称映射纠错 |
 | `ledger add-manual -a <科目> -m <月> -n <金额> -t <备注> -j <json>` | 期初调整（**只作用于建账月**，-m 仅记录） |
 | `ledger subjects scan -v <凭证目录> -j <json> [-o <候选.csv>]` | 扫凭证提取科目清单 → 候选建账审核表（宽容解析 OCR md；权威基底=旧账期末科目余额表转录，scan 产物并入双向 diff） |
@@ -106,7 +109,9 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 
 ### 2. 每月记账
 1. 凭证放 `vouchers/YYYY_MM/`（init 建好的目录），每张凭证一个 Markdown 文件（格式见 references/commands.md）
-2. 生成当月账本：
+   - 可由 agent/用户**用 CLI 创建**：`ledger voucher add -o output --date 2026-03-05 --summary "付养老金" --debit "公益支出-补助费用=9990.00" --credit "应付款-养老金=9990.00"`（不平不落盘；不影响已生成的月份）
+   - 录完**先自查**：`ledger voucher list -v vouchers/2026_03`（清单）与 `ledger voucher check -v vouchers/2026_03`（缺号/重号/多余 .md）
+2. 生成当月账本：**必须由用户显式要求**才执行（不允许 agent 擅自生成——生成即把当月从"草稿期"推进到"生效期"）
 ```bash
 ./ledger generate -v vouchers/2025_10 -o output
 ```
@@ -178,6 +183,8 @@ ledger generate -v <凭证目录> -o <输出> ...          # 重新生成即生�
 | `⚠ 科目 X 期初双源冲突：账本页链期末 A 元，JSON 权威链 B 月期末 C 元`（generate 提示） | xlsx 账页链与 JSON 余额链不一致（账本过期：凭证改动未 `-f` 级联重建，或手工改过一侧）→ 已按铁律三采信 JSON 生成；核对后从冲突月 `-f` 重建，让账本追上 JSON |
 | `科目 X 配置为合并总账科目，不能直接记账` | 合并父级禁止直接记账/设期初 → 用子科目 |
 | `科目 X 配置为合并总账科目，不能同时配置为分离明细账科目` | 合并父级禁止同时配置分离（它是总账科目非明细）→ 分离配置到其明细所属总账或叶子 |
+| 账上多出凭空的分录 / `voucher check` 报"非正式凭证文件" | 月目录内放了非 `记字第XXXX号.md` 的 `.md`（如 `草稿.md`、`模板.md`、`记字第0005号 副本.md`）——凭证收集是**递归**扫全部 `.md`，`草稿.md` 会被**静默**计入账本（连重号告警都没有）→ 移出月目录或改名为正式凭证名 |
+| `voucher add` 报"含表头关键字，解析器会丢弃整行" | 摘要/科目里出现 `摘要`/`总帐科目`/`明细科目`/`借方`/`贷方` 或摘要恰为 `合计`——解析器把这类行当表头/合计行跳过，会使该行从账本**静默消失** → 改写措辞（写入器已提前拦截，不会落盘） |
 
 ## 参考文件
 

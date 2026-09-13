@@ -17,6 +17,19 @@ import (
 // 白名单检查要的是"月目录卫生"，故要求精确命名。
 var voucherFileWhitelist = regexp.MustCompile(`^记字第(\d+)号\.md$`)
 
+// ParseVoucherFileNum 从正式凭证文件名解析凭证号（不符合白名单命名则 ok=false）。
+func ParseVoucherFileNum(name string) (int, bool) {
+	m := voucherFileWhitelist.FindStringSubmatch(filepath.Base(name))
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
 // SequenceIssueKind 问题类别。
 type SequenceIssueKind string
 

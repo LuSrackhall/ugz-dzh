@@ -152,6 +152,10 @@ func normalizeDetail(s string) string {
 	return regexpWhitespace.ReplaceAllString(s, " ")
 }
 
+// ParseAmountCents 解析金额写法为分，与凭证解析器同口径
+// （千分位、括号红字、全角括号/减号等四种红字写法均等价）。
+func ParseAmountCents(s string) (int64, bool) { return parseAmountToCents(s) }
+
 // FormatAmountCents 将分格式化为凭证金额写法：千分位 + 两位小数；负数（红字）用半角括号。
 func FormatAmountCents(c int64) string {
 	neg := c < 0

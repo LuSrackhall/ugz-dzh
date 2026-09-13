@@ -415,3 +415,42 @@ func TestVoucherAddThenGenerate(t *testing.T) {
 		t.Fatalf("check: %v", err)
 	}
 }
+
+// TestVoucherAddRejectsNonPositiveNum 显式给了非法 --num 必须报错，不得静默改为自动发号。
+func TestVoucherAddRejectsNonPositiveNum(t *testing.T) {
+	dir := setupLedger(t, "2026-03", standardSubjects())
+	for _, bad := range []string{"0", "-3"} {
+		err := runCmd(t, "voucher", "add", "-o", dir,
+			"--date", "2026-03-05", "--summary", "付养老金",
+			"--debit", "公益支出-补助费用=100.00",
+			"--credit", "应付款-养老金=100.00",
+			"--num", bad)
+		if err == nil || !strings.Contains(err.Error(), "--num") {
+			t.Fatalf("--num %s 应被拒绝，得到: %v", bad, err)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(dir, "vouchers", "2026_03")); len(entries) != 0 {
+		t.Errorf("非法 --num 不应写盘，实际剩 %d 个文件", len(entries))
+	}
+}
+
+// TestVoucherAddWarnsOnAlternativeLayout 检测到 vouchers/YYYY/MM 布局时提示但不阻断。
+func TestVoucherAddWarnsOnAlternativeLayout(t *testing.T) {
+	dir := setupLedger(t, "2026-03", standardSubjects())
+	altDir := filepath.Join(dir, "vouchers", "2026", "03")
+	if err := os.MkdirAll(altDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(altDir, "记字第0001号.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, "voucher", "add", "-o", dir,
+		"--date", "2026-03-05", "--summary", "付养老金",
+		"--debit", "公益支出-补助费用=100.00",
+		"--credit", "应付款-养老金=100.00"); err != nil {
+		t.Fatalf("布局歧义应只提示不阻断: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "vouchers", "2026_03", "记字第0001号.md")); err != nil {
+		t.Errorf("仍应写入 YYYY_MM 布局: %v", err)
+	}
+}

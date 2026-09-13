@@ -106,6 +106,10 @@ func runVoucherAdd(cmd *cobra.Command, args []string) error {
 	if jsonArg != "" && (len(debits) > 0 || len(credits) > 0) {
 		return fmt.Errorf("--json 与 --debit/--credit 互斥，请二选一")
 	}
+	// --num 显式给了就必须是正整数：给了个非法值却静默自动发号，会让用户以为号是自己指定的
+	if cmd.Flags().Changed("num") && numFlag <= 0 {
+		return fmt.Errorf("--num 须为正整数（收到 %d）；不指定则由系统自动分配当月下一个号", numFlag)
+	}
 
 	// 组装入参：flag 形态 或 JSON 形态
 	req := voucher.WriteRequest{Attachment: attachment, UnitName: unit, VoucherNum: numFlag}
@@ -127,6 +131,8 @@ func runVoucherAdd(cmd *cobra.Command, args []string) error {
 		}
 		if payload.Num > 0 {
 			req.VoucherNum = payload.Num
+		} else if payload.Num < 0 {
+			return fmt.Errorf("--json 的 num 须为正整数（收到 %d）", payload.Num)
 		}
 		if payload.Signers != nil {
 			req.Signers = *payload.Signers
@@ -171,6 +177,13 @@ func runVoucherAdd(cmd *cobra.Command, args []string) error {
 	year := req.Date[:4]
 	monthDir := filepath.Join(output, "vouchers", voucher.MonthDirName(req.Date))
 	monthKey := voucher.MonthDirName(req.Date)
+
+	// 布局歧义提示：init 的 README 同时提到 vouchers/YYYY_MM/ 与 vouchers/YYYY/MM/ 两种布局。
+	// 本命令固定写 YYYY_MM；若另一套布局已存在且非空，提示一句，避免凭证被静默劈成两棵树。
+	altMonthDir := filepath.Join(output, "vouchers", year, req.Date[5:7])
+	if alt, statErr := os.ReadDir(altMonthDir); statErr == nil && len(alt) > 0 {
+		fmt.Printf("⚠ 检测到另一套月份目录布局 %s 且非空——本命令固定写入 %s；若本账套用的是 YYYY/MM 布局，请统一，勿让凭证分散在两棵树\n", altMonthDir, monthDir)
+	}
 
 	// 账套配置（科目树）
 	configJSON := filepath.Join(output, year, year+".json")

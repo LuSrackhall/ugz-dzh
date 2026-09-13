@@ -44,7 +44,7 @@
 - [ ] 6.1 实现选型决策：官方 Go SDK vs 手写 Streamable HTTP JSON-RPC；记录在 design.md 的 Open Questions 收口。
 - [ ] 6.2 `ledger mcp serve`：`-o` 绑定单一账套根目录，非法账套拒绝启动。
 - [ ] 6.3 传输：Streamable HTTP，`/mcp` 端点；实现 `initialize` / `tools/list` / `tools/call`。
-- [ ] 6.4 token：`--token` > `LEDGER_MCP_TOKEN` > 配置文件；**未配 token 时拒绝绑定非回环地址**并给出生成指引；默认只绑回环。另提供 `ledger mcp token`：生成随机 token 并写入账套配置，使"一条命令 + 一个局域网"即可接入。
+- [ ] 6.4 鉴权：token 来源 `--token` > `LEDGER_MCP_TOKEN` > 账套配置；**未配 token 时绑定非回环地址 → 自动生成随机 token + 写入账套配置 + 启动打印**（禁止任何固定默认值，已配置则不覆盖）；默认只绑回环（免 token）；无鉴权仅 `--insecure` 显式开启（默认关闭）。
 - [ ] 6.5 启动打印接入信息：账套路径、MCP 端点 URL、token（+ 可选二维码）。
 - [ ] 6.6 工具面白名单硬编码：`subjects.list`、`subjects.match`、`voucher.add`、`voucher.list`、`voucher.check`、`ledger.check`、`ledger.query`；**不暴露** generate/lock/gen-close/year-close/subjects import/opening import/add-manual/map/任何 `-f`/任何 JSON 写。
 - [ ] 6.7 路径隔离：所有工具 schema 无路径/目录/文件名参数；月份以 `YYYY-MM` 传入、服务端拼路径；自由文本校验不含路径分隔与 `..`。

@@ -17,30 +17,43 @@
 - **WHEN** `-o` 指向的目录不是有效账套（缺少 `{year}/{year}.json` 结构）
 - **THEN** 服务拒绝启动并以非零码退出
 
-### Requirement: 局域网绑定与 fail-closed 鉴权
+### Requirement: 局域网绑定与鉴权
 
-服务 SHALL 默认只绑定本机回环地址。绑定非回环地址（局域网/全网卡）时，MUST 要求已配置 token；未配置 token 时 MUST 拒绝启动并以非零码退出，MUST NOT 以无鉴权方式监听非回环地址。
+服务 SHALL 默认只绑定本机回环地址，此时 MUST 允许在无 token 情况下启动（只有本机能连，无外部暴露面）。
 
-#### Scenario: 未配 token 拒绝绑定局域网
+绑定非回环地址时，服务 MUST 具备有效 token。若未配置 token，服务 SHALL **自动生成随机 token、写入账套配置文件，并在启动时打印**，MUST NOT 拒绝启动，也 MUST NOT 使用任何固定默认值。
 
-- **WHEN** 执行 `ledger mcp serve --addr 0.0.0.0:8765` 且未提供 token
-- **THEN** 服务以非零码退出并说明必须配置 token
+无鉴权绑定非回环地址 MUST 只能通过显式 `--insecure` 开启，默认关闭。
 
-#### Scenario: 配置 token 后局域网可接入
+#### Scenario: 默认只绑定回环且免 token
 
-- **WHEN** 执行 `ledger mcp serve --addr 0.0.0.0:8765` 并已配置 token
-- **THEN** 服务监听该地址
-- **AND** 同一局域网内携带正确 token 的 MCP 客户端可完成初始化并调用工具
+- **WHEN** 未传 `--addr`
+- **THEN** 服务仅监听回环地址
+- **AND** 未配置 token 时服务正常启动
+
+#### Scenario: 未配 token 绑局域网时自动生成并落盘
+
+- **WHEN** 执行 `ledger mcp serve --addr 0.0.0.0:8765` 且此前未配置 token
+- **THEN** 服务生成随机 token 并写入账套配置文件
+- **AND** 启动输出打印该 token
+- **AND** 服务正常监听，不退出
+- **AND** 生成的 token MUST 不是任何固定默认值
+
+#### Scenario: 已配置 token 时保持不变
+
+- **WHEN** 执行 `ledger mcp serve --addr 0.0.0.0:8765` 且配置文件中已有 token
+- **THEN** 服务使用既有 token 监听，MUST NOT 覆盖配置文件中的 token
 
 #### Scenario: token 错误拒绝调用
 
 - **WHEN** 客户端携带缺失或错误的 token 调用任一工具
 - **THEN** 服务返回鉴权失败，且 MUST NOT 执行该工具的任何读写
 
-#### Scenario: 默认只绑定回环
+#### Scenario: insecure 需显式开启
 
-- **WHEN** 未传 `--addr`
-- **THEN** 服务仅监听回环地址，且允许在未配置 token 时启动
+- **WHEN** 执行非回环绑定但未传 `--insecure` 且无法获得任何 token
+- **THEN** 服务 MUST NOT 以无鉴权方式监听
+- **AND** 只有在显式传入 `--insecure` 时才允许无鉴权绑定
 
 ### Requirement: 工具面白名单
 

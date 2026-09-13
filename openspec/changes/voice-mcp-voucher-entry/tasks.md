@@ -61,7 +61,7 @@
 - [x] 7.1 `go test ./... -count=1` 全绿（含新增 `voucher/` 21 项、`cmd/` 14 项单测）。
 - [x] 7.2 端到端：`init` → 同月连续 `voucher add` 多张 → `generate` 成功 → `check` 校验 xlsx 期末与 JSON 余额链一致（`TestVoucherAddThenGenerate`）；真实二进制冒烟同样通过。
 - [x] 7.3 兼容回归：既有 e2e 包与 `scripts/test-e2e.sh` 账套行为不变（本变更零改动 generator/parser/JSON schema）。
-- [ ] 7.4 `bash scripts/test-e2e.sh` 通过（进行中）。
+- [x] 7.4 `bash scripts/test-e2e.sh` 通过（`E2E_EXIT=0`，日志无 FAIL；含 balance/cmd/embedded/generator/layout/test-e2e/voucher 全包 ok）。
 
 ## 8. 文档与技能
 
@@ -77,7 +77,7 @@
 - [ ] 9.1 `openspec validate voice-mcp-voucher-entry --json` → `valid: true`（改完 spec 后复验）。
 - [ ] 9.2 三重复核（对照本变更 specs/design 与实现，红队对抗实验）。
 - [ ] 9.3 `CHANGELOG.md` 增人话节（🚀新增 / ⚠行为变更 / 📦对账套影响）。
-- [ ] 9.4 `ledger doctor` 通过；`VERSION` 联动确认。
+- [x] 9.4 `ledger doctor` 通过（3 项正常 / 2 项警告 / 0 项失败；警告为仓库根非账套所必然——无 print-config.json 与年度 JSON）。`VERSION` 联动：doctor 报 "CLI dev = skill dev" 一致。
 - [ ] 9.5 发版六步执行（push/tag 前须用户显式批准）。
 
 ## 10. 实施期顺手修复（连带发现）

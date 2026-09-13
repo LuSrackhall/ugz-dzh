@@ -35,8 +35,12 @@
   2. **月目录白名单**：只准 `记字第XXXX号.md`。`CollectEntries`/`ParseDir` 是 `WalkDir` **递归**，多余 .md 被静默记账——`记字第0026号 副本.md` 仅重号告警（**不阻断**），`草稿.md`/`模板.md` **连告警都没有**（`voucherNumRe` 要求文件名含"记字第"）。
   3. MCP 实例绑定单一账套根目录，**路径不接受 LLM 传参**（"一次只碰一个账套"升级为工具层硬隔离）。
   4. 硬规则（借贷平衡/先定义后生成/幂等/余额链）只在 CLI，**禁止上移到 MCP 层**（否则两套规则）。
-  5. **未配 token 时禁止非本机绑定**（fail-closed）；局域网阶段即要求 token——同一 Wi-Fi 下有其它设备。
-- **缺口 4 项（待立项）**：① `ledger voucher add`——**CLI 目前只有读凭证，无任何创建凭证 md 的命令**；② 断码检查（**当前只有重号告警、无连续性检查**）+ 月目录白名单；③ 凭证号服务端串行分配 + 重试幂等；④ `ledger mcp serve`。
+  5. - **token 是门钥匙，不是大模型的 token**；需要鉴权的分界是**跨设备**（绑回环免 token）。**首次绑非回环且未配 token → 自动生成随机 token + 写入账套配置 + 启动打印**（用户 2026-09-13 选定；真正要禁的是**固定默认值**，不是自动生成）。无鉴权仅 `--insecure` 显式开启。局域网明文 HTTP，威胁模型=同 Wi-Fi 普通设备，TLS 留待联网阶段。
+- **缺口 4 项进度**：① `ledger voucher add` ✅（`voucher/writer.go` + `cmd/voucher_add.go`）；② 断码 + 月目录白名单 ✅（`voucher/sequence.go` + `cmd/voucher_check.go`，默认告警 / `--strict` 阻断）；③ 凭证号分配 + 重试幂等 ✅（`vouchers/.voucher-keys/YYYY_MM.json`，在月目录之外）；④ `ledger mcp serve` ⬜ **未开工**；第 5 组（科目名归一化与候选）⬜ 未开工。提案 `openspec/changes/voice-mcp-voucher-entry/`（validate valid）。
+- **`voucher add` 三道闸门**（不平不落盘，**无 `--allow-new` 逃生**）：借贷平衡（净额口径，复用 `ValidateVoucherBalance`）→ 科目已定义（复用 `undefinedVoucherSubjects`）→ **解析器往返自检**。`add` **不触发 generate**。
+- **实施期两个真坑（2026-09-13）**：
+  1. **解析器会静默丢弃整行**：`parseVoucherText` 判定"**任意单元格含** `摘要`/`总帐科目`/`总账科目`/`明细科目`/`借方`/`贷方` 即整行当表头 `continue`"，摘要恰为 `合计` 也跳过——**都不报错**。写入器已用 `validateParserSafeText` 提前拦截并给改写建议；**这是既存解析器的潜在静默面**（同 9-04 修的两处真静默），是否改解析器未决。它是被**往返自检**抓出来的，不是读代码读出来的。
+  2. **测试夹具 `resetFlagsInProcess` 对切片型 flag 失效**：`f.Value.Set(f.DefValue)` 对切片 flag 的 DefValue 是字面量 `"[]"`，会写入一个 `"[]"` 元素 → 同进程第二次 `Execute` 读到脏值。`--debit/--credit` 是本仓库**第一对切片 flag**。已改 `pflag.SliceValue.Replace(nil)`。
 - **MCP 工具面（建议最终）**：`subjects.list`/`subjects.match`（只读，供 agent 对齐科目名与同音字候选——设计稿 §四"语音立项工作项"的落地处）、`voucher.add`、`voucher.list`、`check`、`query`（只读）。**不暴露** generate/lock/gen-close/year-close/任何 `-f`/任何路径参数。
 - **确认颗粒度（我的设计建议）**：用户确认的对象必须是**磁盘上的 md 文件内容**（agent 先落盘、再把文件念回来），**不是 agent 凭记忆的转述**——否则"说的"和"写的"可能不一致，幻觉就藏在这里。
 

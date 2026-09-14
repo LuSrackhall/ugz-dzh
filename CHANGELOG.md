@@ -6,6 +6,31 @@
 
 ---
 
+## v0.10.8 —— 恢复 mac-win-common 的 ML 自定义标定（2026-09-14）
+
+### 这一版讲了什么
+
+`mac-win-common`（两端通用模板）的 ML 标定**按用户标定值恢复**（v0.10.6 曾一度改为"与 win-standard 一致 = 平台级"）：
+
+| 字段 | 恢复值 |
+|---|---|
+| `ml.colScale` / `rowScale` | 1.1198 / 0.996 |
+| `ml.frontColScale` / `backColScale` | 1.11809 / 1.11809 |
+| `ml.frontBindingDelta` | −18px（正面装订边） |
+| `ml.backOuterDelta` | −9px（反面书口） |
+| `ml.backSummaryDelta` | +12px（反面摘要） |
+| `ml.frontDigitDelta.k9` | −1px（分位） |
+
+- **不动 git 历史**（正向提交恢复，非 revert）；
+- `gl` 标定（1.13595 正反面、反面书口 −8px）与字体配置（金额数字 MV Boli、表头 等线 Light、金额分析表头行 等线）保持现状不变；
+- 改动仅涉及 `platforms.windows` 段——**Mac 端零影响**。
+
+### 📦 对既有账套的影响
+
+**零迁移**；用该模板的机器 `ledger config apply mac-win-common -f` 后重新 `generate` 生效。技能文档同步至 0.10.8——升级后请重跑 `ledger install-skill`。
+
+---
+
 ## v0.10.7 —— ML 金额分析表头行独立字体配置（2026-09-11）
 
 ### 这一版讲了什么

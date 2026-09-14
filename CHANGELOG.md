@@ -6,11 +6,14 @@
 
 ---
 
-## v0.10.8 —— 恢复 mac-win-common 的 ML 自定义标定（2026-09-14）
+## v0.10.8 —— 两个 Windows 模板的 ML 标定统一（2026-09-14）
 
 ### 这一版讲了什么
 
-`mac-win-common`（两端通用模板）的 ML 标定**按用户标定值恢复**（v0.10.6 曾一度改为"与 win-standard 一致 = 平台级"）：
+**两个内置 Windows 模板的 ML 标定统一为用户标定值**（仅 `platforms.windows.ml` 段）：
+
+- `mac-win-common`：v0.10.6 曾改为"与 win-standard 一致 = 平台级"，现**按用户标定恢复**；
+- `win-standard`：ML 段原为平台级（全 0），现**同样按该标定设置**（本版新增）。
 
 | 字段 | 恢复值 |
 |---|---|
@@ -25,9 +28,14 @@
 - `gl` 标定（1.13595 正反面、反面书口 −8px）与字体配置（金额数字 MV Boli、表头 等线 Light、金额分析表头行 等线）保持现状不变；
 - 改动仅涉及 `platforms.windows` 段——**Mac 端零影响**。
 
+### 🐛 顺带修复（Mac 端误伤）
+
+- v0.10.6 改 `win-standard` 金额数字字体时**误将 mac 段的 `digit` 也改成了 MV Boli**（全局替换所致）——本版已恢复 `Noteworthy`（Mac 段现与改动前完全一致：`colScale/rowScale = 1.0/1.0`、`Calibri`、`Noteworthy`）。
+- 复核结论：除该处外，本会话所有改动均只落在 `platforms.windows` 段，**Mac 端渲染行为无变化**。
+
 ### 📦 对既有账套的影响
 
-**零迁移**；用该模板的机器 `ledger config apply mac-win-common -f` 后重新 `generate` 生效。技能文档同步至 0.10.8——升级后请重跑 `ledger install-skill`。
+**零迁移**；用该模板的机器 `ledger config apply <模板> -f` 后重新 `generate` 生效。技能文档同步至 0.10.8——升级后请重跑 `ledger install-skill`。
 
 ---
 

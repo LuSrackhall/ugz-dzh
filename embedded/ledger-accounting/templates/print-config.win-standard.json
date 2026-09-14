@@ -32,24 +32,17 @@
         "backOuterDelta": 0
       },
       "ml": {
-        "_comment": "ML（多科目明细账）覆盖：字段同 gl；frontDigitDelta=正面页金额分位微调（base=基础位14px各位 / k0=千万 / k1=百万 / k4=千位 / k9=分位，特例位16px；作用于所有明细列同一位，0=不动）",
-        "colScale": 0,
-        "rowScale": 0,
-        "frontColScale": 0,
-        "backColScale": 0,
-        "frontSummaryDelta": 0,
-        "frontBindingDelta": 0,
-        "frontOuterDelta": 0,
-        "backSummaryDelta": 0,
-        "backBindingDelta": 0,
-        "backOuterDelta": 0,
+        "_comment": "ML（多科目明细账）标定（2026-09-14 用户标定）：平台 1.1198/0.996、正反面 1.11809、正面装订边 -18px、分位 k9 -1px、反面书口 -9px、反面摘要 +12px",
+        "colScale": 1.1198,
+        "rowScale": 0.996,
+        "frontColScale": 1.11809,
+        "backColScale": 1.11809,
+        "frontBindingDelta": -18,
         "frontDigitDelta": {
-          "base": 0,
-          "k0": 0,
-          "k1": 0,
-          "k4": 0,
-          "k9": 0
-        }
+          "k9": -1
+        },
+        "backOuterDelta": -9,
+        "backSummaryDelta": 12
       }
     },
     "mac": {
@@ -58,7 +51,7 @@
       "rowScale": 1.0,
       "fonts": {
         "normal": "Calibri",
-        "digit": "MV Boli",
+        "digit": "Noteworthy",
         "title": "仿宋",
         "default": "宋体",
         "digitSize": 0,

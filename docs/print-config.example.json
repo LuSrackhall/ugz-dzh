@@ -8,7 +8,7 @@
       "fonts": {
         "_comment": "normal=列宽基准字体；digit=金额数字；title=标题；default=其余区域；labelFamily=摘要/借/贷/余额表头字体（Win 默认等线 Light）；digitSize/labelSize=字号、digitBold/labelBold=加粗（0/null=现状）",
         "normal": "宋体",
-        "digit": "Noteworthy",
+        "digit": "MV Boli",
         "title": "仿宋",
         "default": "宋体",
         "digitSize": 0,
@@ -68,4 +68,3 @@
     }
   }
 }
-

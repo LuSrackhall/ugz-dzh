@@ -144,6 +144,8 @@ func defaultPrintConfig() *PrintConfig {
 	winFonts := defaultFonts()
 	winFonts.Normal = "宋体"
 	winFonts.LabelFamily = "等线 Light"
+	// Windows 金额数字默认 MV Boli（2026-09-14）；mac 未覆盖 → 仍用 defaultFonts 的 Noteworthy
+	winFonts.Digit = "MV Boli"
 	cfg.Platforms["windows"] = PlatformConfig{
 		ColScale: 1.1075, RowScale: 0.992, Fonts: winFonts,
 		GL: &SheetConfig{ColScale: 1.13595, RowScale: 0.99495},
@@ -419,9 +421,9 @@ func PrintConfigTemplate() string {
       "colScale": 1.1075,
       "rowScale": 0.992,
       "fonts": {
-        "_comment": "normal=列宽基准字体；digit=金额数字；title=标题；default=其余区域；labelFamily=摘要/借/贷/余额表头字体（Win 默认等线 Light）；amountHeaderFamily=ML 金额分析表头行（( )方金 / 额分析）字体（空=随 labelFamily）；digitSize/labelSize=字号、digitBold/labelBold=加粗（0/null=现状）",
+        "_comment": "normal=列宽基准字体；digit=金额数字（Win 默认 MV Boli）；title=标题；default=其余区域；labelFamily=摘要/借/贷/余额表头字体（Win 默认等线 Light）；amountHeaderFamily=ML 金额分析表头行（( )方金 / 额分析）字体（空=随 labelFamily）；digitSize/labelSize=字号、digitBold/labelBold=加粗（0/null=现状）",
         "normal": "宋体",
-        "digit": "Noteworthy",
+        "digit": "MV Boli",
         "title": "仿宋",
         "default": "宋体",
         "digitSize": 0,

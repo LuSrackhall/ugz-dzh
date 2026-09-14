@@ -6,6 +6,27 @@
 
 ---
 
+## v0.10.9 —— Windows 金额数字字体全链路统一 MV Boli（2026-09-14）
+
+### 这一版讲了什么
+
+用户要求：**凡 Windows 端，金额数字字体一律 MV Boli**（不区分用哪个模板）。核查后发现两个内置模板已合规，但**还有三处遗漏**，本版补齐：
+
+| 位置 | 改前 | 改后 |
+|---|---|---|
+| `templates/win-standard.json` / `mac-win-common.json` | 已是 MV Boli | 不变 |
+| **代码内置 Windows 默认**（未配模板时生效） | Noteworthy | **MV Boli** |
+| **generate 自动创建的 print-config.json**（模板生成器） | Noteworthy | **MV Boli** |
+| **示例文件**（`docs/print-config.example.json`、`example/print-config.json`） | Noteworthy | **MV Boli**（仅 windows 段） |
+
+**Mac 端逐一校验保持原值**：所有 mac 段 `digit` 仍为 `Noteworthy`（含 `mac-standard` 模板与各处示例的 mac 段）——本次全部改动均为**结构感知替换**（不跨平台段误伤）。
+
+### 📦 对既有账套的影响
+
+**零迁移**（Windows 端未配 `digit` 时行为从 Noteworthy 变为 MV Boli；已显式配置的账套不受影响）。技能文档同步至 0.10.9——升级后请重跑 `ledger install-skill`。
+
+---
+
 ## v0.10.8 —— 两个 Windows 模板的 ML 标定统一（2026-09-14）
 
 ### 这一版讲了什么

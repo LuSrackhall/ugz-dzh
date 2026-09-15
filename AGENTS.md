@@ -15,6 +15,19 @@ docs: 更新设计文档
 
 历史变更记录存放在 `openspec/changes/archive/` 和 `openspec/specs/` 中。
 
+## Git 工作区纪律（多会话 / 多 agent 并行）
+
+> 本工作区常同时运行多个 agent 会话与人工编辑。以下为**硬约束**，任何 agent 不得自行放宽；技能/记忆中的同类说明与本节约冲突时，以本节为准。
+
+1. **提交必须路径限定**：先 `git add <本会话产物路径>`，再 `git commit -m "..." -- <同一路径>`。
+   **严禁** `git add -A` / `git add .` / `git commit -a`——会把他人进行中的改动卷进自己的提交，污染历史、破坏他人提交粒度。
+2. **提交前先 `git status`**：分清「本会话产物」与「他人进行中的改动」；**他人的改动一律原样保留**，不回滚、不暂存、不提交。
+3. **仓库级操作必须先获用户显式批准**：`push`、`merge`、打 tag、发版（goreleaser / `gh release`）。批准只覆盖被询问的那一步，**不得顺带推进后续步骤**。
+4. **派生产物不入 git**：xlsx 账本、`print/`、`pdf/`、`closing/` 等由生成器重建；只纳管手工凭证 md、`{year}.json`（权威源）、源码与文档。
+5. **技能双目录逐字同步**：`.agents/skills/ledger-accounting/` ↔ `embedded/ledger-accounting/`。改动顺序恒为：改源 → 同步 embedded → `go build` → `ledger install-skill`（`TestSkillMirrorSync` 为守门测试；顺序颠倒会把旧内容写回 `.agents`）。
+6. **长任务用独立 worktree 隔离**：`git worktree add <目录> <ref>`，结束即 `git worktree remove` 清理。
+7. **多平台配置改动必须做平台隔离实证**：涉及平台（win/mac）的模板/字体/系数/默认值改动，需以旧版本二进制与当前二进制对同一账套各生成一次、逐单元格比对，确认未受影响方可发版。
+
 ## 项目记忆（跨 agent 共享）
 
 - **开工前**：读 `.workbuddy/memory/MEMORY.md`（项目长期记忆，唯一权威源）；需要近期上下文时再翻 `.workbuddy/memory/` 下的日期日志（`YYYY-MM-DD.md`）。

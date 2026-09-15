@@ -21,6 +21,10 @@
 
 **Mac 端逐一校验保持原值**：所有 mac 段 `digit` 仍为 `Noteworthy`（含 `mac-standard` 模板与各处示例的 mac 段）——本次全部改动均为**结构感知替换**（不跨平台段误伤）。
 
+### 📜 通用宪法补充（`AGENTS.md`）
+
+新增 **「Git 工作区纪律（多会话 / 多 agent 并行）」** 章节（7 条硬约束）：提交路径限定（严禁 `git add -A`）、提交前分清他人改动并原样保留、`push`/`merge`/打 tag/发版必须用户显式批准、派生产物不入 git、技能双目录同步顺序（改源→embedded→build→install-skill）、长任务 worktree 隔离、多平台配置改动须做平台隔离实证。技能 `references/workflows.md` 已指向该节（规则单一来源，避免两处分叉）。
+
 ### 📦 对既有账套的影响
 
 **零迁移**（Windows 端未配 `digit` 时行为从 Noteworthy 变为 MV Boli；已显式配置的账套不受影响）。技能文档同步至 0.10.9——升级后请重跑 `ledger install-skill`。
